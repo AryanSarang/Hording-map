@@ -1,0 +1,31 @@
+{
+  "name": "map-marketing-filter",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@googlemaps/js-api-loader": "^1.16.6",
+    "@react-google-maps/api": "^2.20.3",
+    "@types/google.maps": "^3.55.11",
+    "dotenv": "^16.4.7",
+    "leaflet": "^1.9.4",
+    "mongodb": "^6.8.0",
+    "mongoose": "^8.5.1",
+    "next": "14.2.5",
+    "next-cloudinary": "^6.16.0",
+    "pg": "^8.13.1",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-leaflet": "^4.2.1",
+    "sequelize": "^6.37.5"
+  },
+  "devDependencies": {
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1"
+  }
+}
