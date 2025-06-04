@@ -1,5 +1,4 @@
-// filepath: /config/database.js
-import pg from 'pg';
+const pg = require('pg'); // Changed to 'require'
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
@@ -10,9 +9,8 @@ const sequelize = new Sequelize(process.env.NEXT_DATABASE_URL, {
     dialectOptions: {
         ssl: {
             require: true,
-            rejectUnauthorized: false // This line allows self-signed certificates
+            rejectUnauthorized: false // This line is correct and necessary
         }
-
     },
     logging: false,
 });

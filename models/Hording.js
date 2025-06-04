@@ -1,3 +1,5 @@
+// filepath: models/Hording.js
+
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -7,6 +9,7 @@ const Hording = sequelize.define('Hording', {
         autoIncrement: true,
         primaryKey: true,
     },
+    // --- Location Fields ---
     latitude: {
         type: DataTypes.FLOAT,
         allowNull: true,
@@ -15,50 +18,65 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.FLOAT,
         allowNull: true,
     },
-    mediaType: {
+    state: {
         type: DataTypes.STRING,
-        allowNull: true,
+        allowNull: false,
+    },
+    city: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    address: {
+        type: DataTypes.TEXT,
+        allowNull: false,
     },
     landmark: {
         type: DataTypes.STRING,
         allowNull: true,
     },
+    // --- Hoarding Specification Fields ---
+    mediaType: {
+        type: DataTypes.ENUM('hording', 'busShelter', 'other'),
+        allowNull: true,
+    },
     width: {
-        type: DataTypes.FLOAT,
+        type: DataTypes.INTEGER, // Changed to INTEGER as requested
         allowNull: true,
     },
     height: {
-        type: DataTypes.FLOAT,
-        allowNull: true,
-    },
-    type: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    visibility: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    rate: {
-        type: DataTypes.FLOAT,
-        allowNull: true,
-    },
-    customers: {
-        type: DataTypes.INTEGER,
-        allowNull: true,
-    },
-    traffic: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    condition: {
-        type: DataTypes.STRING,
+        type: DataTypes.INTEGER, // Changed to INTEGER as requested
         allowNull: true,
     },
     hordingType: {
-        type: DataTypes.STRING,
+        type: DataTypes.ENUM('frontLit', 'backLit', 'led'),
         allowNull: true,
     },
+    visibility: {
+        type: DataTypes.ENUM('prime', 'high', 'medium', 'low'),
+        allowNull: true,
+    },
+    condition: {
+        type: DataTypes.ENUM('supreme', 'great', 'good', 'average'),
+        allowNull: true,
+    },
+    // --- Commercial Fields ---
+    rate: {
+        type: DataTypes.INTEGER, // Changed to INTEGER as requested
+        allowNull: true,
+    },
+    ourRate: {
+        type: DataTypes.INTEGER, // Changed to INTEGER as requested
+        allowNull: true,
+    },
+    paymentTerms: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    minimumBookingDuration: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    // --- Vendor and Client Fields ---
     vendorName: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -67,22 +85,11 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    ourRate: {
-        type: DataTypes.FLOAT,
-        allowNull: true,
-    },
-    propertyCode: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    offers: {
+    previousClientele: {
         type: DataTypes.TEXT,
         allowNull: true,
     },
-    description: {
-        type: DataTypes.TEXT,
-        allowNull: true,
-    },
+    // --- LED Specific Fields ---
     slotTime: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -95,18 +102,39 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    imageUrls: {
-        type: DataTypes.ARRAY(DataTypes.STRING), // Assuming imageUrls is an array of strings
+    // --- Metadata and Other ---
+    propertyCode: {
+        type: DataTypes.STRING,
         allowNull: true,
     },
-    createdAt: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW,
+    offers: {
+        type: DataTypes.TEXT,
+        allowNull: true,
     },
-    updatedAt: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW,
+    description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+    },
+    imageUrls: {
+        type: DataTypes.ARRAY(DataTypes.STRING),
+        allowNull: true,
+    },
+    dwellTime: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    compliance: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: true,
+    },
+    status: {
+        type: DataTypes.ENUM('active', 'inactive', 'pending'),
+        defaultValue: 'pending',
+        allowNull: false,
     }
+}, {
+    timestamps: true,
 });
 
 module.exports = Hording;

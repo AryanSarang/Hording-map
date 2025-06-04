@@ -1,25 +1,61 @@
+// filepath: src/app/api/formdata/route.js
+
 import Hording from '../../../../models/Hording';
-import sequelize from '../../../../config/database';
+import sequelize from '../../../../config/database'; // Make sure this path is correct
+import { Sequelize } from 'sequelize'; // Import Sequelize for instanceof check
 
 export async function POST(req) {
-    await sequelize.authenticate();
-    console.log(req);
-    const { latitude, longitude, mediaType, landmark, width, height, type, visibility, rate, customers, traffic, condition, hordingType, vendorName, pocName, ourRate, propertyCode, offers, description, slotTime, loopTime, displayHours, imageUrls } = await req.json();
     try {
-        const formData = await Hording.create({ latitude, longitude, mediaType, landmark, width, height, type, visibility, rate, customers, traffic, condition, hordingType, vendorName, pocName, ourRate, propertyCode, offers, description, slotTime, loopTime, displayHours, imageUrls });
-        return new Response(JSON.stringify(formData), { status: 201 });
+        await sequelize.authenticate();
+        console.log("Database connection authenticated successfully.");
+
+        const body = await req.json();
+        console.log("Received data:", body);
+
+        // Directly pass the body to Hording.create()
+        // Sequelize will map the properties from the body to the model's fields.
+        const newEntry = await Hording.create(body);
+
+        return new Response(JSON.stringify(newEntry), { status: 201 });
+
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+        console.error("!!! API Error:", error);
+
+        let errorResponse = {
+            message: "Failed to process request.",
+            errorName: error.name,
+        };
+
+        // Check if it's a Sequelize validation error to provide more specific feedback
+        if (error instanceof Sequelize.ValidationError) {
+            errorResponse.message = "Validation failed. Please check your input.";
+            // Extract specific field errors
+            errorResponse.validationErrors = error.errors.map(err => ({
+                field: err.path,
+                message: err.message,
+                value: err.value
+            }));
+            return new Response(JSON.stringify(errorResponse), { status: 400 }); // Bad Request
+        }
+
+        // For other types of errors
+        errorResponse.error = error.message;
+        return new Response(JSON.stringify(errorResponse), { status: 500 }); // Internal Server Error
     }
 }
 
-export async function GET() {
-    await sequelize.authenticate();
-
+// Keeping the GET route with similar error handling
+export async function GET(req) {
     try {
-        const formData = await Hording.findAll();
-        return new Response(JSON.stringify(formData), { status: 200 });
+        await sequelize.authenticate();
+        const allHordings = await Hording.findAll();
+        return new Response(JSON.stringify(allHordings), { status: 200 });
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+        console.error("!!! API Error (GET):", error);
+        return new Response(JSON.stringify({
+            message: "Failed to fetch data.",
+            error: error.message,
+            errorName: error.name,
+        }), { status: 500 });
     }
 }
