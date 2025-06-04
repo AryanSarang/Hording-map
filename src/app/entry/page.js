@@ -44,7 +44,7 @@ const initialFormData = {
 const baseInputClassName = "block w-full rounded-lg border-gray-300 dark:border-slate-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-2.5 px-3.5 text-sm peer bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 placeholder-transparent";
 const floatingLabelClassName = "absolute text-gray-500 dark:text-slate-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-slate-700 px-2 peer-focus:px-2 peer-focus:text-indigo-600 dark:peer-focus:text-indigo-400 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1";
 const selectLabelClassName = "block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1";
-const requiredStar = <span className="text-red-500 ml-1">*</span>;
+// const requiredStar = <span className="text-red-500 ml-1">*</span>;
 const sectionTitleClassName = "text-lg font-semibold text-gray-800 dark:text-slate-100 border-b border-gray-200 dark:border-slate-700 pb-2 mb-6";
 
 const stepsInfo = [
@@ -186,18 +186,40 @@ export default function Page() {
 
     const renderError = (fieldName) => errors[fieldName] && <p className="text-red-500 text-xs mt-1">{errors[fieldName]}</p>;
 
+    // Helper component for inputs with floating labels
     const FloatingLabelInput = ({ name, label, type = "text", required = false, ...props }) => (
         <div className="relative">
-            <input type={type} id={name} name={name} className={baseInputClassName} value={formData[name]} onChange={handleInputChange} placeholder=" " {...props} />
-            <label htmlFor={name} className={floatingLabelClassName}>{label} {required && requiredStar}</label>
+            <input
+                type={type}
+                id={name}
+                name={name}
+                className={baseInputClassName}
+                value={formData[name]}
+                onChange={handleInputChange}
+                placeholder=" " // Keep the space placeholder for CSS
+                {...props}
+            />
+            {/* MODIFIED: Removed {required && requiredStar} */}
+            <label htmlFor={name} className={floatingLabelClassName}>{label}</label>
             {renderError(name)}
         </div>
     );
 
+    // Helper component for textareas with floating labels
     const FloatingLabelTextarea = ({ name, label, required = false, rows = 3, ...props }) => (
         <div className="relative">
-            <textarea id={name} name={name} className={baseInputClassName} value={formData[name]} onChange={handleInputChange} placeholder=" " rows={rows} {...props} />
-            <label htmlFor={name} className={floatingLabelClassName}>{label} {required && requiredStar}</label>
+            <textarea
+                id={name}
+                name={name}
+                className={baseInputClassName}
+                value={formData[name]}
+                onChange={handleInputChange}
+                placeholder=" " // Keep the space placeholder for CSS
+                rows={rows}
+                {...props}
+            />
+            {/* MODIFIED: Removed {required && requiredStar} */}
+            <label htmlFor={name} className={floatingLabelClassName}>{label}</label>
             {renderError(name)}
         </div>
     );
