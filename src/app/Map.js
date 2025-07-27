@@ -1,14 +1,8 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
+import React, { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
-
-// Dynamically import MapContainer and other components to ensure they are only used on the client side
-const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
-const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
+import L from "leaflet";
 
 const places = [
     { lat: 43.642693, lng: -79.3871189 },
@@ -16,51 +10,58 @@ const places = [
     { lat: 43.647693, lng: -79.3877189 }
 ];
 
-const center = places[0];
+const center = [43.642693, -79.3871189];
 
 export default function Map() {
-    const [selectedPlace, setSelectedPlace] = useState(null);
+    const mapContainerRef = useRef(null);
+    const mapInstanceRef = useRef(null);
 
     useEffect(() => {
-        // Fix for default marker icon issues with React-Leaflet
-        const L = require('leaflet');
-        delete L.Icon.Default.prototype._getIconUrl;
+        // This check ensures the code only runs on the client side
+        if (typeof window === 'undefined') {
+            return;
+        }
 
-        L.Icon.Default.mergeOptions({
-            iconRetinaUrl: '/images/marker-icon-2x.png',
-            iconUrl: '/images/marker-icon.png',
-            shadowUrl: '/images/marker-shadow.png',
-        });
-    }, []);
+        // Initialize the map only if it hasn't been initialized yet
+        if (mapContainerRef.current && !mapInstanceRef.current) {
+            // Fix for default marker icon issues
+            delete L.Icon.Default.prototype._getIconUrl;
+            L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+                iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+            });
+
+            // Create the map instance
+            mapInstanceRef.current = L.map(mapContainerRef.current).setView(center, 13);
+
+            // Add the tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapInstanceRef.current);
+
+            // Add markers
+            places.forEach(place => {
+                L.marker([place.lat, place.lng])
+                    .addTo(mapInstanceRef.current)
+                    .bindPopup(`Location: ${place.lat}, ${place.lng}`);
+            });
+        }
+
+        // IMPORTANT: The cleanup function
+        // This function will run when the component is unmounted or re-rendered in development
+        return () => {
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+            }
+        };
+    }, []); // The empty dependency array is crucial for this to run only once.
 
     return (
         <main className="flex min-h-screen flex-col items-center justify-between p-24">
-            <MapContainer center={center} zoom={13} style={{ width: '600px', height: '600px' }}>
-                <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    maxZoom={19}
-                />
-                {places.map((place, index) => (
-                    <Marker
-                        key={index}
-                        position={place}
-                        eventHandlers={{
-                            click: () => {
-                                setSelectedPlace(place === selectedPlace ? null : place);
-                            },
-                        }}
-                    >
-                        {selectedPlace === place && (
-                            <Popup>
-                                <div>
-                                    <h3 style={{ color: "black" }}>{selectedPlace.lat}</h3>
-                                </div>
-                            </Popup>
-                        )}
-                    </Marker>
-                ))}
-            </MapContainer>
+            {/* This div is the target for our Leaflet map */}
+            <div ref={mapContainerRef} style={{ width: '600px', height: '600px' }} />
         </main>
     );
 }

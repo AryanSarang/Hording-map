@@ -1,7 +1,7 @@
-// filepath: models/Hording.js
-
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
+const Vendor = require('./Vendor');
+
 
 const Hording = sequelize.define('Hording', {
     id: {
@@ -55,7 +55,7 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.ENUM('prime', 'high', 'medium', 'low'),
         allowNull: true,
     },
-    condition: {
+    quality: {
         type: DataTypes.ENUM('supreme', 'great', 'good', 'average'),
         allowNull: true,
     },
@@ -137,4 +137,7 @@ const Hording = sequelize.define('Hording', {
     timestamps: true,
 });
 
+
+Hording.belongsTo(Vendor, { as: 'vendor', foreignKey: 'vendorId' });
+Vendor.hasMany(Hording, { as: 'hordings', foreignKey: 'vendorId' });
 module.exports = Hording;

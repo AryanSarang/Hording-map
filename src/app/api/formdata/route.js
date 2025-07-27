@@ -1,8 +1,7 @@
-// filepath: src/app/api/formdata/route.js
-
 import Hording from '../../../../models/Hording';
-import sequelize from '../../../../config/database'; // Make sure this path is correct
-import { Sequelize } from 'sequelize'; // Import Sequelize for instanceof check
+import Vendor from '../../../../models/Vendor';
+import sequelize from '../../../../config/database';
+import { Sequelize } from 'sequelize';
 
 export async function POST(req) {
     try {
@@ -11,10 +10,26 @@ export async function POST(req) {
 
         const body = await req.json();
         console.log("Received data:", body);
+        let vendorId = null;
+        if (body.vendorName && body.vendorName.trim() !== '') {
+            const [vendor] = await Vendor.findOrCreate({
+                where: { name: body.vendorName.trim() },
+                defaults: { name: body.vendorName.trim() }
+            });
+            vendorId = vendor.id;
+        }
+        const numericFields = ['width', 'height', 'rate', 'ourRate', 'latitude', 'longitude'];
 
-        // Directly pass the body to Hording.create()
-        // Sequelize will map the properties from the body to the model's fields.
-        const newEntry = await Hording.create(body);
+        numericFields.forEach(field => {
+            if (body[field] === '') {
+                body[field] = null;
+            }
+        });
+
+        const newEntry = await Hording.create({
+            ...body,
+            vendorId,
+        });
 
         return new Response(JSON.stringify(newEntry), { status: 201 });
 
@@ -26,24 +41,20 @@ export async function POST(req) {
             errorName: error.name,
         };
 
-        // Check if it's a Sequelize validation error to provide more specific feedback
         if (error instanceof Sequelize.ValidationError) {
             errorResponse.message = "Validation failed. Please check your input.";
-            // Extract specific field errors
             errorResponse.validationErrors = error.errors.map(err => ({
                 field: err.path,
                 message: err.message,
                 value: err.value
             }));
-            return new Response(JSON.stringify(errorResponse), { status: 400 }); // Bad Request
+            return new Response(JSON.stringify(errorResponse), { status: 400 });
         }
 
-        // For other types of errors
         errorResponse.error = error.message;
-        return new Response(JSON.stringify(errorResponse), { status: 500 }); // Internal Server Error
+        return new Response(JSON.stringify(errorResponse), { status: 500 });
     }
 }
-
 // Keeping the GET route with similar error handling
 export async function GET(req) {
     try {
