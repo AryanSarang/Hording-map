@@ -1,17 +1,21 @@
-import sequelize from '../../../../config/database'; // Import sequelize instance
-import Vendor from '../../../../models/Vendor';
+// src/app/api/vendors/route.js
+import { NextResponse } from 'next/server';
+import { supabase } from '../../../lib/supabase'; // Use the public client for reading
 
-export async function GET() {
+export const revalidate = 0;
+
+export async function GET(req) {
     try {
-        // Add this line to ensure the database is connected
-        await sequelize.authenticate();
+        const { data: vendors, error } = await supabase
+            .from('Vendors')
+            .select('*')
+            .order('name', { ascending: true });
 
-        const vendors = await Vendor.findAll({
-            order: [['name', 'ASC']] // Order them alphabetically
-        });
-        return new Response(JSON.stringify(vendors), { status: 200 });
+        if (error) throw error;
+
+        return NextResponse.json(vendors, { status: 200 });
     } catch (error) {
-        console.error("!!! API Error (GET /api/vendors):", error);
-        return new Response(JSON.stringify({ message: "Failed to fetch vendors.", error: error.message }), { status: 500 });
+        console.error("Fetch Error:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

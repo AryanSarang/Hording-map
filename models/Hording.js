@@ -2,20 +2,18 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 const Vendor = require('./Vendor');
 
-
 const Hording = sequelize.define('Hording', {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
         primaryKey: true,
     },
-    // --- Location Fields ---
     latitude: {
-        type: DataTypes.FLOAT,
+        type: DataTypes.DOUBLE,
         allowNull: true,
     },
     longitude: {
-        type: DataTypes.FLOAT,
+        type: DataTypes.DOUBLE,
         allowNull: true,
     },
     state: {
@@ -26,6 +24,10 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.STRING,
         allowNull: false,
     },
+    zone: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
     address: {
         type: DataTypes.TEXT,
         allowNull: false,
@@ -34,52 +36,70 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    // --- Hoarding Specification Fields ---
+    roadName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    roadFrom: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    roadTo: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    positionWRTRoad: {
+        type: DataTypes.ENUM('LHS', 'RHS'),
+        allowNull: true,
+    },
+    trafficType: {
+        type: DataTypes.ENUM('Morning', 'Evening'),
+        allowNull: true,
+    },
+    screenNumber: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+    },
+
     mediaType: {
-        type: DataTypes.ENUM('hording', 'busShelter', 'other'),
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    screenPlacement: {
+        type: DataTypes.ENUM('Residential', 'Commercial', 'RailwayStation', 'Cafe', 'Pub', 'Club', 'Restaurant'),
         allowNull: true,
     },
     width: {
-        type: DataTypes.INTEGER, // Changed to INTEGER as requested
+        type: DataTypes.INTEGER,
         allowNull: true,
     },
     height: {
-        type: DataTypes.INTEGER, // Changed to INTEGER as requested
+        type: DataTypes.INTEGER,
         allowNull: true,
     },
     hordingType: {
-        type: DataTypes.ENUM('frontLit', 'backLit', 'led'),
+        type: DataTypes.STRING,
         allowNull: true,
     },
     visibility: {
-        type: DataTypes.ENUM('prime', 'high', 'medium', 'low'),
+        type: DataTypes.STRING,
         allowNull: true,
     },
-    quality: {
-        type: DataTypes.ENUM('supreme', 'great', 'good', 'average'),
-        allowNull: true,
-    },
-    // --- Commercial Fields ---
     rate: {
-        type: DataTypes.INTEGER, // Changed to INTEGER as requested
+        type: DataTypes.INTEGER,
         allowNull: true,
     },
     ourRate: {
-        type: DataTypes.INTEGER, // Changed to INTEGER as requested
+        type: DataTypes.INTEGER,
         allowNull: true,
     },
     paymentTerms: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING,
         allowNull: true,
     },
     minimumBookingDuration: {
         type: DataTypes.STRING,
         allowNull: false,
-    },
-    // --- Vendor and Client Fields ---
-    vendorName: {
-        type: DataTypes.STRING,
-        allowNull: true,
     },
     pocName: {
         type: DataTypes.STRING,
@@ -89,7 +109,14 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.TEXT,
         allowNull: true,
     },
-    // --- LED Specific Fields ---
+    screenSize: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
+    pocNumber: {
+        type: DataTypes.STRING,
+        allowNull: true,
+    },
     slotTime: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -102,7 +129,6 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    // --- Metadata and Other ---
     propertyCode: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -126,18 +152,16 @@ const Hording = sequelize.define('Hording', {
     compliance: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
-        allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('active', 'inactive', 'pending'),
-        defaultValue: 'pending',
+        type: DataTypes.STRING,
         allowNull: false,
-    }
+    },
 }, {
     timestamps: true,
 });
 
-
 Hording.belongsTo(Vendor, { as: 'vendor', foreignKey: 'vendorId' });
 Vendor.hasMany(Hording, { as: 'hordings', foreignKey: 'vendorId' });
+
 module.exports = Hording;

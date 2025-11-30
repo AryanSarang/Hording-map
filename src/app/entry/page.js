@@ -11,16 +11,17 @@ const Map = dynamic(() => import('./EntryMap'), {
 });
 
 const initialFormData = {
-    latitude: '', longitude: '', state: 'MH', city: 'Mumbai', address: '', landmark: '',
-    mediaType: 'hording', width: '', height: '', hordingType: 'frontLit',
-    visibility: 'prime', condition: 'supreme', rate: '', ourRate: '',
+    latitude: '', longitude: '', state: 'MH', city: 'Mumbai', zone: '', address: '', landmark: '',
+    roadName: '', roadFrom: '', roadTo: '', positionWRTRoad: 'LHS', trafficType: 'Morning',
+    mediaType: 'digitalScreen', width: '', height: '', hordingType: 'led', screenPlacement: 'residential', screenSize: '', screenNumber: '', slotTime: '', loopTime: '', displayHours: '',
+    visibility: 'none', rate: '', ourRate: '',
     paymentTerms: '', minimumBookingDuration: '', vendorName: '', pocName: '',
-    previousClientele: '', slotTime: '', loopTime: '', displayHours: '',
+    previousClientele: '', pocNumber: '', slotTime: '', screenNumebr: '', loopTime: '', displayHours: '',
     propertyCode: '', offers: '', description: '', dwellTime: '',
     compliance: false, status: 'pending',
 };
 
-// --- STYLING CONSTANTS (Updated for new design) ---
+// --- STYLING CONSTANTS ---
 const baseInputClassName = "block w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-transparent shadow-sm focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-0 text-sm peer py-2.5 px-3.5";
 const floatingLabelClassName = "absolute text-gray-500 dark:text-slate-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-slate-800 px-2 peer-focus:px-2 peer-focus:text-indigo-600 dark:peer-focus:text-indigo-400 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1";
 const selectLabelClassName = "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1";
@@ -39,8 +40,27 @@ const getCustomSelectStyles = (isDarkMode = true) => ({
     menuPortal: base => ({ ...base, zIndex: 9999 })
 });
 
-const FloatingLabelInput = ({ name, label, type = "text", value, onChange, error }) => (<div className="relative"> <input type={type} id={name} name={name} className={baseInputClassName} value={value} onChange={onChange} placeholder=" " /> <label htmlFor={name} className={floatingLabelClassName}>{label}</label> {error && <p className="text-red-500 text-xs mt-1">{error}</p>} </div>);
+const FloatingLabelInput = ({ name, label, type = "text", value, onChange, error }) => (<div className="relative h-fit"> <input type={type} id={name} name={name} className={baseInputClassName} value={value} onChange={onChange} placeholder=" " /> <label htmlFor={name} className={floatingLabelClassName}>{label}</label> {error && <p className="text-red-500 text-xs mt-1">{error}</p>} </div>);
 const FloatingLabelTextarea = ({ name, label, value, onChange, error, rows = 3 }) => (<div className="relative"> <textarea id={name} name={name} className={baseInputClassName} value={value} onChange={onChange} placeholder=" " rows={rows} /> <label htmlFor={name} className={floatingLabelClassName}>{label}</label> {error && <p className="text-red-500 text-xs mt-1">{error}</p>} </div>);
+
+// New Toggle Switch Component
+const ToggleSwitch = ({ name, label, value, options, onChange }) => (
+    <div>
+        <label className={selectLabelClassName}>{label}</label>
+        <div className="mt-2 flex rounded-lg bg-slate-700 p-1">
+            {options.map(option => (
+                <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onChange(name, option.value)}
+                    className={`w-full rounded-md py-1.5 text-sm font-medium transition-colors ${value === option.value ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-600'}`}
+                >
+                    {option.label}
+                </button>
+            ))}
+        </div>
+    </div>
+);
 
 export default function Page() {
     const [formData, setFormData] = useState(initialFormData);
@@ -89,6 +109,7 @@ export default function Page() {
 
     const handleStateChange = (e) => { setFormData(prev => ({ ...prev, state: e.target.value, city: '' })); if (errors.state || errors.city) { setErrors(prev => ({ ...prev, state: null, city: null })); } };
     const handleInputChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); if (errors[name]) { setErrors(prev => ({ ...prev, [name]: null })); } };
+    const handleToggleChange = (name, value) => { setFormData(prev => ({ ...prev, [name]: value })); };
     const handleVendorChange = (newValue, actionMeta) => {
         let vendorName = '';
         if (actionMeta.action === 'create-option' && newValue) {
@@ -106,7 +127,7 @@ export default function Page() {
         if (step === 1) {
             if (!formData.state) newErrors.state = 'State is required.';
             if (!formData.city) newErrors.city = 'City is required.';
-            if (!formData.address.trim()) newErrors.address = 'Location description is required.';
+            if (!formData.address.trim()) newErrors.address = 'Address is required.';
         } else if (step === 2) {
             if (!formData.minimumBookingDuration.trim()) newErrors.minimumBookingDuration = 'Minimum booking duration is required.';
         } else if (step === 3) {
@@ -143,7 +164,7 @@ export default function Page() {
         const finalErrors = {};
         if (!formData.state) { finalErrors.state = 'State is required.'; allValid = false; }
         if (!formData.city) { finalErrors.city = 'City is required.'; allValid = false; }
-        if (!formData.address.trim()) { finalErrors.address = 'Location description is required.'; allValid = false; }
+        if (!formData.address.trim()) { finalErrors.address = 'Address is required.'; allValid = false; }
         if (!formData.minimumBookingDuration.trim()) { finalErrors.minimumBookingDuration = 'Minimum booking duration is required.'; allValid = false; }
         if (!formData.status) { finalErrors.status = 'Site status is required.'; allValid = false; }
         if (!allValid) {
@@ -195,19 +216,43 @@ export default function Page() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
                                             <div><label htmlFor="state" className={selectLabelClassName}>State</label><select name="state" value={formData.state} onChange={handleStateChange} className={baseInputClassName}><option value="">Select a State</option>{states.map(state => (<option key={state.isoCode} value={state.isoCode}>{state.name}</option>))}</select>{renderError('state')}</div>
                                             <div><label htmlFor="city" className={selectLabelClassName}>City</label><select name="city" value={formData.city} onChange={handleInputChange} className={baseInputClassName} disabled={!formData.state || cities.length === 0}><option value="">Select a City</option>{cities.map(city => (<option key={city.name} value={city.name}>{city.name}</option>))}</select>{renderError('city')}</div>
-                                            <div className="md:col-span-2"><FloatingLabelTextarea name="address" label="Location Description" value={formData.address} onChange={handleInputChange} error={errors.address} /></div>
+                                            <div className="md:col-span-2"><FloatingLabelTextarea name="address" label="Address" value={formData.address} onChange={handleInputChange} error={errors.address} /></div>
                                             <FloatingLabelInput name="landmark" label="Nearest Landmark" value={formData.landmark} onChange={handleInputChange} error={errors.landmark} />
+                                            <div ><FloatingLabelInput name="roadName" label="Road Name" value={formData.roadName} onChange={handleInputChange} error={errors.roadName} /></div>
+                                            <FloatingLabelInput name="roadFrom" label="From" value={formData.roadFrom} onChange={handleInputChange} error={errors.roadFrom} />
+                                            <FloatingLabelInput name="roadTo" label="To" value={formData.roadTo} onChange={handleInputChange} error={errors.roadTo} />
+                                            <FloatingLabelInput name="zone" label="zone" value={formData.zone} onChange={handleInputChange} error={errors.zone} />
+
+                                            <ToggleSwitch name="positionWRTRoad" label="Position WRT Road" value={formData.positionWRTRoad} options={[{ label: 'LHS', value: 'LHS' }, { label: 'RHS', value: 'RHS' }]} onChange={handleToggleChange} />
+                                            <ToggleSwitch name="trafficType" label="Traffic Type" value={formData.trafficType} options={[{ label: 'Morning', value: 'Morning' }, { label: 'Evening', value: 'Evening' }]} onChange={handleToggleChange} />
                                             <div className="md:col-span-2"><p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Pin Location on Map</p><div className="mt-1 h-64 md:h-80 w-full rounded-lg overflow-hidden border border-gray-300 dark:border-slate-600"><Map onMapClick={handleMapClick} clickLocation={clickLocation} /></div><div className="mt-2 grid grid-cols-2 gap-4"><input type="number" readOnly placeholder='Latitude' value={formData.latitude} className={`${baseInputClassName} bg-gray-100 dark:bg-slate-600`} /><input type="number" readOnly placeholder='Longitude' value={formData.longitude} className={`${baseInputClassName} bg-gray-100 dark:bg-slate-600`} /></div></div>
                                         </div>
                                     </div>
                                     <div>
                                         <h3 className={sectionTitleClassName}>Hoarding Specifications</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <div> <label htmlFor="mediaType" className={selectLabelClassName}>Media Type</label> <select name="mediaType" value={formData.mediaType} onChange={handleInputChange} className={baseInputClassName}> <option value="hording">Hoarding</option> <option value="busShelter">Bus Shelter</option> <option value="other">Other</option> </select> </div>
-                                            <div> <label htmlFor="hordingType" className={selectLabelClassName}>Hoarding Type</label> <select name="hordingType" value={formData.hordingType} onChange={handleInputChange} className={baseInputClassName}> <option value="frontLit">Front-Lit</option> <option value="backLit">Back-Lit</option> <option value="led">LED</option> </select> </div>
+                                            <div> <label htmlFor="mediaType" className={selectLabelClassName}>Media Type</label> <select name="mediaType" value={formData.mediaType} onChange={handleInputChange} className={baseInputClassName}><option value="digitalScreen">Digital Screen</option> <option value="hording">Hoarding</option> <option value="busShelter">Bus Shelter</option> <option value="other">Other</option> </select> </div>
+                                            <div> <label htmlFor="hordingType" className={selectLabelClassName}>Hoarding Type</label> <select name="hordingType" value={formData.hordingType} onChange={handleInputChange} className={baseInputClassName}><option value="led">LED</option> <option value="frontLit">Front-Lit</option> <option value="backLit">Back-Lit</option>  </select> </div>
                                             <FloatingLabelInput name="width" label="Width (ft)" type="number" value={formData.width} onChange={handleInputChange} error={errors.width} />
                                             <FloatingLabelInput name="height" label="Height (ft)" type="number" value={formData.height} onChange={handleInputChange} error={errors.height} />
-                                            {formData.hordingType === 'led' && (<> <FloatingLabelInput name="slotTime" label="Slot Time (e.g., 10s)" value={formData.slotTime} onChange={handleInputChange} error={errors.slotTime} /> <FloatingLabelInput name="loopTime" label="Loop Time (e.g., 120s)" value={formData.loopTime} onChange={handleInputChange} error={errors.loopTime} /> <div className="md:col-span-2"> <FloatingLabelInput name="displayHours" label="Display Hours (e.g., 6 AM - 10 PM)" value={formData.displayHours} onChange={handleInputChange} error={errors.displayHours} /> </div> </>)}
+                                            {formData.hordingType === 'led' && (
+                                                <>
+                                                    <div> <label htmlFor="screenPlacement" className={selectLabelClassName}>Screen Placement</label>
+                                                        <select name="screenPlacement" value={formData.screenPlacement} onChange={handleInputChange} className={baseInputClassName}>
+                                                            <option value="residential">Residential</option> <option value="commercial">Commercial</option>
+                                                            <option value="railwayStation">Railway Station</option>
+                                                            <option value="cafe">Cafe</option>
+                                                            <option value="pub">Pub</option>
+                                                            <option value="club">Club</option>
+                                                            <option value="restaurant">Restaurant</option>
+                                                        </select> </div>
+                                                    <FloatingLabelInput name="screenSize" className="h-fit" label="Screen size (e.g., inch)" value={formData.screenSize} onChange={handleInputChange} error={errors.screenSize} />
+                                                    <FloatingLabelInput name="screenNumber" className="h-fit" type="number" label="Screen Number" value={formData.screenNumber} onChange={handleInputChange} error={errors.screenNumber} />
+
+                                                    <FloatingLabelInput name="slotTime" label="Slot Time (e.g., 10s)" value={formData.slotTime} onChange={handleInputChange} error={errors.slotTime} />
+                                                    <FloatingLabelInput name="loopTime" label="Loop Time (e.g., 120s)" value={formData.loopTime} onChange={handleInputChange} error={errors.loopTime} />
+                                                    <div > <FloatingLabelInput name="displayHours" label="Display Hours (e.g., 6 AM - 10 PM)" value={formData.displayHours} onChange={handleInputChange} error={errors.displayHours} /> </div>
+                                                </>)}
                                         </div>
                                     </div>
                                 </div>
@@ -227,9 +272,8 @@ export default function Page() {
                                     <div>
                                         <h3 className={sectionTitleClassName}>Site Details</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <div> <label htmlFor="visibility" className={selectLabelClassName}>Visibility</label> <select name="visibility" value={formData.visibility} onChange={handleInputChange} className={baseInputClassName}> <option value="prime">Prime</option> <option value="high">High</option> <option value="medium">Medium</option> <option value="low">Low</option> </select> </div>
-                                            <div> <label htmlFor="condition" className={selectLabelClassName}>Quality</label> <select name="condition" value={formData.condition} onChange={handleInputChange} className={baseInputClassName}> <option value="supreme">Supreme</option> <option value="great">Great</option> <option value="good">Good</option> <option value="average">Average</option> </select> </div>
-                                            <FloatingLabelInput name="dwellTime" label="Dwell Time" value={formData.dwellTime} onChange={handleInputChange} error={errors.dwellTime} />
+                                            <div> <label htmlFor="visibility" className={selectLabelClassName}>Visibility</label> <select name="visibility" value={formData.visibility} onChange={handleInputChange} className={baseInputClassName}><option value="none">None</option> <option value="prime">Prime</option> <option value="high">High</option> <option value="medium">Medium</option> <option value="low">Low</option> </select> </div>
+                                            <div className='md:mt-1'>  <FloatingLabelInput name="dwellTime" label="Dwell Time" value={formData.dwellTime} onChange={handleInputChange} error={errors.dwellTime} /></div>
                                             <div className="md:col-span-2"> <FloatingLabelTextarea name="description" label="Description" value={formData.description} onChange={handleInputChange} error={errors.description} /> </div>
                                             <div className="md:col-span-2"> <FloatingLabelTextarea name="previousClientele" label="Previous Clientele" value={formData.previousClientele} onChange={handleInputChange} error={errors.previousClientele} /> </div>
                                         </div>
@@ -257,6 +301,8 @@ export default function Page() {
                                                 )}
                                             </div>
                                             <FloatingLabelInput name="pocName" label="POC Name" value={formData.pocName} onChange={handleInputChange} error={errors.pocName} />
+                                            <FloatingLabelInput name="pocNumber" className="h-fit" label="POC Number" value={formData.pocNumber} onChange={handleInputChange} error={errors.pocNumber} />
+
                                             <FloatingLabelInput name="propertyCode" label="Property Code" value={formData.propertyCode} onChange={handleInputChange} error={errors.propertyCode} />
                                         </div>
                                     </div>
@@ -267,7 +313,7 @@ export default function Page() {
                                     <div>
                                         <h3 className={sectionTitleClassName}>Media Upload</h3>
                                         <div>
-                                            <p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Hoarding Images</p>
+                                            <p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Site Images</p>
                                             <div className="mt-1 p-6 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg text-center">
                                                 <CldUploadWidget onSuccess={handleUpload} uploadPreset="hording-map" options={{ sources: ['local', 'url', 'camera'], multiple: true }}>{({ open }) => <button type="button" onClick={() => open()} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">Click to Upload Images</button>}</CldUploadWidget>
                                                 {imageUrls.length > 0 && (<div className="flex flex-wrap justify-center mt-4 gap-4"> {imageUrls.map((url, index) => (<div key={index} className="relative"> <img src={url} alt={`Uploaded ${index + 1}`} className="w-24 h-24 object-cover rounded-lg shadow-md" /> </div>))} </div>)}

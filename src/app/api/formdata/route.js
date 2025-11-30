@@ -1,72 +1,106 @@
-import Hording from '../../../../models/Hording';
-import Vendor from '../../../../models/Vendor';
-import sequelize from '../../../../config/database';
-import { Sequelize } from 'sequelize';
+// src/app/api/formdata/route.js
+import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '../../../lib/supabase'; // Adjust path if needed
 
 export async function POST(req) {
     try {
-        await sequelize.authenticate();
-        console.log("Database connection authenticated successfully.");
-
         const body = await req.json();
         console.log("Received data:", body);
+
         let vendorId = null;
+
+        // --- 1. LOGIC: Vendor Find or Create ---
+        // (Replicates Sequelize's findOrCreate)
         if (body.vendorName && body.vendorName.trim() !== '') {
-            const [vendor] = await Vendor.findOrCreate({
-                where: { name: body.vendorName.trim() },
-                defaults: { name: body.vendorName.trim() }
-            });
-            vendorId = vendor.id;
+            const vendorName = body.vendorName.trim();
+
+            // A. Try to find existing vendor
+            const { data: existingVendor } = await supabaseAdmin
+                .from('Vendors')
+                .select('id')
+                .eq('name', vendorName)
+                .single();
+
+            if (existingVendor) {
+                vendorId = existingVendor.id;
+            } else {
+                // B. If not found, Create new one
+                const { data: newVendor, error: createError } = await supabaseAdmin
+                    .from('Vendors')
+                    .insert([{ name: vendorName }])
+                    .select('id')
+                    .single();
+
+                if (createError) {
+                    throw new Error(`Failed to create vendor: ${createError.message}`);
+                }
+                vendorId = newVendor.id;
+            }
         }
-        const numericFields = ['width', 'height', 'rate', 'ourRate', 'latitude', 'longitude'];
+
+        // --- 2. LOGIC: Data Cleaning ---
+        // (Matches your exact numericFields list)
+        const numericFields = ['width', 'height', 'rate', 'ourRate', 'latitude', 'longitude', 'screenNumber'];
+        const cleanBody = { ...body };
 
         numericFields.forEach(field => {
-            if (body[field] === '') {
-                body[field] = null;
+            if (cleanBody[field] === '' || cleanBody[field] === undefined) {
+                cleanBody[field] = null;
             }
         });
 
-        const newEntry = await Hording.create({
-            ...body,
-            vendorId,
-        });
+        // Prepare final object for insertion
+        cleanBody.vendorId = vendorId;
+        delete cleanBody.vendorName; // Remove field not present in Hordings table
 
-        return new Response(JSON.stringify(newEntry), { status: 201 });
+        // --- 3. LOGIC: Create Hording Entry ---
+        const { data: newEntry, error: insertError } = await supabaseAdmin
+            .from('Hordings')
+            .insert([cleanBody])
+            .select()
+            .single();
+
+        // --- 4. LOGIC: Error Handling ---
+        if (insertError) {
+            console.error("Supabase Insert Error:", insertError);
+
+            // Mimic Validation Error response structure
+            return NextResponse.json({
+                message: "Validation failed or Database Error.",
+                error: insertError.message,
+                details: insertError.details
+            }, { status: 400 });
+        }
+
+        return NextResponse.json(newEntry, { status: 201 });
 
     } catch (error) {
         console.error("!!! API Error:", error);
-
-        let errorResponse = {
+        return NextResponse.json({
             message: "Failed to process request.",
-            errorName: error.name,
-        };
-
-        if (error instanceof Sequelize.ValidationError) {
-            errorResponse.message = "Validation failed. Please check your input.";
-            errorResponse.validationErrors = error.errors.map(err => ({
-                field: err.path,
-                message: err.message,
-                value: err.value
-            }));
-            return new Response(JSON.stringify(errorResponse), { status: 400 });
-        }
-
-        errorResponse.error = error.message;
-        return new Response(JSON.stringify(errorResponse), { status: 500 });
+            error: error.message
+        }, { status: 500 });
     }
 }
-// Keeping the GET route with similar error handling
+
 export async function GET(req) {
     try {
-        await sequelize.authenticate();
-        const allHordings = await Hording.findAll();
-        return new Response(JSON.stringify(allHordings), { status: 200 });
+        // Fetch all data
+        const { data: allHordings, error } = await supabaseAdmin
+            .from('Hordings')
+            .select('*');
+
+        if (error) {
+            throw error;
+        }
+
+        return NextResponse.json(allHordings, { status: 200 });
+
     } catch (error) {
         console.error("!!! API Error (GET):", error);
-        return new Response(JSON.stringify({
+        return NextResponse.json({
             message: "Failed to fetch data.",
-            error: error.message,
-            errorName: error.name,
-        }), { status: 500 });
+            error: error.message
+        }, { status: 500 });
     }
 }
