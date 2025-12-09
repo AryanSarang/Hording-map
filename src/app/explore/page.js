@@ -9,7 +9,7 @@ export default async function ExplorePage() {
     // 1. Fetch data using Supabase Client
     const { data: hoardings, error } = await supabase
         .from('Hordings') // Make sure this matches your table name exactly
-        .select('*');
+        .select('*, vendor:Vendors(name)');
 
     if (error) {
         console.error("Supabase Error:", error);

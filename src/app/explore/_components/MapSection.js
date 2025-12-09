@@ -2,12 +2,11 @@
 "use client";
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import MarkerClusterGroup from 'react-leaflet-cluster'; // 👈 IMPORT THIS
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
 import L from 'leaflet';
 
-// Fix icons
 const icon = typeof window !== 'undefined' ? L.icon({
     iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
     iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
@@ -33,17 +32,17 @@ function MapController({ selectedId, hoardings }) {
 
 export default function MapSection({ hoardings, selectedId, onSelect }) {
     return (
-        <div className="w-full h-full relative isolate bg-black"> {/* Dark bg for loading */}
+        <div className="w-full h-full relative isolate bg-gray-900">
 
-            {/* Floating Search Bar (Dark Mode) */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-[40%]">
-                <div className="relative shadow-xl">
+            {/* --- SEARCH BAR (Floating on Map) --- */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-[40%] max-w-md">
+                <div className="relative shadow-2xl">
                     <input
                         type="text"
                         placeholder="Search location..."
-                        className="w-full pl-10 pr-4 py-3 rounded-full border border-gray-700 bg-gray-900/90 text-white placeholder-gray-400 backdrop-blur-md focus:bg-black focus:border-green-500 outline-none text-sm transition"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-full border border-gray-600 bg-black/80 text-white placeholder-gray-400 backdrop-blur-xl focus:bg-black focus:border-green-500 outline-none text-xs transition-all shadow-lg"
                     />
-                    <span className="absolute left-4 top-3.5 text-gray-400">🔍</span>
+                    <span className="absolute left-3.5 top-2.5 text-gray-400 text-sm">🔍</span>
                 </div>
             </div>
 
@@ -52,21 +51,16 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                 zoom={11}
                 scrollWheelZoom={true}
                 className="w-full h-full z-0"
-                style={{ height: "100%", width: "100%", background: "#111" }}
+                style={{ height: "100%", width: "100%" }}
             >
-                {/* 👇 DARK MODE TILES */}
                 <TileLayer
-                    attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
                 <MapController selectedId={selectedId} hoardings={hoardings} />
 
-                {/* 👇 CLUSTERING WRAPPER */}
-                <MarkerClusterGroup
-                    chunkedLoading
-                    spiderfyOnMaxZoom={true}
-                >
+                <MarkerClusterGroup chunkedLoading spiderfyOnMaxZoom={true}>
                     {hoardings.map((h) => (
                         h.latitude && h.longitude ? (
                             <Marker
@@ -74,10 +68,9 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                                 position={[h.latitude, h.longitude]}
                                 icon={icon}
                                 eventHandlers={{
-                                    click: () => onSelect(h.id), // This triggers the detail view update
+                                    click: () => onSelect(h.id),
                                 }}
                             >
-                                {/* Optional: Remove Popup if you want users to look at the side panel instead */}
                                 <Popup className="custom-popup">
                                     <div className="text-black text-xs font-bold">{h.address}</div>
                                 </Popup>
