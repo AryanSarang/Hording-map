@@ -8,7 +8,7 @@ export const revalidate = 0;
 export default async function ExplorePage() {
     // 1. Fetch data using Supabase Client
     const { data: hoardings, error } = await supabase
-        .from('Hordings') // Make sure this matches your table name exactly
+        .from('hordings') // Make sure this matches your table name exactly
         .select('*, vendor:Vendors(name)');
 
     if (error) {

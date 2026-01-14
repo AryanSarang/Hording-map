@@ -28,7 +28,7 @@ export default function EntryMap({ onMapClick, clickLocation }) {
             mapInstanceRef.current = L.map(mapContainerRef.current).setView(center, 11);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution: '© OpenStreetMap contributors'
             }).addTo(mapInstanceRef.current);
 
             // Add map click event listener
@@ -45,7 +45,7 @@ export default function EntryMap({ onMapClick, clickLocation }) {
                 mapInstanceRef.current = null;
             }
         };
-    }, [onMapClick]); // Dependency on onMapClick prop
+    }, [onMapClick]);
 
     // A separate effect to manage the marker when clickLocation changes
     useEffect(() => {
@@ -60,6 +60,15 @@ export default function EntryMap({ onMapClick, clickLocation }) {
     }, [clickLocation]);
 
     return (
-        <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+        <div
+            ref={mapContainerRef}
+            style={{
+                width: '100%',
+                height: '400px',
+                borderRadius: '0.5rem',
+                border: '1px solid rgb(71, 85, 105)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            }}
+        />
     );
 }

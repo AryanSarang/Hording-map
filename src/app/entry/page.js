@@ -1,352 +1,805 @@
-"use client"
+'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { CldUploadWidget } from 'next-cloudinary';
 import { State, City } from 'country-state-city';
-import CreatableSelect from 'react-select/creatable';
+import { ChevronDown, Plus, Trash2, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
-const Map = dynamic(() => import('./EntryMap'), {
-    ssr: false
-});
+const Map = dynamic(() => import('./EntryMap'), { ssr: false });
 
+// Initial form data matching Hording schema
 const initialFormData = {
-    latitude: '', longitude: '', state: 'MH', city: 'Mumbai', zone: '', address: '', landmark: '',
-    roadName: '', roadFrom: '', roadTo: '', positionWRTRoad: 'LHS', trafficType: 'Morning',
-    mediaType: 'digitalScreen', width: '', height: '', hordingType: 'led', screenPlacement: 'residential', screenSize: '', screenNumber: '', slotTime: '', loopTime: '', displayHours: '',
-    visibility: 'none', rate: '', ourRate: '',
-    paymentTerms: '', minimumBookingDuration: '', vendorName: '', pocName: '',
-    previousClientele: '', pocNumber: '', slotTime: '', screenNumebr: '', loopTime: '', displayHours: '',
-    propertyCode: '', offers: '', description: '', dwellTime: '',
-    compliance: false, status: 'pending',
+    // LOCATION
+    latitude: '',
+    longitude: '',
+    state: 'MH',
+    city: 'Mumbai',
+    address: '',
+    pincode: '',
+    zone: '',
+    landmark: '',
+    road_name: '',
+    road_from: '',
+    road_to: '',
+    position_wrt_road: 'LHS',
+
+    // CONTACT
+    poc_name: '',
+    poc_number: '',
+    poc_email: '',
+
+    // COMMERCIAL
+    monthly_rental: '',
+    vendor_rate: '',
+    payment_terms: '',
+    minimum_booking_duration: '',
+    vendor_name: '',
+
+    // MEDIA CORE
+    media_type: 'Digital Screens',
+    media: [],
+
+    // SPECS (varies by media_type)
+    screen_size: '',
+    screen_number: '',
+    screen_placement: 'Roadside',
+    display_format: 'Static',
+    width: '',
+    height: '',
+    hording_type: 'Static',
+
+    // ADDITIONAL
+    traffic_type: 'Heavy',
+    visibility: 'High',
+    condition: 'Excellent',
+    dwell_time: '',
+    previous_clientele: '',
+
+    // SYSTEM
+    status: 'active',
+    compliance: false,
+
+    // METAFIELDS
+    metafields: {},
 };
 
-// --- STYLING CONSTANTS ---
-const baseInputClassName = "block w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-transparent shadow-sm focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-0 text-sm peer py-2.5 px-3.5";
-const floatingLabelClassName = "absolute text-gray-500 dark:text-slate-400 duration-300 transform -translate-y-4 scale-75 top-2 z-10 origin-[0] bg-white dark:bg-slate-800 px-2 peer-focus:px-2 peer-focus:text-indigo-600 dark:peer-focus:text-indigo-400 peer-placeholder-shown:scale-100 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:top-1/2 peer-focus:top-2 peer-focus:scale-75 peer-focus:-translate-y-4 start-1";
-const selectLabelClassName = "block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1";
-const sectionTitleClassName = "text-lg font-semibold text-gray-800 dark:text-slate-100 border-b border-gray-200 dark:border-slate-700 pb-2 mb-6";
-const stepsInfo = [{ number: 1, title: "Location & Specs" }, { number: 2, title: "Commercials & Details" }, { number: 3, title: "Media & Finalization" }];
+// Available metafield namespaces for Hordings
+const METAFIELD_NAMESPACES = [
+    { namespace: 'custom', key: 'seo_notes', name: 'SEO Notes', type: 'string' },
+    { namespace: 'custom', key: 'traffic_pattern', name: 'Traffic Pattern', type: 'string' },
+    { namespace: 'custom', key: 'foot_traffic_count', name: 'Foot Traffic Count', type: 'number' },
+    { namespace: 'custom', key: 'vehicle_traffic_count', name: 'Vehicle Traffic Count', type: 'number' },
+    { namespace: 'custom', key: 'peak_hours', name: 'Peak Hours', type: 'string' },
+    { namespace: 'custom', key: 'demographics', name: 'Demographics', type: 'string' },
+    { namespace: 'custom', key: 'nearby_landmarks', name: 'Nearby Landmarks', type: 'string' },
+    { namespace: 'custom', key: 'installation_date', name: 'Installation Date', type: 'date' },
+    { namespace: 'custom', key: 'maintenance_notes', name: 'Maintenance Notes', type: 'string' },
+    { namespace: 'custom', key: 'certifications', name: 'Certifications', type: 'string' },
+];
 
-const getCustomSelectStyles = (isDarkMode = true) => ({
-    control: (base, state) => ({ ...base, backgroundColor: isDarkMode ? '#1e293b' : '#ffffff', borderColor: state.isFocused ? '#818cf8' : (isDarkMode ? '#475569' : '#d1d5db'), borderRadius: '0.5rem', padding: '0.125rem', boxShadow: 'none', '&:hover': { borderColor: '#6366f1' }, }),
-    input: (base) => ({ ...base, color: isDarkMode ? '#f1f5f9' : '#0f172a' }),
-    singleValue: (base) => ({ ...base, color: isDarkMode ? '#f1f5f9' : '#0f172a' }),
-    menu: (base) => ({ ...base, backgroundColor: isDarkMode ? '#334155' : 'white', borderRadius: '0.5rem' }),
-    option: (base, state) => ({ ...base, backgroundColor: state.isFocused ? (isDarkMode ? '#4f46e5' : '#e0e7ff') : 'transparent', color: isDarkMode ? '#f1f5f9' : '#111827', borderRadius: '0.375rem', margin: '0 4px', width: 'calc(100% - 8px)', '&:active': { backgroundColor: isDarkMode ? '#4338ca' : '#c7d2fe' }, }),
-    placeholder: (base) => ({ ...base, color: isDarkMode ? '#94a3b8' : '#6b7280' }),
-    indicatorSeparator: () => ({ display: 'none' }),
-    dropdownIndicator: (base, state) => ({ ...base, color: state.isFocused ? (isDarkMode ? '#f1f5f9' : '#4f46e5') : (isDarkMode ? '#94a3b8' : '#6b7280'), '&:hover': { color: isDarkMode ? '#f1f5f9' : '#4f46e5' } }),
-    menuPortal: base => ({ ...base, zIndex: 9999 })
-});
+// Styling
+const inputClass = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500';
+const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
+const sectionClass = 'border-b border-gray-200 dark:border-gray-700 pb-6 mb-6';
+const buttonPrimaryClass = 'px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition';
+const buttonSecondaryClass = 'px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded-lg font-medium transition';
+const buttonDangerClass = 'px-3 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900 dark:hover:bg-red-800 text-red-700 dark:text-red-300 rounded text-sm transition';
 
-const FloatingLabelInput = ({ name, label, type = "text", value, onChange, error }) => (<div className="relative h-fit"> <input type={type} id={name} name={name} className={baseInputClassName} value={value} onChange={onChange} placeholder=" " /> <label htmlFor={name} className={floatingLabelClassName}>{label}</label> {error && <p className="text-red-500 text-xs mt-1">{error}</p>} </div>);
-const FloatingLabelTextarea = ({ name, label, value, onChange, error, rows = 3 }) => (<div className="relative"> <textarea id={name} name={name} className={baseInputClassName} value={value} onChange={onChange} placeholder=" " rows={rows} /> <label htmlFor={name} className={floatingLabelClassName}>{label}</label> {error && <p className="text-red-500 text-xs mt-1">{error}</p>} </div>);
+// Collapsible Section Component
+const CollapsibleSection = ({ title, children, defaultOpen = true, icon: Icon = null }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
 
-// New Toggle Switch Component
-const ToggleSwitch = ({ name, label, value, options, onChange }) => (
-    <div>
-        <label className={selectLabelClassName}>{label}</label>
-        <div className="mt-2 flex rounded-lg bg-slate-700 p-1">
-            {options.map(option => (
-                <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => onChange(name, option.value)}
-                    className={`w-full rounded-md py-1.5 text-sm font-medium transition-colors ${value === option.value ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-300 hover:bg-slate-600'}`}
-                >
-                    {option.label}
-                </button>
-            ))}
+    return (
+        <div className={sectionClass}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between w-full mb-4 hover:text-blue-600 dark:hover:text-blue-400 transition"
+            >
+                <div className="flex items-center gap-2">
+                    {Icon && <Icon className="w-5 h-5" />}
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+                </div>
+                <ChevronDown className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && <div>{children}</div>}
         </div>
+    );
+};
+
+// Input Component
+const InputField = ({ label, name, type = 'text', value, onChange, error, required = false, hint }) => (
+    <div className="mb-4">
+        <label className={labelClass}>
+            {label}
+            {required && <span className="text-red-600 dark:text-red-400">*</span>}
+        </label>
+        <input
+            type={type}
+            name={name}
+            value={value}
+            onChange={onChange}
+            className={`${inputClass} ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
+        />
+        {error && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{error}</p>}
+        {hint && <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{hint}</p>}
     </div>
 );
 
-export default function Page() {
-    const [formData, setFormData] = useState(initialFormData);
-    const [clickLocation, setClickLocation] = useState(null);
-    const [imageUrls, setImageUrls] = useState([]);
-    const [currentStep, setCurrentStep] = useState(1);
-    const [errors, setErrors] = useState({});
-    const [formStatus, setFormStatus] = useState({ message: '', type: '' });
-    const [states, setStates] = useState([]);
-    const [cities, setCities] = useState([]);
-    const [vendorOptions, setVendorOptions] = useState([]);
-    const [isLoadingVendors, setIsLoadingVendors] = useState(true);
-    const [isClient, setIsClient] = useState(false);
+// Select Component
+const SelectField = ({ label, name, value, options, onChange, error, required = false }) => (
+    <div className="mb-4">
+        <label className={labelClass}>
+            {label}
+            {required && <span className="text-red-600 dark:text-red-400">*</span>}
+        </label>
+        <select
+            name={name}
+            value={value}
+            onChange={onChange}
+            className={`${inputClass} ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
+        >
+            <option value="">Select {label}</option>
+            {Array.isArray(options) && options.map((opt, idx) => (
+                <option key={idx} value={opt}>{opt}</option>
+            ))}
+        </select>
+        {error && <p className="text-red-600 dark:text-red-400 text-sm mt-1">{error}</p>}
+    </div>
+);
 
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    useEffect(() => {
-        try { setStates(State.getStatesOfCountry('IN') || []); } catch (e) { console.error("Failed to load states", e); setStates([]); }
-
-        fetch('/api/vendors')
-            .then(res => res.ok ? res.json() : Promise.reject(res))
-            .then(data => {
-                if (Array.isArray(data)) {
-                    setVendorOptions(data.map(v => ({ value: v.name, label: v.name })));
-                }
-            })
-            .catch(e => console.error("Failed to fetch vendors", e))
-            .finally(() => setIsLoadingVendors(false));
-    }, []);
-
-    useEffect(() => {
-        if (formData.state) { setCities(City.getCitiesOfState('IN', formData.state) || []); }
-        else { setCities([]); }
-    }, [formData.state]);
-
-    const resetForm = () => {
-        setFormData(initialFormData);
-        setImageUrls([]);
-        setClickLocation(null);
-        setErrors({});
-        setCurrentStep(1);
-        setFormStatus({ message: '', type: '' });
-    };
-
-    const handleStateChange = (e) => { setFormData(prev => ({ ...prev, state: e.target.value, city: '' })); if (errors.state || errors.city) { setErrors(prev => ({ ...prev, state: null, city: null })); } };
-    const handleInputChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value })); if (errors[name]) { setErrors(prev => ({ ...prev, [name]: null })); } };
-    const handleToggleChange = (name, value) => { setFormData(prev => ({ ...prev, [name]: value })); };
-    const handleVendorChange = (newValue, actionMeta) => {
-        let vendorName = '';
-        if (actionMeta.action === 'create-option' && newValue) {
-            vendorName = newValue.value;
-            setVendorOptions(prev => [...prev, newValue]);
-        } else {
-            vendorName = newValue ? newValue.value : '';
-        }
-        setFormData(prev => ({ ...prev, vendorName: vendorName }));
-    };
-    const handleMapClick = useCallback((lat, lng) => { setFormData(prev => ({ ...prev, latitude: lat, longitude: lng })); setClickLocation({ lat, lng }); }, []);
-    const validateStep = (stepToValidate) => {
-        const newErrors = {};
-        const step = stepToValidate || currentStep;
-        if (step === 1) {
-            if (!formData.state) newErrors.state = 'State is required.';
-            if (!formData.city) newErrors.city = 'City is required.';
-            if (!formData.address.trim()) newErrors.address = 'Address is required.';
-        } else if (step === 2) {
-            if (!formData.minimumBookingDuration.trim()) newErrors.minimumBookingDuration = 'Minimum booking duration is required.';
-        } else if (step === 3) {
-            if (!formData.status) newErrors.status = 'Site status is required.';
-        }
-        setErrors(prev => ({ ...prev, ...newErrors }));
-        return Object.keys(newErrors).length === 0;
-    };
-    const nextStep = () => {
-        if (validateStep(currentStep)) {
-            setCurrentStep(prev => prev + 1);
-            setFormStatus({ message: '', type: '' });
-        } else {
-            setFormStatus({ message: 'Please complete all required fields.', type: 'error' });
-            setTimeout(() => setFormStatus({ message: '', type: '' }), 3000);
-        }
-    };
-    const prevStep = () => { setCurrentStep(prev => prev - 1); setFormStatus({ message: '', type: '' }); };
-    const attemptStepNavigation = (targetStep) => {
-        if (targetStep < currentStep) { setCurrentStep(targetStep); return; }
-        for (let i = 1; i < targetStep; i++) {
-            if (!validateStep(i)) {
-                setFormStatus({ message: `Please complete Step ${i} first.`, type: 'error' });
-                setTimeout(() => setFormStatus({ message: '', type: '' }), 3000);
-                setCurrentStep(i);
-                return;
-            }
-        }
-        setCurrentStep(targetStep);
-    };
-    const handleSave = async (e) => {
-        e.preventDefault();
-        let allValid = true;
-        const finalErrors = {};
-        if (!formData.state) { finalErrors.state = 'State is required.'; allValid = false; }
-        if (!formData.city) { finalErrors.city = 'City is required.'; allValid = false; }
-        if (!formData.address.trim()) { finalErrors.address = 'Address is required.'; allValid = false; }
-        if (!formData.minimumBookingDuration.trim()) { finalErrors.minimumBookingDuration = 'Minimum booking duration is required.'; allValid = false; }
-        if (!formData.status) { finalErrors.status = 'Site status is required.'; allValid = false; }
-        if (!allValid) {
-            setErrors(finalErrors);
-            setFormStatus({ message: 'Please fix all errors before submitting.', type: 'error' });
-            if (finalErrors.state || finalErrors.city || finalErrors.address) setCurrentStep(1);
-            else if (finalErrors.minimumBookingDuration) setCurrentStep(2);
-            else if (finalErrors.status) setCurrentStep(3);
-            return;
-        }
-        setFormStatus({ message: 'Submitting...', type: 'loading' });
-        try {
-            const submissionData = { ...formData, imageUrls: imageUrls };
-            const response = await fetch('/api/formdata', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData), });
-            if (response.ok) {
-                setFormStatus({ message: 'Hoarding entry saved successfully!', type: 'success' });
-                resetForm();
-                setTimeout(() => setFormStatus({ message: '', type: '' }), 5000);
-            } else {
-                const errorData = await response.json();
-                setFormStatus({ message: `Failed to submit: ${errorData.message || errorData.error || 'Unknown server error.'}`, type: 'error' });
-            }
-        } catch (error) {
-            setFormStatus({ message: 'An unexpected error occurred. Please try again.', type: 'error' });
-        }
-    };
-    const handleUpload = (result) => { if (result.event === 'success') { setImageUrls(prev => [...prev, result.info.secure_url]); } };
-    const renderError = (fieldName) => errors[fieldName] && <p className="text-red-500 text-xs mt-1">{errors[fieldName]}</p>;
+// Metafield Row Component
+const MetafieldRow = ({ mf, value, onUpdate, onDelete }) => {
+    const [showValue, setShowValue] = useState(false);
 
     return (
-        <div className="w-full min-h-screen bg-gray-50 dark:bg-slate-900">
-            <div className="container mx-auto px-4 py-8">
-                <div className="bg-white dark:bg-slate-800 rounded-lg md:flex">
-                    <div className="md:w-1/4 p-6 pt-10 border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 rounded-l-lg">
-                        <h2 className="text-xl font-semibold text-gray-700 dark:text-slate-200 mb-8 text-center">Entry Steps</h2>
-                        <div className="relative pl-4">{stepsInfo.map((step, index) => (<div key={step.number} className="flex items-start mb-2"><div className="flex flex-col items-center mr-4"><button onClick={() => attemptStepNavigation(step.number)} className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors duration-150 ease-in-out ${currentStep === step.number ? 'bg-indigo-600 text-white dark:bg-indigo-500' : (currentStep > step.number ? 'bg-green-500 text-white dark:bg-green-600' : 'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600')}`}>{step.number}</button>{index < stepsInfo.length - 1 && (<div className={`w-0.5 h-12 mt-1 ${currentStep > step.number ? 'bg-indigo-500 dark:bg-indigo-400' : 'bg-gray-200 dark:bg-slate-600'}`}></div>)}</div><button onClick={() => attemptStepNavigation(step.number)} className={`pt-1 text-left ${currentStep === step.number ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-600 dark:text-slate-300'}`}>{step.title}</button></div>))}</div>
+        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-gray-600">
+            <div className="flex-1">
+                <p className="font-medium text-gray-900 dark:text-gray-100">{mf.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">custom.{mf.key}</p>
+            </div>
+            <div className="flex-1">
+                <input
+                    type={mf.type === 'date' ? 'date' : mf.type === 'number' ? 'number' : 'text'}
+                    value={value || ''}
+                    onChange={(e) => onUpdate(mf.key, e.target.value)}
+                    placeholder={`Enter ${mf.name.toLowerCase()}`}
+                    className={`${inputClass} text-sm`}
+                />
+            </div>
+            <button
+                type="button"
+                onClick={() => setShowValue(!showValue)}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition"
+            >
+                {showValue ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            </button>
+            <button
+                type="button"
+                onClick={() => onDelete(mf.key)}
+                className={buttonDangerClass}
+            >
+                <Trash2 className="w-4 h-4" />
+            </button>
+        </div>
+    );
+};
+
+// Main Component
+export default function HordingEditor() {
+    const [formData, setFormData] = useState(initialFormData);
+    const [errors, setErrors] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [vendors, setVendors] = useState([]);
+    const [clickLocation, setClickLocation] = useState(null);
+    const [addingMetafield, setAddingMetafield] = useState(null);
+
+    // Fetch vendors
+    useEffect(() => {
+        const fetchVendors = async () => {
+            try {
+                const res = await fetch('/api/vendors');
+                if (res.ok) {
+                    const data = await res.json();
+                    setVendors(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                console.error('Error fetching vendors:', err);
+            }
+        };
+        fetchVendors();
+    }, []);
+
+    // Handle input change
+    const handleInputChange = (e) => {
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
+        setSaved(false);
+    };
+
+    // Handle map click
+    const handleMapClick = useCallback((lat, lng) => {
+        setFormData(prev => ({
+            ...prev,
+            latitude: lat.toFixed(6),
+            longitude: lng.toFixed(6)
+        }));
+        setClickLocation({ lat, lng });
+    }, []);
+
+    // Handle metafield update
+    const handleMetafieldUpdate = (key, value) => {
+        setFormData(prev => ({
+            ...prev,
+            metafields: {
+                ...prev.metafields,
+                [key]: value
+            }
+        }));
+    };
+
+    // Handle metafield delete
+    const handleMetafieldDelete = (key) => {
+        setFormData(prev => {
+            const newMetafields = { ...prev.metafields };
+            delete newMetafields[key];
+            return {
+                ...prev,
+                metafields: newMetafields
+            };
+        });
+    };
+
+    // Add metafield
+    const handleAddMetafield = (mf) => {
+        setFormData(prev => ({
+            ...prev,
+            metafields: {
+                ...prev.metafields,
+                [mf.key]: ''
+            }
+        }));
+        setAddingMetafield(null);
+    };
+
+    // Validate form
+    const validateForm = () => {
+        const newErrors = {};
+
+        if (!formData.latitude) newErrors.latitude = 'Latitude is required';
+        if (!formData.longitude) newErrors.longitude = 'Longitude is required';
+        if (!formData.address) newErrors.address = 'Address is required';
+        if (!formData.poc_name) newErrors.poc_name = 'POC Name is required';
+        if (!formData.poc_number) newErrors.poc_number = 'POC Number is required';
+        if (!formData.monthly_rental) newErrors.monthly_rental = 'Monthly Rental is required';
+        if (!formData.vendor_name) newErrors.vendor_name = 'Vendor is required';
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    // Handle submit
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!validateForm()) {
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const res = await fetch('/api/formdata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                setErrors({ submit: err.message || 'Failed to save' });
+                setLoading(false);
+                return;
+            }
+
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+        } catch (err) {
+            setErrors({ submit: err.message });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Available metafields not yet added
+    const availableMetafields = METAFIELD_NAMESPACES.filter(mf => !formData.metafields.hasOwnProperty(mf.key));
+
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100">
+            {/* Header */}
+            <div className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold">Add Hording</h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Create a new outdoor advertising location</p>
                     </div>
-                    <div className="md:w-3/4 p-6 sm:p-10">
-                        <div className="flex justify-between items-center mb-4">
-                            <h1 className='text-2xl font-bold text-gray-800 dark:text-slate-100'>{stepsInfo.find(s => s.number === currentStep)?.title}</h1>
-                            <p className='text-gray-500 dark:text-slate-400 text-sm'>Step {currentStep} of 3</p>
-                        </div>
-                        {formStatus.message && (<div className={`p-3.5 mb-6 rounded-lg text-center text-sm ${formStatus.type === 'success' ? 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-700 dark:text-green-100 dark:border-green-600' : formStatus.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-700 dark:text-red-100 dark:border-red-600' : 'bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-700 dark:text-blue-100 dark:border-blue-600'}`}>{formStatus.message}</div>)}
-                        <form onSubmit={handleSave} noValidate>
-                            {currentStep === 1 && (
-                                <div className="space-y-8">
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Geographical Information</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <div><label htmlFor="state" className={selectLabelClassName}>State</label><select name="state" value={formData.state} onChange={handleStateChange} className={baseInputClassName}><option value="">Select a State</option>{states.map(state => (<option key={state.isoCode} value={state.isoCode}>{state.name}</option>))}</select>{renderError('state')}</div>
-                                            <div><label htmlFor="city" className={selectLabelClassName}>City</label><select name="city" value={formData.city} onChange={handleInputChange} className={baseInputClassName} disabled={!formData.state || cities.length === 0}><option value="">Select a City</option>{cities.map(city => (<option key={city.name} value={city.name}>{city.name}</option>))}</select>{renderError('city')}</div>
-                                            <div className="md:col-span-2"><FloatingLabelTextarea name="address" label="Address" value={formData.address} onChange={handleInputChange} error={errors.address} /></div>
-                                            <FloatingLabelInput name="landmark" label="Nearest Landmark" value={formData.landmark} onChange={handleInputChange} error={errors.landmark} />
-                                            <div ><FloatingLabelInput name="roadName" label="Road Name" value={formData.roadName} onChange={handleInputChange} error={errors.roadName} /></div>
-                                            <FloatingLabelInput name="roadFrom" label="From" value={formData.roadFrom} onChange={handleInputChange} error={errors.roadFrom} />
-                                            <FloatingLabelInput name="roadTo" label="To" value={formData.roadTo} onChange={handleInputChange} error={errors.roadTo} />
-                                            <FloatingLabelInput name="zone" label="zone" value={formData.zone} onChange={handleInputChange} error={errors.zone} />
-
-                                            <ToggleSwitch name="positionWRTRoad" label="Position WRT Road" value={formData.positionWRTRoad} options={[{ label: 'LHS', value: 'LHS' }, { label: 'RHS', value: 'RHS' }]} onChange={handleToggleChange} />
-                                            <ToggleSwitch name="trafficType" label="Traffic Type" value={formData.trafficType} options={[{ label: 'Morning', value: 'Morning' }, { label: 'Evening', value: 'Evening' }]} onChange={handleToggleChange} />
-                                            <div className="md:col-span-2"><p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Pin Location on Map</p><div className="mt-1 h-64 md:h-80 w-full rounded-lg overflow-hidden border border-gray-300 dark:border-slate-600"><Map onMapClick={handleMapClick} clickLocation={clickLocation} /></div><div className="mt-2 grid grid-cols-2 gap-4"><input type="number" readOnly placeholder='Latitude' value={formData.latitude} className={`${baseInputClassName} bg-gray-100 dark:bg-slate-600`} /><input type="number" readOnly placeholder='Longitude' value={formData.longitude} className={`${baseInputClassName} bg-gray-100 dark:bg-slate-600`} /></div></div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Hoarding Specifications</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <div> <label htmlFor="mediaType" className={selectLabelClassName}>Media Type</label> <select name="mediaType" value={formData.mediaType} onChange={handleInputChange} className={baseInputClassName}><option value="digitalScreen">Digital Screen</option> <option value="hording">Hoarding</option> <option value="busShelter">Bus Shelter</option> <option value="other">Other</option> </select> </div>
-                                            <div> <label htmlFor="hordingType" className={selectLabelClassName}>Hoarding Type</label> <select name="hordingType" value={formData.hordingType} onChange={handleInputChange} className={baseInputClassName}><option value="led">LED</option> <option value="frontLit">Front-Lit</option> <option value="backLit">Back-Lit</option>  </select> </div>
-                                            <FloatingLabelInput name="width" label="Width (ft)" type="number" value={formData.width} onChange={handleInputChange} error={errors.width} />
-                                            <FloatingLabelInput name="height" label="Height (ft)" type="number" value={formData.height} onChange={handleInputChange} error={errors.height} />
-                                            {formData.hordingType === 'led' && (
-                                                <>
-                                                    <div> <label htmlFor="screenPlacement" className={selectLabelClassName}>Screen Placement</label>
-                                                        <select name="screenPlacement" value={formData.screenPlacement} onChange={handleInputChange} className={baseInputClassName}>
-                                                            <option value="residential">Residential</option> <option value="commercial">Commercial</option>
-                                                            <option value="railwayStation">Railway Station</option>
-                                                            <option value="cafe">Cafe</option>
-                                                            <option value="pub">Pub</option>
-                                                            <option value="club">Club</option>
-                                                            <option value="restaurant">Restaurant</option>
-                                                        </select> </div>
-                                                    <FloatingLabelInput name="screenSize" className="h-fit" label="Screen size (e.g., inch)" value={formData.screenSize} onChange={handleInputChange} error={errors.screenSize} />
-                                                    <FloatingLabelInput name="screenNumber" className="h-fit" type="number" label="Screen Number" value={formData.screenNumber} onChange={handleInputChange} error={errors.screenNumber} />
-
-                                                    <FloatingLabelInput name="slotTime" label="Slot Time (e.g., 10s)" value={formData.slotTime} onChange={handleInputChange} error={errors.slotTime} />
-                                                    <FloatingLabelInput name="loopTime" label="Loop Time (e.g., 120s)" value={formData.loopTime} onChange={handleInputChange} error={errors.loopTime} />
-                                                    <div > <FloatingLabelInput name="displayHours" label="Display Hours (e.g., 6 AM - 10 PM)" value={formData.displayHours} onChange={handleInputChange} error={errors.displayHours} /> </div>
-                                                </>)}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            {currentStep === 2 && (
-                                <div className="space-y-8">
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Pricing & Booking</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <FloatingLabelInput name="rate" label="Rate (per month)" type="number" value={formData.rate} onChange={handleInputChange} error={errors.rate} />
-                                            <FloatingLabelInput name="ourRate" label="Our Rate (per month)" type="number" value={formData.ourRate} onChange={handleInputChange} error={errors.ourRate} />
-                                            <FloatingLabelInput name="minimumBookingDuration" label="Min. Booking Duration" value={formData.minimumBookingDuration} onChange={handleInputChange} error={errors.minimumBookingDuration} />
-                                            <div className="md:col-span-2"><FloatingLabelTextarea name="paymentTerms" label="Payment Terms/Cycle" value={formData.paymentTerms} onChange={handleInputChange} error={errors.paymentTerms} /></div>
-                                            <div className="md:col-span-2"><FloatingLabelTextarea name="offers" label="Offers, Discounts, Negotiation Scope" value={formData.offers} onChange={handleInputChange} error={errors.offers} /></div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Site Details</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <div> <label htmlFor="visibility" className={selectLabelClassName}>Visibility</label> <select name="visibility" value={formData.visibility} onChange={handleInputChange} className={baseInputClassName}><option value="none">None</option> <option value="prime">Prime</option> <option value="high">High</option> <option value="medium">Medium</option> <option value="low">Low</option> </select> </div>
-                                            <div className='md:mt-1'>  <FloatingLabelInput name="dwellTime" label="Dwell Time" value={formData.dwellTime} onChange={handleInputChange} error={errors.dwellTime} /></div>
-                                            <div className="md:col-span-2"> <FloatingLabelTextarea name="description" label="Description" value={formData.description} onChange={handleInputChange} error={errors.description} /> </div>
-                                            <div className="md:col-span-2"> <FloatingLabelTextarea name="previousClientele" label="Previous Clientele" value={formData.previousClientele} onChange={handleInputChange} error={errors.previousClientele} /> </div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Vendor Information</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                                            <div className="md:col-span-2">
-                                                <label className={selectLabelClassName}>Vendor Name</label>
-                                                {isClient ? (
-                                                    <CreatableSelect
-                                                        isClearable
-                                                        isSearchable
-                                                        isLoading={isLoadingVendors}
-                                                        onChange={handleVendorChange}
-                                                        options={vendorOptions}
-                                                        value={vendorOptions.find(option => option.value === formData.vendorName)}
-                                                        placeholder="Select or type to add a vendor"
-                                                        styles={getCustomSelectStyles(true)}
-                                                        menuPortalTarget={document.body}
-                                                        menuPosition={'fixed'}
-                                                    />
-                                                ) : (
-                                                    <div className={`${baseInputClassName} flex items-center text-slate-400`}>Loading vendors...</div>
-                                                )}
-                                            </div>
-                                            <FloatingLabelInput name="pocName" label="POC Name" value={formData.pocName} onChange={handleInputChange} error={errors.pocName} />
-                                            <FloatingLabelInput name="pocNumber" className="h-fit" label="POC Number" value={formData.pocNumber} onChange={handleInputChange} error={errors.pocNumber} />
-
-                                            <FloatingLabelInput name="propertyCode" label="Property Code" value={formData.propertyCode} onChange={handleInputChange} error={errors.propertyCode} />
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            {currentStep === 3 && (
-                                <div className="space-y-8">
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Media Upload</h3>
-                                        <div>
-                                            <p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Site Images</p>
-                                            <div className="mt-1 p-6 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-lg text-center">
-                                                <CldUploadWidget onSuccess={handleUpload} uploadPreset="hording-map" options={{ sources: ['local', 'url', 'camera'], multiple: true }}>{({ open }) => <button type="button" onClick={() => open()} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">Click to Upload Images</button>}</CldUploadWidget>
-                                                {imageUrls.length > 0 && (<div className="flex flex-wrap justify-center mt-4 gap-4"> {imageUrls.map((url, index) => (<div key={index} className="relative"> <img src={url} alt={`Uploaded ${index + 1}`} className="w-24 h-24 object-cover rounded-lg shadow-md" /> </div>))} </div>)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h3 className={sectionTitleClassName}>Status & Compliance</h3>
-                                        <div className="space-y-6">
-                                            <div>
-                                                <label htmlFor="status" className={selectLabelClassName}>Site Status</label>
-                                                <select name="status" value={formData.status} onChange={handleInputChange} className={baseInputClassName}><option value="pending">Pending</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
-                                                {renderError('status')}
-                                            </div>
-                                            <div className="flex items-start pt-2">
-                                                <div className="flex items-center h-5"> <input id="compliance" name="compliance" type="checkbox" checked={formData.compliance} onChange={handleInputChange} className="focus:ring-indigo-500 dark:focus:ring-indigo-400 h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700" /> </div>
-                                                <div className="ml-3 text-sm">
-                                                    <label htmlFor="compliance" className="font-medium text-gray-700 dark:text-slate-200">Compliance Verified</label>
-                                                    <p className="text-gray-500 dark:text-slate-400 text-xs">Check if all legal/regulatory compliance is complete.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="mt-10 pt-6 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
-                                <div> {currentStep > 1 && (<button type="button" onClick={prevStep} className="px-6 py-2.5 border border-gray-400 dark:border-slate-500 text-gray-700 dark:text-slate-300 rounded-lg shadow-sm hover:bg-gray-100 dark:hover:bg-slate-700">Previous</button>)} </div>
-                                <div> {currentStep < 3 && (<button type="button" onClick={nextStep} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-lg shadow-sm">Next</button>)} {currentStep === 3 && (<button type="submit" className="px-6 py-2.5 bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 text-white rounded-lg shadow-sm disabled:opacity-70" disabled={formStatus.type === 'loading'}>{formStatus.type === 'loading' ? 'Saving...' : 'Save Hoarding Entry'}</button>)} </div>
-                            </div>
-                        </form>
+                    <div className="flex items-center gap-3">
+                        {saved && (
+                            <div className="text-green-600 dark:text-green-400 font-medium">✓ Saved</div>
+                        )}
+                        <button
+                            type="submit"
+                            form="hordings-form"
+                            disabled={loading}
+                            className={`${buttonPrimaryClass} disabled:opacity-50`}
+                        >
+                            {loading ? 'Saving...' : 'Save Hording'}
+                        </button>
                     </div>
                 </div>
             </div>
+
+            {/* Main Content */}
+            <form id="hordings-form" onSubmit={handleSubmit} className="max-w-7xl mx-auto px-4 py-6">
+                <div className="grid grid-cols-3 gap-6">
+                    {/* Left Column - Main Content */}
+                    <div className="col-span-2">
+                        {/* Submit Error */}
+                        {errors.submit && (
+                            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-medium text-red-700 dark:text-red-300">{errors.submit}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* LOCATION SECTION */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <CollapsibleSection title="Location Information" defaultOpen={true}>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Latitude"
+                                        name="latitude"
+                                        type="number"
+                                        value={formData.latitude}
+                                        onChange={handleInputChange}
+                                        error={errors.latitude}
+                                        required
+                                    />
+                                    <InputField
+                                        label="Longitude"
+                                        name="longitude"
+                                        type="number"
+                                        value={formData.longitude}
+                                        onChange={handleInputChange}
+                                        error={errors.longitude}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className={labelClass}>Select on Map</label>
+                                    <div className="rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                                        <Map onMapClick={handleMapClick} clickLocation={clickLocation} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <SelectField
+                                        label="State"
+                                        name="state"
+                                        value={formData.state}
+                                        options={State.getStatesOfCountry('IN').map(s => s.isoCode)}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                    <SelectField
+                                        label="City"
+                                        name="city"
+                                        value={formData.city}
+                                        options={City.getCitiesOfState('IN', formData.state).map(c => c.name)}
+                                        onChange={handleInputChange}
+                                        required
+                                    />
+                                </div>
+
+                                <InputField
+                                    label="Address"
+                                    name="address"
+                                    value={formData.address}
+                                    onChange={handleInputChange}
+                                    error={errors.address}
+                                    required
+                                />
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Pincode"
+                                        name="pincode"
+                                        value={formData.pincode}
+                                        onChange={handleInputChange}
+                                    />
+                                    <InputField
+                                        label="Zone"
+                                        name="zone"
+                                        value={formData.zone}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Landmark"
+                                        name="landmark"
+                                        value={formData.landmark}
+                                        onChange={handleInputChange}
+                                    />
+                                    <SelectField
+                                        label="Position WRT Road"
+                                        name="position_wrt_road"
+                                        value={formData.position_wrt_road}
+                                        options={['LHS', 'RHS', 'Center']}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Road Name"
+                                        name="road_name"
+                                        value={formData.road_name}
+                                        onChange={handleInputChange}
+                                    />
+                                    <InputField
+                                        label="Traffic Type"
+                                        name="traffic_type"
+                                        value={formData.traffic_type}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                            </CollapsibleSection>
+                        </div>
+
+                        {/* MEDIA TYPE & SPECS */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <CollapsibleSection title="Media Type & Specifications" defaultOpen={true}>
+                                <SelectField
+                                    label="Media Type"
+                                    name="media_type"
+                                    value={formData.media_type}
+                                    options={['Digital Screens', 'Hoarding', 'Bus Shelter', 'Wall Wrap', 'Kiosk', 'Transit', 'Neon Sign', 'Other']}
+                                    onChange={handleInputChange}
+                                    required
+                                />
+
+                                {formData.media_type === 'Digital Screens' && (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <InputField
+                                                label="Screen Size (inches)"
+                                                name="screen_size"
+                                                type="number"
+                                                value={formData.screen_size}
+                                                onChange={handleInputChange}
+                                            />
+                                            <InputField
+                                                label="Number of Screens"
+                                                name="screen_number"
+                                                type="number"
+                                                value={formData.screen_number}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <SelectField
+                                                label="Display Format"
+                                                name="display_format"
+                                                value={formData.display_format}
+                                                options={['Static', 'LED', 'LCD', 'Projection']}
+                                                onChange={handleInputChange}
+                                            />
+                                            <SelectField
+                                                label="Screen Placement"
+                                                name="screen_placement"
+                                                value={formData.screen_placement}
+                                                options={['Roadside', 'Residential', 'Commercial', 'Mall', 'Transit']}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+
+                                {formData.media_type === 'Hoarding' && (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <InputField
+                                                label="Width (feet)"
+                                                name="width"
+                                                type="number"
+                                                value={formData.width}
+                                                onChange={handleInputChange}
+                                            />
+                                            <InputField
+                                                label="Height (feet)"
+                                                name="height"
+                                                type="number"
+                                                value={formData.height}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <SelectField
+                                                label="Hoarding Type"
+                                                name="hording_type"
+                                                value={formData.hording_type}
+                                                options={['Static', 'Rotating', 'Trivision']}
+                                                onChange={handleInputChange}
+                                            />
+                                            <SelectField
+                                                label="Condition"
+                                                name="condition"
+                                                value={formData.condition}
+                                                options={['Excellent', 'Good', 'Fair', 'Poor']}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+
+                                <SelectField
+                                    label="Visibility"
+                                    name="visibility"
+                                    value={formData.visibility}
+                                    options={['High', 'Medium', 'Low']}
+                                    onChange={handleInputChange}
+                                />
+                            </CollapsibleSection>
+                        </div>
+
+                        {/* CONTACT & COMMERCIAL */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <CollapsibleSection title="Contact Information" defaultOpen={true}>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="POC Name"
+                                        name="poc_name"
+                                        value={formData.poc_name}
+                                        onChange={handleInputChange}
+                                        error={errors.poc_name}
+                                        required
+                                    />
+                                    <InputField
+                                        label="POC Number"
+                                        name="poc_number"
+                                        value={formData.poc_number}
+                                        onChange={handleInputChange}
+                                        error={errors.poc_number}
+                                        required
+                                    />
+                                </div>
+
+                                <InputField
+                                    label="POC Email"
+                                    name="poc_email"
+                                    type="email"
+                                    value={formData.poc_email}
+                                    onChange={handleInputChange}
+                                />
+                            </CollapsibleSection>
+
+                            <CollapsibleSection title="Commercial Details" defaultOpen={true}>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Monthly Rental (₹)"
+                                        name="monthly_rental"
+                                        type="number"
+                                        value={formData.monthly_rental}
+                                        onChange={handleInputChange}
+                                        error={errors.monthly_rental}
+                                        required
+                                    />
+                                    <InputField
+                                        label="Vendor Rate (₹)"
+                                        name="vendor_rate"
+                                        type="number"
+                                        value={formData.vendor_rate}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <InputField
+                                        label="Payment Terms"
+                                        name="payment_terms"
+                                        value={formData.payment_terms}
+                                        onChange={handleInputChange}
+                                    />
+                                    <InputField
+                                        label="Minimum Booking Duration"
+                                        name="minimum_booking_duration"
+                                        value={formData.minimum_booking_duration}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+
+                                <InputField
+                                    label="Dwell Time (Optional)"
+                                    name="dwell_time"
+                                    value={formData.dwell_time}
+                                    onChange={handleInputChange}
+                                />
+                            </CollapsibleSection>
+                        </div>
+
+                        {/* MEDIA GALLERY */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <CollapsibleSection title="Media Gallery" defaultOpen={true}>
+                                <div className="mb-4">
+                                    <CldUploadWidget
+                                        uploadPreset="hording_media"
+                                        onSuccess={(result) => {
+                                            if (result.event === 'success') {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    media: [...(prev.media || []), result.info.secure_url]
+                                                }));
+                                            }
+                                        }}
+                                    >
+                                        {({ open }) => (
+                                            <button
+                                                type="button"
+                                                onClick={() => open()}
+                                                className={`${buttonPrimaryClass} w-full text-center`}
+                                            >
+                                                <Plus className="w-4 h-4 inline mr-2" />
+                                                Upload Images/Videos
+                                            </button>
+                                        )}
+                                    </CldUploadWidget>
+                                </div>
+
+                                {formData.media && formData.media.length > 0 && (
+                                    <div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{formData.media.length} file(s) uploaded</p>
+                                        <div className="grid grid-cols-4 gap-3">
+                                            {formData.media.map((url, idx) => (
+                                                <div key={idx} className="relative group rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+                                                    <img src={url} alt={`Media ${idx}`} className="w-full h-24 object-cover" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                media: prev.media.filter((_, i) => i !== idx)
+                                                            }));
+                                                        }}
+                                                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition p-1 bg-red-600 hover:bg-red-700 text-white rounded"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </CollapsibleSection>
+                        </div>
+
+                        {/* METAFIELDS */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <CollapsibleSection title="Custom Metafields" defaultOpen={false}>
+                                <div className="mb-4">
+                                    {Object.entries(formData.metafields).length === 0 ? (
+                                        <p className="text-gray-500 dark:text-gray-400 text-sm">No metafields added yet</p>
+                                    ) : (
+                                        <div className="space-y-3 mb-4">
+                                            {Object.entries(formData.metafields).map(([key, value]) => {
+                                                const mf = METAFIELD_NAMESPACES.find(m => m.key === key);
+                                                return mf ? (
+                                                    <MetafieldRow
+                                                        key={key}
+                                                        mf={mf}
+                                                        value={value}
+                                                        onUpdate={handleMetafieldUpdate}
+                                                        onDelete={handleMetafieldDelete}
+                                                    />
+                                                ) : null;
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {availableMetafields.length > 0 && (
+                                    <div>
+                                        <label className={labelClass}>Add Metafield</label>
+                                        <div className="flex gap-2">
+                                            <select
+                                                value={addingMetafield?.key || ''}
+                                                onChange={(e) => {
+                                                    const mf = METAFIELD_NAMESPACES.find(m => m.key === e.target.value);
+                                                    setAddingMetafield(mf);
+                                                }}
+                                                className={inputClass}
+                                            >
+                                                <option value="">Select a metafield...</option>
+                                                {availableMetafields.map(mf => (
+                                                    <option key={mf.key} value={mf.key}>{mf.name}</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (addingMetafield) {
+                                                        handleAddMetafield(addingMetafield);
+                                                    }
+                                                }}
+                                                disabled={!addingMetafield}
+                                                className={`${buttonPrimaryClass} disabled:opacity-50`}
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </CollapsibleSection>
+                        </div>
+                    </div>
+
+                    {/* Right Column - Sidebar */}
+                    <div>
+                        {/* Vendor Selection Card */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <h3 className="text-lg font-semibold mb-4">Vendor</h3>
+                            <SelectField
+                                label="Select Vendor"
+                                name="vendor_name"
+                                value={formData.vendor_name}
+                                options={vendors.map(v => v.name)}
+                                onChange={handleInputChange}
+                                error={errors.vendor_name}
+                                required
+                            />
+                        </div>
+
+                        {/* Status Card */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 mb-6">
+                            <h3 className="text-lg font-semibold mb-4">Status</h3>
+                            <SelectField
+                                label="Status"
+                                name="status"
+                                value={formData.status}
+                                options={['active', 'inactive', 'archived']}
+                                onChange={handleInputChange}
+                            />
+                        </div>
+
+                        {/* Compliance Card */}
+                        <div className="bg-white dark:bg-slate-800 rounded-lg p-6">
+                            <h3 className="text-lg font-semibold mb-4">Compliance</h3>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="compliance"
+                                    checked={formData.compliance}
+                                    onChange={handleInputChange}
+                                    className="w-5 h-5 rounded border-gray-300 dark:border-gray-600"
+                                />
+                                <span className="text-gray-700 dark:text-gray-300">Compliance Check Passed</span>
+                            </label>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Mark as compliant with local regulations</p>
+                        </div>
+                    </div>
+                </div>
+            </form>
         </div>
     );
 }

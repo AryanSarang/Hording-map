@@ -1,0 +1,336 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import Sidebar from '../../components/Sidebar';
+import styles from '../hordings.module.css';
+
+export default function EditHordingPage() {
+    const router = useRouter();
+    const params = useParams();
+    const [formData, setFormData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        fetchHording();
+    }, [params.id]);
+
+    async function fetchHording() {
+        try {
+            setLoading(true);
+            const res = await fetch(`/api/vendor/hordings/${params.id}`);
+            const data = await res.json();
+
+            if (data.success) {
+                setFormData(data.data);
+            } else {
+                setError(data.error || 'Failed to fetch hording');
+            }
+        } catch (err) {
+            console.error('Error fetching hording:', err);
+            setError('Error fetching hording');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function handleChange(e) {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    }
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+
+        if (!formData.name.trim() || !formData.city.trim()) {
+            alert('Name and City are required');
+            return;
+        }
+
+        setSaving(true);
+
+        try {
+            const res = await fetch(`/api/vendor/hordings/${params.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData),
+            });
+
+            if (res.ok) {
+                alert('Hording updated successfully!');
+                router.push('/vendor/hordings');
+            } else {
+                const errData = await res.json();
+                alert(errData.error || 'Error updating hording');
+            }
+        } catch (err) {
+            console.error('Error:', err);
+            alert('Error updating hording');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleDelete() {
+        if (!confirm('Are you sure you want to delete this hording?')) return;
+
+        try {
+            const res = await fetch(`/api/vendor/hordings/${params.id}`, { method: 'DELETE' });
+
+            if (res.ok) {
+                alert('Hording deleted successfully');
+                router.push('/vendor/hordings');
+            } else {
+                alert('Failed to delete hording');
+            }
+        } catch (err) {
+            console.error('Error deleting:', err);
+            alert('Error deleting hording');
+        }
+    }
+
+    if (loading) return (
+        <div className={styles.container}>
+            <Sidebar />
+            <main className={styles.main}>
+                <div className={styles.loading}>Loading...</div>
+            </main>
+        </div>
+    );
+
+    if (error) return (
+        <div className={styles.container}>
+            <Sidebar />
+            <main className={styles.main}>
+                <div className={styles.errorAlert}>{error}</div>
+            </main>
+        </div>
+    );
+
+    return (
+        <div className={styles.container}>
+            <Sidebar />
+
+            <main className={styles.main}>
+                <div className={styles.topbar}>
+                    <h1 className={styles.title}>Edit Hording</h1>
+                </div>
+
+                <div className={styles.content}>
+                    <div className={styles.section}>
+                        <form onSubmit={handleSubmit}>
+                            {/* BASIC INFORMATION */}
+                            <div className={styles.formSection}>
+                                <h3 className={styles.formSectionTitle}>📍 Basic Information</h3>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.required}>Name</label>
+                                        <input
+                                            type="text"
+                                            name="name"
+                                            placeholder="Hording name"
+                                            value={formData?.name || ''}
+                                            onChange={handleChange}
+                                            required
+                                        />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>Description</label>
+                                        <input
+                                            type="text"
+                                            name="description"
+                                            placeholder="Brief description"
+                                            value={formData?.description || ''}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* LOCATION */}
+                            <div className={styles.formSection}>
+                                <h3 className={styles.formSectionTitle}>📍 Location</h3>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.required}>City</label>
+                                        <input
+                                            type="text"
+                                            name="city"
+                                            placeholder="City"
+                                            value={formData?.city || ''}
+                                            onChange={handleChange}
+                                            required
+                                        />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>State</label>
+                                        <input
+                                            type="text"
+                                            name="state"
+                                            placeholder="State"
+                                            value={formData?.state || ''}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                </div>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                                        <label>Address</label>
+                                        <textarea
+                                            name="address"
+                                            placeholder="Full address"
+                                            value={formData?.address || ''}
+                                            onChange={handleChange}
+                                            rows="3"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* PRICING */}
+                            <div className={styles.formSection}>
+                                <h3 className={styles.formSectionTitle}>💰 Pricing & Booking</h3>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>Rate (₹/month)</label>
+                                        <input
+                                            type="number"
+                                            name="rate"
+                                            placeholder="Rate"
+                                            value={formData?.rate || ''}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>Our Rate (₹/month)</label>
+                                        <input
+                                            type="number"
+                                            name="ourRate"
+                                            placeholder="Our rate"
+                                            value={formData?.ourRate || ''}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.required}>Minimum Booking Duration</label>
+                                        <input
+                                            type="text"
+                                            name="minimumBookingDuration"
+                                            placeholder="e.g., 1 month"
+                                            value={formData?.minimumBookingDuration || ''}
+                                            onChange={handleChange}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* MEDIA DETAILS */}
+                            <div className={styles.formSection}>
+                                <h3 className={styles.formSectionTitle}>📺 Media Details</h3>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>Media Type</label>
+                                        <select name="mediaType" value={formData?.mediaType || ''} onChange={handleChange}>
+                                            <option value="">Select media type</option>
+                                            <option value="digitalScreen">Digital Screen</option>
+                                            <option value="hoarding">Hoarding</option>
+                                            <option value="busShelter">Bus Shelter</option>
+                                        </select>
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>Hording Type</label>
+                                        <select name="hordingType" value={formData?.hordingType || ''} onChange={handleChange}>
+                                            <option value="">Select hording type</option>
+                                            <option value="led">LED</option>
+                                            <option value="frontLit">Front Lit</option>
+                                            <option value="backLit">Back Lit</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* STATUS & VISIBILITY */}
+                            <div className={styles.formSection}>
+                                <h3 className={styles.formSectionTitle}>👁️ Status & Visibility</h3>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>Visibility</label>
+                                        <select name="visibility" value={formData?.visibility || 'Prime'} onChange={handleChange}>
+                                            <option value="Prime">Prime</option>
+                                            <option value="High">High</option>
+                                            <option value="Medium">Medium</option>
+                                            <option value="Low">Low</option>
+                                            <option value="None">None</option>
+                                        </select>
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>Status</label>
+                                        <select name="status" value={formData?.status || 'pending'} onChange={handleChange}>
+                                            <option value="pending">Pending</option>
+                                            <option value="active">Active</option>
+                                            <option value="inactive">Inactive</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* VENDOR INFORMATION */}
+                            <div className={styles.formSection}>
+                                <h3 className={styles.formSectionTitle}>👤 Vendor Information</h3>
+                                <div className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>POC Name</label>
+                                        <input
+                                            type="text"
+                                            name="pocName"
+                                            placeholder="Point of contact name"
+                                            value={formData?.pocName || ''}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label>POC Number</label>
+                                        <input
+                                            type="text"
+                                            name="pocNumber"
+                                            placeholder="+91 XXXXX XXXXX"
+                                            value={formData?.pocNumber || ''}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* FORM ACTIONS */}
+                            <div className={styles.formActions}>
+                                <button type="submit" className={styles.submitBtn} disabled={saving}>
+                                    {saving ? 'Updating...' : 'Update Hording'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.cancelBtn}
+                                    onClick={() => router.back()}
+                                    disabled={saving}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`${styles.submitBtn} ${styles.btnDanger}`}
+                                    onClick={handleDelete}
+                                    disabled={saving}
+                                    style={{ marginLeft: 'auto' }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+}

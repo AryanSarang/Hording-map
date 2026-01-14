@@ -1,0 +1,346 @@
+.container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+    background: #0a0e27;
+    color: #e0e6ed;
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+}
+
+.topbar {
+    background: #121829;
+    border-bottom: 1px solid #1f2937;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+    color: #fff;
+}
+
+.createBtn {
+    padding: 0.625rem 1.25rem;
+    background: #3b82f6;
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.createBtn:hover {
+    background: #2563eb;
+}
+
+.content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.section {
+    background: #121829;
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    padding: 2rem;
+}
+
+.tableWrapper {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.table thead {
+    background: #1a1f37;
+    border-bottom: 2px solid #2a3544;
+}
+
+.table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+}
+
+.table tbody tr {
+    border-bottom: 1px solid #1f2937;
+    transition: background 0.2s;
+}
+
+.table tbody tr:hover {
+    background: #1a1f37;
+}
+
+.table td {
+    padding: 1rem;
+    color: #e0e6ed;
+}
+
+.nameTd {
+    font-weight: 600;
+    color: #fff;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-inactive {
+    background: rgba(107, 114, 128, 0.15);
+    color: #d1d5db;
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.actionBtn {
+    padding: 0.375rem 0.75rem;
+    background: #3b82f6;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-block;
+}
+
+.actionBtn:hover {
+    background: #2563eb;
+}
+
+.actionBtn.danger {
+    background: #ef4444;
+}
+
+.actionBtn.danger:hover {
+    background: #dc2626;
+}
+
+.empty {
+    text-align: center;
+    padding: 3rem;
+    color: #9ca3af;
+    background: #121829;
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+}
+
+.emptyIcon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.createLink {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.625rem 1.25rem;
+    background: #3b82f6;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.createLink:hover {
+    background: #2563eb;
+}
+
+.error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: #9ca3af;
+}
+
+@media (max-width: 768px) {
+    .container {
+        grid-template-columns: 1fr;
+    }
+
+    .topbar {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    .table {
+        font-size: 0.8rem;
+    }
+
+    .table th,
+    .table td {
+        padding: 0.75rem 0.5rem;
+    }
+}
+
+.form {
+    display: grid;
+    gap: 2rem;
+}
+
+.formSection {
+    padding: 1.5rem;
+    background: #1a1f37;
+    border-radius: 6px;
+    border: 1px solid #2a3544;
+}
+
+.sectionHead {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.formRow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.formGroup {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.formGroup label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e0e6ed;
+}
+
+.required::after {
+    content: ' *';
+    color: #ef4444;
+}
+
+.formGroup input,
+.formGroup textarea,
+.formGroup select {
+    padding: 0.75rem;
+    border: 1px solid #2a3544;
+    border-radius: 6px;
+    background: #121829;
+    color: #e0e6ed;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.formGroup input::placeholder,
+.formGroup textarea::placeholder {
+    color: #6b7280;
+}
+
+.formGroup input:focus,
+.formGroup textarea:focus,
+.formGroup select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.formGroup textarea {
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+}
+
+.formActions {
+    display: flex;
+    gap: 1rem;
+    padding-top: 2rem;
+    border-top: 1px solid #2a3544;
+}
+
+.submitBtn {
+    padding: 0.75rem 1.5rem;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.submitBtn:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.submitBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cancelBtn {
+    padding: 0.75rem 1.5rem;
+    background: #2a3544;
+    color: #e0e6ed;
+    border: 1px solid #3f4859;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancelBtn:hover {
+    background: #3f4859;
+}
