@@ -39,7 +39,7 @@ Manages global metafields
 
 Views analytics
 
-🗂️ SUPABASE DATABASE TABLES
+🗂️ SUPABASE DATABASE TABLES-docs/supabase.txt file has schemas.
 Table 1: Vendors (Vendor account info)
 text
 Vendors {
