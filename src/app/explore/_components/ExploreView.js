@@ -1,4 +1,4 @@
-// src/app/explore/_components/ExploreView.js
+// app/explore/_components/ExploreView.js
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -49,12 +49,16 @@ export default function ExploreView({ hoardings }) {
     });
 
     const filteredHoardings = hoardings.filter(h => {
-        if (h.rate !== null && (h.rate < filters.minPrice || h.rate > filters.maxPrice)) return false;
+        if (h.rate !== null && h.rate !== undefined && (h.rate < filters.minPrice || h.rate > filters.maxPrice)) return false;
         if (filters.state && h.state?.toLowerCase() !== filters.state.toLowerCase()) return false;
         if (filters.city && h.city?.toLowerCase() !== filters.city.toLowerCase()) return false;
         if (h.positionWRTRoad && !filters.positions.includes(h.positionWRTRoad)) return false;
         if (h.mediaType && !filters.mediaTypes.includes(h.mediaType)) return false;
-        if (filters.vendorId !== 'all' && h.vendorId !== Number(filters.vendorId)) return false;
+        if (filters.vendorId !== 'all') {
+            const hVendorId = h.vendorId ? Number(h.vendorId) : null;
+            const fVendorId = Number(filters.vendorId);
+            if (hVendorId !== fVendorId) return false;
+        }
         return true;
     });
 

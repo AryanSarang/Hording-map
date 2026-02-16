@@ -1,4 +1,4 @@
-// src/app/explore/_components/DetailsPanel.js
+// app/explore/_components/DetailsPanel.js
 "use client";
 
 export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToPlan, currentPlan }) {

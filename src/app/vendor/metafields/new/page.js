@@ -1,50 +1,68 @@
+// app/vendor/metafields/new/page.js
+// Create metafield template: name + type only. Values filled when creating hordings.
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import styles from '../metafields.module.css';
 
 export default function CreateMetafieldPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [definitions, setDefinitions] = useState([]);
     const [formData, setFormData] = useState({
-        label: '',
-        type: 'text',
-        example: '',
-        display_order: 0,
-        multiple_values: false,
+        name: '',
+        definitionId: '',
+        optionsInput: '', // Comma-separated for dropdown
     });
 
-    function autoGenerateKey(label) {
-        return label
-            .toLowerCase()
-            .replace(/\s+/g, '_')
-            .replace(/[^a-z0-9_]/g, '');
-    }
+    useEffect(() => {
+        fetch('/api/vendors/metafield-definitions')
+            .then(r => r.json())
+            .then(d => d.success && setDefinitions(d.data || []));
+    }, []);
+
+    const selectedDef = definitions.find(d => d.id === parseInt(formData.definitionId));
+    const isDropdown = selectedDef?.value_type === 'single_select';
 
     function handleInputChange(e) {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value,
-        }));
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
     }
 
     async function handleSubmit(e) {
         e.preventDefault();
+
+        if (!formData.name?.trim()) {
+            setError('Name is required');
+            return;
+        }
+        if (!formData.definitionId) {
+            setError('Metafield type is required');
+            return;
+        }
+        if (isDropdown && !formData.optionsInput?.trim()) {
+            setError('Dropdown options are required');
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
         try {
-            const key = autoGenerateKey(formData.label);
+            const options = isDropdown
+                ? formData.optionsInput.split(',').map(s => s.trim()).filter(Boolean)
+                : null;
 
-            const res = await fetch('/api/vendor/metafields', {
+            const res = await fetch('/api/vendors/metafields', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    ...formData,
-                    key,
+                    name: formData.name.trim(),
+                    definitionId: formData.definitionId,
+                    options,
                 }),
             });
 
@@ -53,7 +71,7 @@ export default function CreateMetafieldPage() {
             if (data.success) {
                 router.push('/vendor/metafields');
             } else {
-                setError(data.error);
+                setError(data.error || 'Failed to create metafield');
             }
         } catch (err) {
             setError('Failed to create metafield');
@@ -64,79 +82,80 @@ export default function CreateMetafieldPage() {
     }
 
     return (
-        <div className={styles.container}>
-            <h1>Create Metafield Definition</h1>
+        <>
+            <div className={styles.topbar}>
+                <h1 className={styles.title}>Add Metafield</h1>
+                <Link href="/vendor/metafields" className={styles.cancelBtn}>
+                    Back to List
+                </Link>
+            </div>
 
-            {error && <div className={styles.error}>{error}</div>}
+            <div className={styles.content}>
+                <div className={styles.section}>
+                    {error && <div className={styles.error}>{error}</div>}
 
-            <form onSubmit={handleSubmit} className={styles.form}>
-                <div className={styles.formGroup}>
-                    <label>Label *</label>
-                    <input
-                        type="text"
-                        name="label"
-                        value={formData.label}
-                        onChange={handleInputChange}
-                        required
-                        placeholder="e.g., Traffic Pattern"
-                    />
+                    <p className={styles.hint} style={{ marginBottom: '1.5rem' }}>
+                        Create a custom field that will be available when creating or editing hordings. Values are filled there, not here.
+                    </p>
+
+                    <form onSubmit={handleSubmit} className={styles.form}>
+                        <div className={styles.formGroup}>
+                            <label>Name *</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                placeholder="e.g., Traffic Pattern"
+                                required
+                            />
+                        </div>
+
+                        <div className={styles.formGroup}>
+                            <label>Metafield type *</label>
+                            <select
+                                name="definitionId"
+                                value={formData.definitionId}
+                                onChange={handleInputChange}
+                                required
+                            >
+                                <option value="">Select a type...</option>
+                                {definitions.map(d => (
+                                    <option key={d.id} value={d.id}>
+                                        {d.label} ({d.value_type})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {isDropdown && (
+                            <div className={styles.formGroup}>
+                                <label>Dropdown options *</label>
+                                <input
+                                    type="text"
+                                    name="optionsInput"
+                                    value={formData.optionsInput}
+                                    onChange={handleInputChange}
+                                    placeholder="Option A, Option B, Option C"
+                                    required={isDropdown}
+                                />
+                                <small style={{ color: '#94a3b8', marginTop: '0.25rem', display: 'block' }}>
+                                    Comma-separated list of options
+                                </small>
+                            </div>
+                        )}
+
+                        <div className={styles.formActions}>
+                            <button type="submit" className={styles.submitBtn} disabled={loading}>
+                                {loading ? 'Creating...' : 'Create Metafield'}
+                            </button>
+                            <button type="button" className={styles.cancelBtn} onClick={() => router.back()}>
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
                 </div>
-
-                <div className={styles.formGroup}>
-                    <label>Type *</label>
-                    <select
-                        name="type"
-                        value={formData.type}
-                        onChange={handleInputChange}
-                        required
-                    >
-                        <option value="text">Text</option>
-                        <option value="number">Number</option>
-                        <option value="date">Date</option>
-                        <option value="checkbox">Checkbox</option>
-                        <option value="textarea">Textarea</option>
-                        <option value="select">Select</option>
-                    </select>
-                </div>
-
-                <div className={styles.formGroup}>
-                    <label>Example Value</label>
-                    <input
-                        type="text"
-                        name="example"
-                        value={formData.example}
-                        onChange={handleInputChange}
-                        placeholder="e.g., Morning 6-9am"
-                    />
-                </div>
-
-                <div className={styles.formGroup}>
-                    <label>Display Order</label>
-                    <input
-                        type="number"
-                        name="display_order"
-                        value={formData.display_order}
-                        onChange={handleInputChange}
-                        min="0"
-                    />
-                </div>
-
-                <div className={styles.formGroup}>
-                    <label>
-                        <input
-                            type="checkbox"
-                            name="multiple_values"
-                            checked={formData.multiple_values}
-                            onChange={handleInputChange}
-                        />
-                        Allow Multiple Values
-                    </label>
-                </div>
-
-                <button type="submit" className={styles.submitBtn} disabled={loading}>
-                    {loading ? 'Creating...' : 'Create Metafield'}
-                </button>
-            </form>
-        </div>
+            </div>
+        </>
     );
 }

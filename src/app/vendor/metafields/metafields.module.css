@@ -1,0 +1,268 @@
+/* app/vendor/metafields/metafields.module.css */
+.topbar {
+    background: #0f1419;
+    border-bottom: 1px solid #1e293b;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    color: #f1f5f9;
+}
+
+.createBtn {
+    padding: 8px 14px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 12px;
+    transition: background 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.createBtn:hover {
+    background: #2563eb;
+}
+
+.content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.section {
+    background: #0f1419;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.tableWrapper {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.table thead {
+    background: #131922;
+    border-bottom: 1px solid #1e293b;
+}
+
+.table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #94a3b8;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.table tbody tr {
+    border-bottom: 1px solid #1e293b;
+    transition: background 0.15s;
+}
+
+.table tbody tr:hover {
+    background: #131922;
+}
+
+.table td {
+    padding: 1rem;
+    color: #e0e6ed;
+}
+
+.nameTd {
+    font-weight: 600;
+    color: #fff;
+}
+
+.valueTd {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 0.5rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.actionBtn {
+    padding: 6px 12px;
+    background: #3b82f6;
+    font-size: 11px;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.actionBtn:hover {
+    background: #2563eb;
+}
+
+.danger {
+    background: #ef4444;
+}
+
+.danger:hover {
+    background: #dc2626;
+}
+
+.form {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.formGroup {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.formGroup label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.formGroup input,
+.formGroup textarea,
+.formGroup select {
+    padding: 10px 12px;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    background: #0f1419;
+    color: #e2e8f0;
+    font-family: inherit;
+    font-size: 13px;
+    transition: border-color 0.2s;
+}
+
+.formGroup input::placeholder,
+.formGroup textarea::placeholder {
+    color: #6b7280;
+}
+
+.formGroup input:focus,
+.formGroup textarea:focus,
+.formGroup select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.formActions {
+    display: flex;
+    gap: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #2a3544;
+}
+
+.submitBtn {
+    padding: 10px 18px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.submitBtn:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.submitBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.deleteBtn {
+    padding: 0.75rem 1.5rem;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.deleteBtn:hover {
+    background: #dc2626;
+}
+
+.cancelBtn {
+    padding: 0.75rem 1.5rem;
+    background: #2a3544;
+    color: #e0e6ed;
+    border: 1px solid #3f4859;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    text-align: center;
+}
+
+.cancelBtn:hover {
+    background: #3f4859;
+}
+
+.error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.empty {
+    text-align: center;
+    padding: 3rem;
+    color: #9ca3af;
+}
+
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: #9ca3af;
+}

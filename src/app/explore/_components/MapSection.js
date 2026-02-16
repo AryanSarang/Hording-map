@@ -1,4 +1,4 @@
-// src/app/explore/_components/MapSection.js
+// app/explore/_components/MapSection.js
 "use client";
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';

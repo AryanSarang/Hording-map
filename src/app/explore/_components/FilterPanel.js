@@ -1,4 +1,4 @@
-// src/app/explore/_components/FilterPanel.js
+// app/explore/_components/FilterPanel.js
 "use client";
 
 import { useMemo } from 'react';

@@ -1,4 +1,4 @@
-// src/app/onboarding/page.js
+// app/onboarding/page.js
 "use client";
 
 import { useState, useEffect } from 'react';

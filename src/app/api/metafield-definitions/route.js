@@ -1,6 +1,4 @@
-// src/app/api/metafield-definitions/route.js
-'use client';
-
+// app/api/metafield-definitions/route.js
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(

@@ -1,4 +1,4 @@
-// src/app/explore/page.js
+// app/explore/page.js
 import ExploreView from './_components/ExploreView';
 import { supabase } from '../../lib/supabase'; // Import the Public client
 
@@ -7,9 +7,12 @@ export const revalidate = 0;
 
 export default async function ExplorePage() {
     // 1. Fetch data using Supabase Client
+    // Use hordings_complete view if possible, otherwise join manually
+    // The schema showed 'hordings_complete' view exists. Let's try to use it as it likely has formatted data.
+    // But to be safe and strictly follow the previous logic with fixes:
     const { data: hoardings, error } = await supabase
-        .from('hordings') // Make sure this matches your table name exactly
-        .select('*, vendor:Vendors(name)');
+        .from('hordings')
+        .select('*, vendor:vendors(name)'); // Fix: Vendors -> vendors (lowercase)
 
     if (error) {
         console.error("Supabase Error:", error);
@@ -19,11 +22,18 @@ export default async function ExplorePage() {
     // 2. Format data (Parse JSON strings, ensure numbers)
     const formattedHoardings = (hoardings || []).map(h => ({
         ...h,
-        // If imageUrls is a string "['url']", parse it. If array, keep it.
-        imageUrls: typeof h.imageUrls === 'string' ? JSON.parse(h.imageUrls) : (h.imageUrls || []),
+        // Map DB columns to frontend expected props (camelCase)
+        vendorId: h.vendor_id,
+        rate: h.monthly_rental,
+        mediaType: h.media_type,
+        imageUrls: h.media || [], // Fix: Use media column, it's already an array
+
+        // Ensure numbers
         latitude: parseFloat(h.latitude),
         longitude: parseFloat(h.longitude),
-        rate: Number(h.rate),
+
+        // Flatten vendor name if needed
+        vendorName: h.vendor?.name
     }));
 
     return <ExploreView hoardings={formattedHoardings} />;

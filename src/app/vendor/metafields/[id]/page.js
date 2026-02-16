@@ -1,7 +1,10 @@
+// app/vendor/metafields/[id]/page.js
+// Edit metafield template (name, type, options) - not values
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import styles from '../metafields.module.css';
 
 export default function EditMetafieldPage() {
@@ -12,170 +15,155 @@ export default function EditMetafieldPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [definitions, setDefinitions] = useState([]);
     const [formData, setFormData] = useState({
-        label: '',
-        type: 'text',
-        example: '',
-        display_order: 0,
-        multiple_values: false,
+        name: '',
+        definitionId: '',
+        optionsInput: '',
     });
 
     useEffect(() => {
-        fetchDefinition();
+        Promise.all([
+            fetch(`/api/vendors/metafields/${id}`).then(r => r.json()),
+            fetch('/api/vendors/metafield-definitions').then(r => r.json())
+        ]).then(([metaRes, defRes]) => {
+            if (defRes.success) setDefinitions(defRes.data || []);
+            if (metaRes.success && metaRes.data) {
+                const m = metaRes.data;
+                setFormData({
+                    name: m.name || '',
+                    definitionId: String(m.definition_id || ''),
+                    optionsInput: Array.isArray(m.options) ? m.options.join(', ') : '',
+                });
+            } else {
+                setError(metaRes.error || 'Metafield not found');
+            }
+        }).catch(() => setError('Failed to load')).finally(() => setLoading(false));
     }, [id]);
 
-    async function fetchDefinition() {
-        try {
-            const res = await fetch(`/api/vendor/metafields/${id}`);
-            const data = await res.json();
-
-            if (data.success) {
-                setFormData(data.data);
-            } else {
-                setError('Definition not found');
-            }
-        } catch (err) {
-            setError('Failed to load definition');
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }
+    const selectedDef = definitions.find(d => d.id === parseInt(formData.definitionId));
+    const isDropdown = selectedDef?.value_type === 'single_select';
 
     function handleInputChange(e) {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value,
-        }));
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
     }
 
     async function handleSubmit(e) {
         e.preventDefault();
+        if (!formData.name?.trim() || !formData.definitionId) {
+            setError('Name and type are required');
+            return;
+        }
+        if (isDropdown && !formData.optionsInput?.trim()) {
+            setError('Dropdown options are required');
+            return;
+        }
+
         setSaving(true);
         setError(null);
 
         try {
-            const res = await fetch(`/api/vendor/metafields/${id}`, {
+            const options = isDropdown
+                ? formData.optionsInput.split(',').map(s => s.trim()).filter(Boolean)
+                : null;
+
+            const res = await fetch(`/api/vendors/metafields/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    name: formData.name.trim(),
+                    definitionId: formData.definitionId,
+                    options,
+                }),
             });
 
             const data = await res.json();
-
-            if (data.success) {
-                router.push('/vendor/metafields');
-            } else {
-                setError(data.error);
-            }
+            if (data.success) router.push('/vendor/metafields');
+            else setError(data.error);
         } catch (err) {
-            setError('Failed to update definition');
-            console.error(err);
+            setError('Failed to update metafield');
         } finally {
             setSaving(false);
         }
     }
 
-    async function handleDelete() {
-        if (!confirm('Are you sure? This will delete all values using this definition.')) return;
-
-        try {
-            const res = await fetch(`/api/vendor/metafields/${id}`, {
-                method: 'DELETE',
-            });
-
-            if (res.ok) {
-                router.push('/vendor/metafields');
-            } else {
-                alert('Failed to delete definition');
-            }
-        } catch (err) {
-            console.error('Error deleting:', err);
-            alert('Error deleting definition');
-        }
-    }
-
-    if (loading) return <div className={styles.loading}>Loading...</div>;
+    if (loading) return (
+        <div className={styles.content}>
+            <div className={styles.loading}>Loading...</div>
+        </div>
+    );
 
     return (
-        <div className={styles.container}>
-            <h1>Edit Metafield Definition</h1>
+        <>
+            <div className={styles.topbar}>
+                <h1 className={styles.title}>Edit Metafield</h1>
+                <Link href="/vendor/metafields" className={styles.cancelBtn}>
+                    Back to List
+                </Link>
+            </div>
 
-            {error && <div className={styles.error}>{error}</div>}
+            <div className={styles.content}>
+                <div className={styles.section}>
+                    {error && <div className={styles.error}>{error}</div>}
 
-            <form onSubmit={handleSubmit} className={styles.form}>
-                <div className={styles.formGroup}>
-                    <label>Label</label>
-                    <input
-                        type="text"
-                        name="label"
-                        value={formData.label}
-                        onChange={handleInputChange}
-                    />
+                    <form onSubmit={handleSubmit} className={styles.form}>
+                        <div className={styles.formGroup}>
+                            <label>Name *</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                required
+                            />
+                        </div>
+
+                        <div className={styles.formGroup}>
+                            <label>Metafield type *</label>
+                            <select
+                                name="definitionId"
+                                value={formData.definitionId}
+                                onChange={handleInputChange}
+                                required
+                            >
+                                <option value="">Select a type...</option>
+                                {definitions.map(d => (
+                                    <option key={d.id} value={d.id}>
+                                        {d.label} ({d.value_type})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {isDropdown && (
+                            <div className={styles.formGroup}>
+                                <label>Dropdown options *</label>
+                                <input
+                                    type="text"
+                                    name="optionsInput"
+                                    value={formData.optionsInput}
+                                    onChange={handleInputChange}
+                                    placeholder="Option A, Option B, Option C"
+                                    required={isDropdown}
+                                />
+                                <small style={{ color: '#94a3b8', marginTop: '0.25rem', display: 'block' }}>
+                                    Comma-separated list of options
+                                </small>
+                            </div>
+                        )}
+
+                        <div className={styles.formActions}>
+                            <button type="submit" className={styles.submitBtn} disabled={saving}>
+                                {saving ? 'Saving...' : 'Update Metafield'}
+                            </button>
+                            <button type="button" className={styles.cancelBtn} onClick={() => router.push('/vendor/metafields')}>
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
                 </div>
-
-                <div className={styles.formGroup}>
-                    <label>Type</label>
-                    <select
-                        name="type"
-                        value={formData.type}
-                        onChange={handleInputChange}
-                    >
-                        <option value="text">Text</option>
-                        <option value="number">Number</option>
-                        <option value="date">Date</option>
-                        <option value="checkbox">Checkbox</option>
-                        <option value="textarea">Textarea</option>
-                        <option value="select">Select</option>
-                    </select>
-                </div>
-
-                <div className={styles.formGroup}>
-                    <label>Example</label>
-                    <input
-                        type="text"
-                        name="example"
-                        value={formData.example}
-                        onChange={handleInputChange}
-                    />
-                </div>
-
-                <div className={styles.formGroup}>
-                    <label>Display Order</label>
-                    <input
-                        type="number"
-                        name="display_order"
-                        value={formData.display_order}
-                        onChange={handleInputChange}
-                    />
-                </div>
-
-                <div className={styles.formGroup}>
-                    <label>
-                        <input
-                            type="checkbox"
-                            name="multiple_values"
-                            checked={formData.multiple_values}
-                            onChange={handleInputChange}
-                        />
-                        Allow Multiple Values
-                    </label>
-                </div>
-
-                <div className={styles.formActions}>
-                    <button type="submit" className={styles.submitBtn} disabled={saving}>
-                        {saving ? 'Saving...' : 'Update Definition'}
-                    </button>
-                    <button
-                        type="button"
-                        className={styles.deleteBtn}
-                        onClick={handleDelete}
-                    >
-                        Delete Definition
-                    </button>
-                </div>
-            </form>
-        </div>
+            </div>
+        </>
     );
 }

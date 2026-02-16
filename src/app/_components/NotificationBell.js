@@ -1,7 +1,8 @@
+// app/_components/NotificationBell.js
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client"; // Adjust based on where your client helper is (e.g., src/lib/supabase)
+import { createClient } from "../../lib/supabase"; // Adjust based on where your client helper is (e.g., src/lib/supabase)
 import { Bell } from "lucide-react";
 
 export default function NotificationBell() {

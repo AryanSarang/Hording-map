@@ -1,53 +1,27 @@
+// app/vendor/hordings/components/MetafieldSection.js
+// Shows all vendor metafields as inputs - values filled when creating/editing hording
 'use client';
 
 import { useState } from 'react';
 import styles from './MetafieldSection.module.css';
 
 export default function MetafieldSection({
-    definitions = [],
-    metafields = [],
-    onMetafieldsChange,
+    vendorMetafields = [],
+    values = {},
+    onValuesChange,
 }) {
-    const [selectedDefinition, setSelectedDefinition] = useState('');
     const [showValues, setShowValues] = useState(true);
 
-    function handleAddMetafield() {
-        if (!selectedDefinition) return;
-
-        const def = definitions.find(d => d.id === parseInt(selectedDefinition));
-        if (!def) return;
-
-        const newMetafield = {
-            key: def.key,
-            value: '',
-            type: def.type,
-            label: def.label,
-        };
-
-        const updated = [...metafields, newMetafield];
-        onMetafieldsChange(updated);
-        setSelectedDefinition('');
+    function handleValueChange(vendorMetafieldId, value) {
+        onValuesChange?.({ ...values, [vendorMetafieldId]: value });
     }
 
-    function handleRemoveMetafield(key) {
-        const updated = metafields.filter(mf => mf.key !== key);
-        onMetafieldsChange(updated);
-    }
-
-    function handleValueChange(key, value) {
-        const updated = metafields.map(mf =>
-            mf.key === key ? { ...mf, value } : mf
-        );
-        onMetafieldsChange(updated);
-    }
-
-    const usedKeys = metafields.map(mf => mf.key);
-    const availableDefinitions = definitions.filter(d => !usedKeys.includes(d.key));
+    if (vendorMetafields.length === 0) return null;
 
     return (
         <div className={styles.section}>
             <div className={styles.header}>
-                <h3>Metafields</h3>
+                <h3>Custom Metafields</h3>
                 <button
                     type="button"
                     onClick={() => setShowValues(!showValues)}
@@ -58,89 +32,65 @@ export default function MetafieldSection({
             </div>
 
             {showValues && (
-                <>
-                    <div className={styles.addSection}>
-                        <select
-                            value={selectedDefinition}
-                            onChange={(e) => setSelectedDefinition(e.target.value)}
-                            className={styles.select}
-                        >
-                            <option value="">Select a metafield to add...</option>
-                            {availableDefinitions.map(def => (
-                                <option key={def.id} value={def.id}>
-                                    {def.label} ({def.type})
-                                </option>
-                            ))}
-                        </select>
-                        <button
-                            type="button"
-                            onClick={handleAddMetafield}
-                            disabled={!selectedDefinition}
-                            className={styles.addBtn}
-                        >
-                            Add
-                        </button>
-                    </div>
+                <div className={styles.list}>
+                    {vendorMetafields.map((mf) => {
+                        const def = mf.metafield_definitions;
+                        const valueType = def?.value_type || mf.value_type || 'string';
+                        const value = values[mf.id] ?? '';
 
-                    {metafields.length === 0 ? (
-                        <p className={styles.empty}>No metafields added yet</p>
-                    ) : (
-                        <div className={styles.list}>
-                            {metafields.map((mf) => (
-                                <div key={mf.key} className={styles.item}>
-                                    <div className={styles.itemHeader}>
-                                        <label>{mf.label || mf.key}</label>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveMetafield(mf.key)}
-                                            className={styles.removeBtn}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-
-                                    {mf.type === 'checkbox' ? (
-                                        <input
-                                            type="checkbox"
-                                            checked={mf.value === 'true' || mf.value === true}
-                                            onChange={(e) => handleValueChange(mf.key, e.target.checked ? 'true' : 'false')}
-                                            className={styles.input}
-                                        />
-                                    ) : mf.type === 'textarea' ? (
-                                        <textarea
-                                            value={mf.value}
-                                            onChange={(e) => handleValueChange(mf.key, e.target.value)}
-                                            className={styles.textarea}
-                                            rows={3}
-                                        />
-                                    ) : mf.type === 'number' ? (
-                                        <input
-                                            type="number"
-                                            value={mf.value}
-                                            onChange={(e) => handleValueChange(mf.key, e.target.value)}
-                                            className={styles.input}
-                                        />
-                                    ) : mf.type === 'date' ? (
-                                        <input
-                                            type="date"
-                                            value={mf.value}
-                                            onChange={(e) => handleValueChange(mf.key, e.target.value)}
-                                            className={styles.input}
-                                        />
-                                    ) : (
-                                        <input
-                                            type="text"
-                                            value={mf.value}
-                                            onChange={(e) => handleValueChange(mf.key, e.target.value)}
-                                            className={styles.input}
-                                            placeholder={`Enter ${mf.label || mf.key}`}
-                                        />
-                                    )}
+                        return (
+                            <div key={mf.id} className={styles.item}>
+                                <div className={styles.itemHeader}>
+                                    <label>{mf.name}</label>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </>
+
+                                {valueType === 'boolean' ? (
+                                    <input
+                                        type="checkbox"
+                                        checked={value === 'true' || value === true}
+                                        onChange={(e) => handleValueChange(mf.id, e.target.checked ? 'true' : 'false')}
+                                        className={styles.input}
+                                    />
+                                ) : valueType === 'rich_text' ? (
+                                    <textarea
+                                        value={value}
+                                        onChange={(e) => handleValueChange(mf.id, e.target.value)}
+                                        className={styles.textarea}
+                                        rows={3}
+                                        placeholder={`Enter ${mf.name}`}
+                                    />
+                                ) : valueType === 'single_select' ? (
+                                    <select
+                                        value={value}
+                                        onChange={(e) => handleValueChange(mf.id, e.target.value)}
+                                        className={styles.select}
+                                    >
+                                        <option value="">Select...</option>
+                                        {(Array.isArray(mf.options) ? mf.options : []).map((opt) => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                        ))}
+                                    </select>
+                                ) : valueType === 'number' || valueType === 'integer' ? (
+                                    <input
+                                        type="number"
+                                        value={value}
+                                        onChange={(e) => handleValueChange(mf.id, e.target.value)}
+                                        className={styles.input}
+                                        placeholder={`Enter ${mf.name}`}
+                                    />
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={value}
+                                        onChange={(e) => handleValueChange(mf.id, e.target.value)}
+                                        className={styles.input}
+                                        placeholder={`Enter ${mf.name}`}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );

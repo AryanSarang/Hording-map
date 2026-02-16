@@ -1,3 +1,4 @@
+// app/_components/HomeHeader.js
 "use client";
 
 import { useState, useEffect } from 'react';

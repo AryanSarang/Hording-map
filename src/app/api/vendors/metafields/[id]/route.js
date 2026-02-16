@@ -1,13 +1,19 @@
+// app/api/vendors/metafields/[id]/route.js
+// Vendor metafield template (name, type, options) - not values
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { supabaseAdmin } from '../../../../../lib/supabase';
 
-// GET - Fetch single metafield
+// GET - Fetch single vendor metafield (template)
 export async function GET(req, { params }) {
     try {
+        const { id } = await params;
         const { data: metafield, error } = await supabaseAdmin
-            .from('Metafields')
-            .select('*')
-            .eq('id', params.id)
+            .from('vendor_metafields')
+            .select(`
+                *,
+                metafield_definitions (id, key, label, value_type)
+            `)
+            .eq('id', id)
             .single();
 
         if (error) {
@@ -26,7 +32,7 @@ export async function GET(req, { params }) {
         }, { status: 200 });
 
     } catch (error) {
-        console.error('GET /api/vendor/metafields/[id] Error:', error);
+        console.error('GET /api/vendors/metafields/[id] Error:', error);
         return NextResponse.json({
             success: false,
             error: error.message || 'Failed to fetch metafield'
@@ -34,16 +40,30 @@ export async function GET(req, { params }) {
     }
 }
 
-// PUT - Update metafield
+// PUT - Update vendor metafield template (name, type, options)
 export async function PUT(req, { params }) {
     try {
+        const { id } = await params;
         const body = await req.json();
 
+        const updates = {};
+        if (body.name !== undefined) updates.name = body.name.trim();
+        if (body.definitionId !== undefined) updates.definition_id = parseInt(body.definitionId);
+        if (body.options !== undefined) updates.options = body.options;
+        if (body.displayOrder !== undefined) updates.display_order = body.displayOrder;
+
+        if (body.name && !updates.key) {
+            updates.key = body.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `field_${id}`;
+        }
+
         const { data: updatedMetafield, error } = await supabaseAdmin
-            .from('Metafields')
-            .update(body)
-            .eq('id', params.id)
-            .select()
+            .from('vendor_metafields')
+            .update(updates)
+            .eq('id', id)
+            .select(`
+                *,
+                metafield_definitions (id, key, label, value_type)
+            `)
             .single();
 
         if (error) {
@@ -62,7 +82,7 @@ export async function PUT(req, { params }) {
         }, { status: 200 });
 
     } catch (error) {
-        console.error('PUT /api/vendor/metafields/[id] Error:', error);
+        console.error('PUT /api/vendors/metafields/[id] Error:', error);
         return NextResponse.json({
             success: false,
             error: error.message || 'Failed to update metafield'
@@ -70,13 +90,14 @@ export async function PUT(req, { params }) {
     }
 }
 
-// DELETE - Delete metafield
+// DELETE - Delete vendor metafield template
 export async function DELETE(req, { params }) {
     try {
+        const { id } = await params;
         const { error } = await supabaseAdmin
-            .from('Metafields')
+            .from('vendor_metafields')
             .delete()
-            .eq('id', params.id);
+            .eq('id', id);
 
         if (error) {
             if (error.code === 'PGRST116') {
@@ -94,7 +115,7 @@ export async function DELETE(req, { params }) {
         }, { status: 200 });
 
     } catch (error) {
-        console.error('DELETE /api/vendor/metafields/[id] Error:', error);
+        console.error('DELETE /api/vendors/metafields/[id] Error:', error);
         return NextResponse.json({
             success: false,
             error: error.message || 'Failed to delete metafield'

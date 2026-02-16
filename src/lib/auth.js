@@ -1,4 +1,4 @@
-// src/lib/auth.js
+// lib/auth.js
 import { headers } from 'next/headers';
 
 /**

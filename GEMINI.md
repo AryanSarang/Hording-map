@@ -158,8 +158,7 @@ text
    - Status & Visibility
    - Vendor Info (POC name, phone)
 6. Submit → Hording saved to database
-7. Admin reviews and approves (status changes to "active")
-8. Hording appears on public map (/explore)
+7. Hording appears on public map (/explore)
 Flow 2: Advertiser Searching
 text
 1. Advertiser visits home page (/)

@@ -1,4 +1,4 @@
-// src/app/explore/_components/ExploreHeader.js
+// app/explore/_components/ExploreHeader.js
 "use client";
 
 import { useState } from 'react';

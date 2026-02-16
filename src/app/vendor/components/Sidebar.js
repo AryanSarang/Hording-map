@@ -1,7 +1,9 @@
+// app/vendor/components/Sidebar.js
 'use client';
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { supabase } from '../../../lib/supabase';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar() {
@@ -9,18 +11,22 @@ export default function Sidebar() {
     const pathname = usePathname();
 
     function isActive(path) {
+        // Exact match for dashboard, startsWith for others
+        if (path === '/vendor/dashboard') return pathname === path;
         return pathname.startsWith(path);
     }
 
-    function handleLogout() {
-        localStorage.removeItem('vendorToken');
-        router.push('/auth/login');
+    async function handleLogout() {
+        await supabase.auth.signOut();
+        router.push('/login');
     }
 
     return (
         <aside className={styles.sidebar}>
             <div className={styles.sidebarHeader}>
-                <h2 className={styles.logo}>📍 Hording Map</h2>
+                <Link href="/" style={{ textDecoration: 'none' }}>
+                    <h2 className={styles.logo}>Hording Map</h2>
+                </Link>
             </div>
 
             <nav className={styles.nav}>

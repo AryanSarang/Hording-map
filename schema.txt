@@ -1,0 +1,120 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.hording_metafields (
+  id integer NOT NULL DEFAULT nextval('hording_metafields_id_seq'::regclass),
+  hording_id integer NOT NULL,
+  definition_id integer,
+  key character varying NOT NULL,
+  value text NOT NULL,
+  value_type character varying DEFAULT 'string'::character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hording_metafields_pkey PRIMARY KEY (id),
+  CONSTRAINT hording_metafields_hording_id_fkey FOREIGN KEY (hording_id) REFERENCES public.hordings(id)
+);
+CREATE TABLE public.hording_pricing (
+  id integer NOT NULL DEFAULT nextval('hording_pricing_id_seq'::regclass),
+  hording_id integer NOT NULL,
+  price_name character varying NOT NULL,
+  price integer NOT NULL CHECK (price > 0),
+  duration character varying NOT NULL,
+  is_active boolean DEFAULT true,
+  display_order integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hording_pricing_pkey PRIMARY KEY (id),
+  CONSTRAINT hording_pricing_hording_id_fkey FOREIGN KEY (hording_id) REFERENCES public.hordings(id)
+);
+CREATE TABLE public.hordings (
+  id integer NOT NULL DEFAULT nextval('hordings_id_seq'::regclass),
+  vendor_id integer,
+  latitude double precision NOT NULL CHECK (latitude >= '-90'::integer::double precision AND latitude <= 90::double precision),
+  longitude double precision NOT NULL CHECK (longitude >= '-180'::integer::double precision AND longitude <= 180::double precision),
+  state character varying NOT NULL,
+  city character varying NOT NULL,
+  address text NOT NULL,
+  pincode character varying,
+  poc_name character varying NOT NULL,
+  poc_number text NOT NULL,
+  poc_email character varying,
+  monthly_rental integer CHECK (monthly_rental > 0),
+  vendor_rate integer CHECK (vendor_rate > 0),
+  payment_terms character varying,
+  minimum_booking_duration character varying NOT NULL,
+  media_type character varying NOT NULL CHECK (media_type::text = ANY (ARRAY['Digital Screens'::character varying, 'Hoarding'::character varying, 'Bus Shelter'::character varying, 'Wall Wrap'::character varying, 'Kiosk'::character varying, 'Transit'::character varying, 'Neon Sign'::character varying, 'Other'::character varying]::text[])),
+  media ARRAY DEFAULT '{}'::text[],
+  zone character varying,
+  landmark character varying,
+  road_name character varying,
+  road_from character varying,
+  road_to character varying,
+  position_wrt_road character varying,
+  traffic_type character varying,
+  screen_size character varying,
+  screen_number integer,
+  screen_placement character varying,
+  display_format character varying,
+  slot_time character varying,
+  loop_time character varying,
+  display_hours character varying,
+  width integer,
+  height integer,
+  hording_type character varying,
+  visibility character varying,
+  condition character varying,
+  previous_clientele text,
+  dwell_time character varying,
+  status character varying DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'inactive'::character varying, 'maintenance'::character varying]::text[])),
+  compliance boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT hordings_pkey PRIMARY KEY (id),
+  CONSTRAINT hordings_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
+);
+CREATE TABLE public.metafield_definitions (
+  id integer NOT NULL DEFAULT nextval('metafield_definitions_id_seq'::regclass),
+  key character varying NOT NULL UNIQUE,
+  label character varying NOT NULL,
+  value_type character varying NOT NULL,
+  is_multiple boolean DEFAULT false,
+  example_value text,
+  display_order integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT metafield_definitions_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  message text,
+  type text DEFAULT 'info'::text,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  email text NOT NULL,
+  full_name text,
+  phone_number text,
+  company_name text,
+  avatar_url text,
+  referral_source text,
+  is_onboarded boolean DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  role USER-DEFINED NOT NULL DEFAULT 'client'::enum_account_role,
+  status USER-DEFINED NOT NULL DEFAULT 'pending'::enum_account_status,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.vendors (
+  id integer NOT NULL DEFAULT nextval('vendors_id_seq'::regclass),
+  name character varying NOT NULL,
+  description text,
+  contact_email character varying,
+  contact_phone character varying,
+  status character varying DEFAULT 'active'::character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT vendors_pkey PRIMARY KEY (id)
+);
