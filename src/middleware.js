@@ -49,7 +49,7 @@ export async function middleware(request) {
         // Define paths
         const path = request.nextUrl.pathname;
         const isAuthPage = path.startsWith('/login') || path.startsWith('/auth') || path.startsWith('/callback');
-        const isPublicPage = path === '/'; // Homepage is public
+        const isPublicPage = path === '/' || path.startsWith('/explore'); // Homepage and Explore are public
         // Pending page should be public-ish for those stuck there
         const isPendingPage = path === '/pending';
 

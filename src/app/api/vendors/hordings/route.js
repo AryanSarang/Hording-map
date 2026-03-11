@@ -12,7 +12,7 @@ export async function GET(req) {
         const mediaType = searchParams.get('mediaType');
 
         let query = supabaseAdmin
-            .from('hordings')
+            .from('media')
             .select('*, vendor:vendors(id, name)');
 
         if (vendorId) query = query.eq('vendor_id', vendorId);
@@ -71,9 +71,9 @@ export async function POST(req) {
             'pocName', 'pocNumber', 'minimumBookingDuration', 'mediaType'
         ];
 
-        // Map frontend camelCase to DB snake_case
+        // Map frontend camelCase to DB snake_case. Let DB generate id (UUID or gen_id10() after migration).
         const dbPayload = {
-            vendor_id: body.vendorId ? parseInt(body.vendorId) : null,
+            vendor_id: (body.vendorId && String(body.vendorId).trim()) || null,
 
             city: body.city,
             state: body.state,
@@ -102,7 +102,6 @@ export async function POST(req) {
             media_type: body.mediaType,
             media: body.imageUrls || [],
 
-            hording_type: body.hordingType,
             width: body.width ? parseInt(body.width) : null,
             height: body.height ? parseInt(body.height) : null,
 
@@ -120,7 +119,6 @@ export async function POST(req) {
 
             condition: body.condition,
             previous_clientele: body.previousClientele,
-            compliance: body.compliance || false,
 
             status: body.status || 'active'
         };
@@ -136,7 +134,7 @@ export async function POST(req) {
         }
 
         const { data: newHording, error } = await supabaseAdmin
-            .from('hordings')
+            .from('media')
             .insert([dbPayload])
             .select()
             .single();
@@ -156,7 +154,7 @@ export async function POST(req) {
             const pricingRows = pricing
                 .filter(p => p.price_name && p.price > 0 && p.duration)
                 .map((p, i) => ({
-                    hording_id: newHording.id,
+                    media_id: newHording.id,
                     price_name: p.price_name,
                     price: parseInt(p.price),
                     duration: p.duration,
@@ -164,7 +162,7 @@ export async function POST(req) {
                     is_active: true
                 }));
             if (pricingRows.length > 0) {
-                await supabaseAdmin.from('hording_pricing').insert(pricingRows);
+                await supabaseAdmin.from('media_pricing').insert(pricingRows);
             }
         }
 
@@ -180,13 +178,13 @@ export async function POST(req) {
                     .in('id', entries.map(([id]) => parseInt(id)));
                 const keyMap = Object.fromEntries((vendorMetas || []).map(v => [v.id, v.key]));
                 const rows = entries.map(([vendorMetafieldId, value]) => ({
-                    hording_id: newHording.id,
+                    media_id: newHording.id,
                     vendor_metafield_id: parseInt(vendorMetafieldId),
                     key: keyMap[vendorMetafieldId] || `mf_${vendorMetafieldId}`,
                     value: String(value ?? ''),
                     value_type: 'string'
                 }));
-                await supabaseAdmin.from('hording_metafields').insert(rows);
+                await supabaseAdmin.from('media_metafields').insert(rows);
             }
         }
 

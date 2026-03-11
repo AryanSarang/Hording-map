@@ -1,11 +1,16 @@
 // app/api/vendors/metafields/[id]/route.js
-// Vendor metafield template (name, type, options) - not values
+// Vendor metafield template (name, type, options) - user-scoped
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '../../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 
-// GET - Fetch single vendor metafield (template)
+// GET - Fetch single metafield (only if owned by current user)
 export async function GET(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
         const { id } = await params;
         const { data: metafield, error } = await supabaseAdmin
             .from('vendor_metafields')
@@ -14,6 +19,7 @@ export async function GET(req, { params }) {
                 metafield_definitions (id, key, label, value_type)
             `)
             .eq('id', id)
+            .eq('user_id', user.id)
             .single();
 
         if (error) {
@@ -40,9 +46,13 @@ export async function GET(req, { params }) {
     }
 }
 
-// PUT - Update vendor metafield template (name, type, options)
+// PUT - Update metafield (only if owned by current user)
 export async function PUT(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
         const { id } = await params;
         const body = await req.json();
 
@@ -60,6 +70,7 @@ export async function PUT(req, { params }) {
             .from('vendor_metafields')
             .update(updates)
             .eq('id', id)
+            .eq('user_id', user.id)
             .select(`
                 *,
                 metafield_definitions (id, key, label, value_type)
@@ -90,14 +101,19 @@ export async function PUT(req, { params }) {
     }
 }
 
-// DELETE - Delete vendor metafield template
+// DELETE - Delete metafield (only if owned by current user)
 export async function DELETE(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
         const { id } = await params;
         const { error } = await supabaseAdmin
             .from('vendor_metafields')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('user_id', user.id);
 
         if (error) {
             if (error.code === 'PGRST116') {

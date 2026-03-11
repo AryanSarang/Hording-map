@@ -77,10 +77,6 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.INTEGER,
         allowNull: true,
     },
-    hordingType: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
     visibility: {
         type: DataTypes.STRING,
         allowNull: true,
@@ -148,10 +144,6 @@ const Hording = sequelize.define('Hording', {
     dwellTime: {
         type: DataTypes.STRING,
         allowNull: true,
-    },
-    compliance: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false,
     },
     status: {
         type: DataTypes.STRING,

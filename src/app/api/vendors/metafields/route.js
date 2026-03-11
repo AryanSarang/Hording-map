@@ -1,14 +1,19 @@
 // app/api/vendors/metafields/route.js
-// Vendor metafields = custom field templates (name + type). Available when creating ANY hording.
-// Values are filled when creating/editing a hording, not here.
+// Metafields are user-specific: scoped to the current logged-in user.
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../lib/supabase';
 
-// GET - Fetch all vendor metafields (custom field definitions - templates)
-export async function GET(req) {
+// GET - Fetch current user's metafield definitions
+export async function GET() {
     try {
-        const { searchParams } = new URL(req.url);
-        const vendorId = searchParams.get('vendorId') || 1; // Default to 1 until auth
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({
+                success: false,
+                error: 'You must be logged in to view metafields'
+            }, { status: 401 });
+        }
 
         const { data: metafields, error } = await supabaseAdmin
             .from('vendor_metafields')
@@ -22,7 +27,7 @@ export async function GET(req) {
                 created_at,
                 metafield_definitions (id, key, label, value_type)
             `)
-            .eq('vendor_id', vendorId)
+            .eq('user_id', user.id)
             .order('display_order', { ascending: true })
             .order('created_at', { ascending: false });
 
@@ -42,9 +47,17 @@ export async function GET(req) {
     }
 }
 
-// POST - Create new metafield (name + type only; values filled when creating hordings)
+// POST - Create metafield for current user (no vendorId required)
 export async function POST(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({
+                success: false,
+                error: 'You must be logged in to create metafields'
+            }, { status: 401 });
+        }
+
         const body = await req.json();
 
         if (!body.name?.trim() || !body.definitionId) {
@@ -54,9 +67,6 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
-        const vendorId = body.vendorId || 1;
-
-        // Auto-generate key from name
         const key = body.name
             .toLowerCase()
             .trim()
@@ -64,11 +74,12 @@ export async function POST(req) {
             .replace(/[^a-z0-9_]/g, '');
 
         const dbPayload = {
-            vendor_id: parseInt(vendorId),
+            user_id: user.id,
+            vendor_id: null, // user-scoped; no vendor required
             name: body.name.trim(),
             key: key || `field_${Date.now()}`,
             definition_id: parseInt(body.definitionId),
-            options: body.options || null, // For dropdown: ["Option A", "Option B"]
+            options: body.options || null,
             display_order: body.displayOrder ?? 0
         };
 

@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 
-const MEDIA_TYPES = ['Digital Screens', 'Hoarding', 'Bus Shelter', 'Wall Wrap', 'Kiosk', 'Transit', 'Neon Sign', 'Other'];
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const REQUIRED = ['city', 'state', 'address', 'latitude', 'longitude', 'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type'];
 
 function parseCsvLine(line) {
@@ -77,12 +77,23 @@ export async function POST(req) {
         const headerIndex = {};
         headers.forEach((h, i) => { headerIndex[h] = i; });
 
-        const vendorIdForMetafields = 1;
-        const { data: vendorMetas } = await supabaseAdmin
-            .from('vendor_metafields')
-            .select('id, key')
-            .eq('vendor_id', vendorIdForMetafields);
-        const keyToId = Object.fromEntries((vendorMetas || []).map((v) => [v.key, v.id]));
+        // Resolve vendor_id from first row for metafield lookup (vendor_id is 10-char string after migration)
+        let vendorIdForMetafields = null;
+        for (let r = 1; r < rows.length; r++) {
+            const i = headerIndex['vendor_id'];
+            if (i != null && rows[r][i] != null && String(rows[r][i]).trim()) {
+                vendorIdForMetafields = String(rows[r][i]).trim();
+                break;
+            }
+        }
+        let keyToId = {};
+        if (vendorIdForMetafields) {
+            const { data: vendorMetas } = await supabaseAdmin
+                .from('vendor_metafields')
+                .select('id, key')
+                .eq('vendor_id', vendorIdForMetafields);
+            keyToId = Object.fromEntries((vendorMetas || []).map((v) => [v.key, v.id]));
+        }
 
         const rowErrors = [];
         const toInsert = [];
@@ -120,11 +131,7 @@ export async function POST(req) {
             else if (!MEDIA_TYPES.includes(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
 
             const vendorIdStr = get('vendor_id');
-            let vendorId = null;
-            if (vendorIdStr) {
-                vendorId = parseInt(vendorIdStr);
-                if (isNaN(vendorId)) errs.push('vendor_id must be a number');
-            }
+            const vendorId = vendorIdStr ? String(vendorIdStr).trim() || null : null;
 
             const statusVal = get('status') || 'active';
             if (!['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
@@ -193,7 +200,6 @@ export async function POST(req) {
                 payment_terms: get('payment_terms'),
                 minimum_booking_duration: minBooking,
                 media_type: mediaType,
-                hording_type: get('hording_type') || null,
                 width: get('width') ? parseInt(get('width')) : null,
                 height: get('height') ? parseInt(get('height')) : null,
                 media: media,
@@ -209,7 +215,6 @@ export async function POST(req) {
                 dwell_time: get('dwell_time') || null,
                 condition: get('condition') || null,
                 previous_clientele: get('previous_clientele') || null,
-                compliance: (get('compliance') || '').toLowerCase() === 'true',
                 status: statusVal,
                 pricing,
                 metafields,
@@ -229,7 +234,7 @@ export async function POST(req) {
         for (const item of toInsert) {
             const { pricing: p, metafields: m, ...hPayload } = item;
             const { data: newH, error: insertErr } = await supabaseAdmin
-                .from('hordings')
+                .from('media')
                 .insert([hPayload])
                 .select()
                 .single();
@@ -244,9 +249,9 @@ export async function POST(req) {
             }
 
             if (Array.isArray(p) && p.length > 0) {
-                await supabaseAdmin.from('hording_pricing').insert(
+                await supabaseAdmin.from('media_pricing').insert(
                     p.map((pr, i) => ({
-                        hording_id: newH.id,
+                        media_id: newH.id,
                         price_name: pr.price_name,
                         price: pr.price,
                         duration: pr.duration,
@@ -262,9 +267,9 @@ export async function POST(req) {
                     .select('id, key')
                     .in('id', Object.keys(m).map(Number));
                 const keyMap = Object.fromEntries((vMetas || []).map((v) => [v.id, v.key]));
-                await supabaseAdmin.from('hording_metafields').insert(
+                await supabaseAdmin.from('media_metafields').insert(
                     Object.entries(m).map(([id, value]) => ({
-                        hording_id: newH.id,
+                        media_id: newH.id,
                         vendor_metafield_id: parseInt(id),
                         key: keyMap[id] || `mf_${id}`,
                         value: String(value ?? ''),

@@ -1,34 +1,35 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-CREATE TABLE public.hording_metafields (
-  id integer NOT NULL DEFAULT nextval('hording_metafields_id_seq'::regclass),
-  hording_id integer NOT NULL,
+-- Tables renamed: hordings -> media, hording_pricing -> media_pricing, hording_metafields -> media_metafields
+CREATE TABLE public.media_metafields (
+  id integer NOT NULL,
+  media_id integer NOT NULL,
   definition_id integer,
   key character varying NOT NULL,
   value text NOT NULL,
   value_type character varying DEFAULT 'string'::character varying,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT hording_metafields_pkey PRIMARY KEY (id),
-  CONSTRAINT hording_metafields_hording_id_fkey FOREIGN KEY (hording_id) REFERENCES public.hordings(id)
+  CONSTRAINT media_metafields_pkey PRIMARY KEY (id),
+  CONSTRAINT media_metafields_media_id_fkey FOREIGN KEY (media_id) REFERENCES public.media(id)
 );
-CREATE TABLE public.hording_pricing (
-  id integer NOT NULL DEFAULT nextval('hording_pricing_id_seq'::regclass),
-  hording_id integer NOT NULL,
+CREATE TABLE public.media_pricing (
+  id integer NOT NULL,
+  media_id integer NOT NULL,
   price_name character varying NOT NULL,
   price integer NOT NULL CHECK (price > 0),
   duration character varying NOT NULL,
   is_active boolean DEFAULT true,
   display_order integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT hording_pricing_pkey PRIMARY KEY (id),
-  CONSTRAINT hording_pricing_hording_id_fkey FOREIGN KEY (hording_id) REFERENCES public.hordings(id)
+  CONSTRAINT media_pricing_pkey PRIMARY KEY (id),
+  CONSTRAINT media_pricing_media_id_fkey FOREIGN KEY (media_id) REFERENCES public.media(id)
 );
-CREATE TABLE public.hordings (
-  id integer NOT NULL DEFAULT nextval('hordings_id_seq'::regclass),
+CREATE TABLE public.media (
+  id integer NOT NULL DEFAULT nextval('media_id_seq'::regclass),
   vendor_id integer,
-  latitude double precision NOT NULL CHECK (latitude >= '-90'::integer::double precision AND latitude <= 90::double precision),
-  longitude double precision NOT NULL CHECK (longitude >= '-180'::integer::double precision AND longitude <= 180::double precision),
+  latitude double precision NOT NULL,
+  longitude double precision NOT NULL,
   state character varying NOT NULL,
   city character varying NOT NULL,
   address text NOT NULL,
@@ -40,7 +41,7 @@ CREATE TABLE public.hordings (
   vendor_rate integer CHECK (vendor_rate > 0),
   payment_terms character varying,
   minimum_booking_duration character varying NOT NULL,
-  media_type character varying NOT NULL CHECK (media_type::text = ANY (ARRAY['Digital Screens'::character varying, 'Hoarding'::character varying, 'Bus Shelter'::character varying, 'Wall Wrap'::character varying, 'Kiosk'::character varying, 'Transit'::character varying, 'Neon Sign'::character varying, 'Other'::character varying]::text[])),
+  media_type character varying NOT NULL CHECK (media_type::text = ANY (ARRAY['Bus Shelter', 'Digital Screens', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other']::text[])),
   media ARRAY DEFAULT '{}'::text[],
   zone character varying,
   landmark character varying,
@@ -58,17 +59,15 @@ CREATE TABLE public.hordings (
   display_hours character varying,
   width integer,
   height integer,
-  hording_type character varying,
   visibility character varying,
   condition character varying,
   previous_clientele text,
   dwell_time character varying,
-  status character varying DEFAULT 'active'::character varying CHECK (status::text = ANY (ARRAY['active'::character varying, 'inactive'::character varying, 'maintenance'::character varying]::text[])),
-  compliance boolean DEFAULT false,
+  status character varying DEFAULT 'active'::character varying,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT hordings_pkey PRIMARY KEY (id),
-  CONSTRAINT hordings_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
+  CONSTRAINT media_pkey PRIMARY KEY (id),
+  CONSTRAINT media_vendor_id_fkey FOREIGN KEY (vendor_id) REFERENCES public.vendors(id)
 );
 CREATE TABLE public.metafield_definitions (
   id integer NOT NULL DEFAULT nextval('metafield_definitions_id_seq'::regclass),

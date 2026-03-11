@@ -1,6 +1,7 @@
 // app/api/vendors/hordings/[id]/route.js
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
+import { isValidMediaId } from '../../../../../lib/genId10';
 
 // Helper to map DB snake_case to Frontend camelCase
 function mapToFrontend(h) {
@@ -33,7 +34,6 @@ function mapToFrontend(h) {
         minimumBookingDuration: h.minimum_booking_duration,
 
         mediaType: h.media_type,
-        hordingType: h.hording_type,
         width: h.width,
         height: h.height,
         imageUrls: Array.isArray(h.media) ? h.media.join('\n') : (h.media || ''),
@@ -52,7 +52,6 @@ function mapToFrontend(h) {
 
         condition: h.condition,
         previousClientele: h.previous_clientele,
-        compliance: h.compliance || false,
         status: h.status
     };
 }
@@ -61,13 +60,13 @@ function mapToFrontend(h) {
 export async function GET(req, { params }) {
     const resolved = await params;
     const { id } = resolved;
-    if (!id || isNaN(parseInt(id))) {
+    if (!isValidMediaId(id)) {
         return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
     try {
         const { data, error } = await supabaseAdmin
-            .from('hordings')
+            .from('media')
             .select('*')
             .eq('id', id)
             .single();
@@ -76,8 +75,8 @@ export async function GET(req, { params }) {
         if (!data) return NextResponse.json({ success: false, error: 'Hording not found' }, { status: 404 });
 
         const [{ data: metafieldRows }, { data: pricingRows }] = await Promise.all([
-            supabaseAdmin.from('hording_metafields').select('vendor_metafield_id, value').eq('hording_id', data.id),
-            supabaseAdmin.from('hording_pricing').select('price_name, price, duration, display_order').eq('hording_id', data.id).order('display_order')
+            supabaseAdmin.from('media_metafields').select('vendor_metafield_id, value').eq('media_id', data.id),
+            supabaseAdmin.from('media_pricing').select('price_name, price, duration, display_order').eq('media_id', data.id).order('display_order')
         ]);
 
         const metafields = {};
@@ -111,7 +110,7 @@ export async function GET(req, { params }) {
 export async function PUT(req, { params }) {
     const resolved = await params;
     const { id } = resolved;
-    if (!id || isNaN(parseInt(id))) {
+    if (!isValidMediaId(id)) {
         return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
@@ -125,7 +124,7 @@ export async function PUT(req, { params }) {
         // Map Frontend camelCase -> DB snake_case
         const dbPayload = {};
 
-        if (body.vendorId !== undefined) dbPayload.vendor_id = body.vendorId ? parseInt(body.vendorId) : null;
+        if (body.vendorId !== undefined) dbPayload.vendor_id = (body.vendorId && String(body.vendorId).trim()) || null;
         if (body.city !== undefined) dbPayload.city = body.city;
         if (body.state !== undefined) dbPayload.state = body.state;
         if (body.address !== undefined) dbPayload.address = body.address;
@@ -151,7 +150,6 @@ export async function PUT(req, { params }) {
         if (body.minimumBookingDuration !== undefined) dbPayload.minimum_booking_duration = body.minimumBookingDuration;
 
         if (body.mediaType !== undefined) dbPayload.media_type = body.mediaType;
-        if (body.hordingType !== undefined) dbPayload.hording_type = body.hordingType;
         if (body.width !== undefined) dbPayload.width = body.width ? parseInt(body.width) : null;
         if (body.height !== undefined) dbPayload.height = body.height ? parseInt(body.height) : null;
         if (body.imageUrls !== undefined) {
@@ -174,11 +172,10 @@ export async function PUT(req, { params }) {
 
         if (body.condition !== undefined) dbPayload.condition = body.condition;
         if (body.previousClientele !== undefined) dbPayload.previous_clientele = body.previousClientele;
-        if (body.compliance !== undefined) dbPayload.compliance = body.compliance;
         if (body.status !== undefined) dbPayload.status = body.status;
 
         const { data, error } = await supabaseAdmin
-            .from('hordings')
+            .from('media')
             .update(dbPayload)
             .eq('id', id)
             .select()
@@ -188,11 +185,11 @@ export async function PUT(req, { params }) {
 
         // Save pricing tiers if provided
         if (Array.isArray(body.pricing) && body.pricing.length > 0) {
-            await supabaseAdmin.from('hording_pricing').delete().eq('hording_id', id);
+            await supabaseAdmin.from('media_pricing').delete().eq('media_id', id);
             const pricingRows = body.pricing
                 .filter(p => p.priceName?.trim() && p.price > 0 && p.duration?.trim())
                 .map((p, i) => ({
-                    hording_id: parseInt(id),
+                    media_id: id,
                     price_name: p.priceName.trim(),
                     price: parseInt(p.price),
                     duration: p.duration.trim(),
@@ -200,14 +197,14 @@ export async function PUT(req, { params }) {
                     is_active: true
                 }));
             if (pricingRows.length > 0) {
-                await supabaseAdmin.from('hording_pricing').insert(pricingRows);
+                await supabaseAdmin.from('media_pricing').insert(pricingRows);
             }
         }
 
         // Save metafield values if provided
         if (body.metafields && typeof body.metafields === 'object') {
             const entries = Object.entries(body.metafields).filter(([k]) => k && parseInt(k));
-            await supabaseAdmin.from('hording_metafields').delete().eq('hording_id', id);
+            await supabaseAdmin.from('media_metafields').delete().eq('media_id', id);
             if (entries.length > 0) {
                 const { data: vendorMetas } = await supabaseAdmin
                     .from('vendor_metafields')
@@ -215,13 +212,13 @@ export async function PUT(req, { params }) {
                     .in('id', entries.map(([k]) => parseInt(k)));
                 const keyMap = Object.fromEntries((vendorMetas || []).map(v => [v.id, v.key]));
                 const rows = entries.map(([vendorMetafieldId, value]) => ({
-                    hording_id: parseInt(id),
+                    media_id: id,
                     vendor_metafield_id: parseInt(vendorMetafieldId),
                     key: keyMap[vendorMetafieldId] || `mf_${vendorMetafieldId}`,
                     value: String(value ?? ''),
                     value_type: 'string'
                 }));
-                await supabaseAdmin.from('hording_metafields').insert(rows);
+                await supabaseAdmin.from('media_metafields').insert(rows);
             }
         }
 
@@ -242,13 +239,13 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
     const resolved = await params;
     const { id } = resolved;
-    if (!id || isNaN(parseInt(id))) {
+    if (!isValidMediaId(id)) {
         return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
     try {
         const { error } = await supabaseAdmin
-            .from('hordings')
+            .from('media')
             .delete()
             .eq('id', id);
 

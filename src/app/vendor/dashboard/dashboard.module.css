@@ -106,9 +106,18 @@
     transition: all 0.2s;
 }
 
-.hordingCard:hover {
+.hordingCard:hover,
+.mediaCard:hover {
     border-color: #3b82f6;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.mediaCard {
+    background: #1a1f37;
+    border: 1px solid #2a3544;
+    border-radius: 6px;
+    padding: 1.25rem;
+    transition: all 0.2s;
 }
 
 .cardHeader {

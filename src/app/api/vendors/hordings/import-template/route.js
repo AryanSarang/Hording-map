@@ -1,6 +1,7 @@
 // app/api/vendors/hordings/import-template/route.js
-// Download CSV template for hording import
+// Download CSV template for hording import. Metafield columns = current user's metafields.
 import { NextResponse } from 'next/server';
+import { getCurrentUser } from '../../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 
 function escapeCsv(val) {
@@ -12,11 +13,17 @@ function escapeCsv(val) {
 
 export async function GET() {
     try {
-        const { data: metas } = await supabaseAdmin
-            .from('vendor_metafields')
-            .select('key')
-            .eq('vendor_id', 1)
-            .order('display_order');
+        // Use current user's metafields for template columns (so template has metafields even with no media)
+        const user = await getCurrentUser();
+        let metas = [];
+        if (user?.id) {
+            const { data } = await supabaseAdmin
+                .from('vendor_metafields')
+                .select('key')
+                .eq('user_id', user.id)
+                .order('display_order');
+            metas = data || [];
+        }
 
         const metaCols = (metas || []).map((m) => `metafield.${m.key}`);
 
@@ -26,12 +33,12 @@ export async function GET() {
             'road_name', 'road_from', 'road_to', 'position_wrt_road',
             'poc_name', 'poc_number', 'poc_email',
             'vendor_id', 'monthly_rental', 'vendor_rate', 'payment_terms', 'minimum_booking_duration',
-            'media_type', 'hording_type', 'width', 'height',
+            'media_type', 'width', 'height',
             'images',
             'screen_size', 'screen_number', 'screen_placement', 'display_format',
             'slot_time', 'loop_time', 'display_hours',
             'traffic_type', 'visibility', 'dwell_time',
-            'condition', 'previous_clientele', 'compliance', 'status',
+            'condition', 'previous_clientele', 'status',
             'pricing',
             ...metaCols,
         ];
@@ -41,13 +48,13 @@ export async function GET() {
             '19.0760', '72.8777',
             'MG Road', 'Gateway', 'Marine Drive', 'Left',
             'John Doe', '+91 9876543210', 'john@example.com',
-            '1', '50000', '45000', 'Net 30', '1 month',
-            'Hoarding', 'LED', '20', '10',
+            '<vendor_id_10chars>', '50000', '45000', 'Net 30', '1 month',
+            'Digital Screens', '20', '10',
             'https://example.com/img1.jpg|https://example.com/img2.jpg',
             '10x6', '1', 'Outdoor', '16:9',
             '10 sec', '2 min', '8am-10pm',
             'Pedestrian', 'Prime', '30 sec',
-            'Good', 'Brand A, Brand B', 'true', 'active',
+            'Good', 'Brand A, Brand B', 'active',
             '[{"price_name":"1 Week","price":15000,"duration":"1 week"},{"price_name":"1 Month","price":50000,"duration":"1 month"}]',
             ...(metaCols.map(() => '')),
         ];

@@ -50,8 +50,8 @@ export default function DashboardPage() {
         <>
             <div className={styles.topbar}>
                 <h1 className={styles.title}>Dashboard</h1>
-                <Link href="/vendor/hordings/new" className={styles.createBtn}>
-                    + New Hording
+                <Link href="/vendor/media/new" className={styles.createBtn}>
+                    + New Media
                 </Link>
             </div>
 
@@ -64,7 +64,7 @@ export default function DashboardPage() {
                     <>
                         <div className={styles.statsGrid}>
                             <div className={styles.statCard}>
-                                <div className={styles.statLabel}>Total Hordings</div>
+                                <div className={styles.statLabel}>Total Media</div>
                                 <div className={styles.statValue}>{stats.hordingsCount}</div>
                             </div>
                             <div className={styles.statCard}>
@@ -83,24 +83,24 @@ export default function DashboardPage() {
                         </div>
 
                         <div className={styles.section}>
-                            <h2 className={styles.sectionTitle}>Recent Hordings</h2>
+                            <h2 className={styles.sectionTitle}>Recent Media</h2>
                             {recentHordings.length === 0 ? (
                                 <div className={styles.empty}>
-                                    <p>No hordings yet. Create your first one!</p>
+                                    <p>No media yet. Create your first one!</p>
                                 </div>
                             ) : (
                                 <div className={styles.cardGrid}>
                                     {recentHordings.map((hording) => (
                                         <Link
                                             key={hording.id}
-                                            href={`/vendor/hordings/${hording.id}`}
+                                            href={`/vendor/media/${hording.id}`}
                                             style={{ textDecoration: 'none', color: 'inherit' }}
                                         >
-                                            <div className={styles.hordingCard}>
+                                            <div className={styles.mediaCard}>
                                                 <div className={styles.cardHeader}>
                                                     <div>
                                                         <h3 className={styles.cardTitle}>
-                                                            {hording.landmark || hording.address || `Hording #${hording.id}`}
+                                                            {hording.landmark || hording.address || `Media #${hording.id}`}
                                                         </h3>
                                                         <p className={styles.cardMeta}>{hording.city}, {hording.state || 'N/A'}</p>
                                                     </div>

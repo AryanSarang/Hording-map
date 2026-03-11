@@ -40,11 +40,11 @@ export default function Sidebar() {
                         <span>Dashboard</span>
                     </Link>
                     <Link
-                        href="/vendor/hordings"
-                        className={`${styles.navItem} ${isActive('/vendor/hordings') ? styles.active : ''}`}
+                        href="/vendor/media"
+                        className={`${styles.navItem} ${isActive('/vendor/media') ? styles.active : ''}`}
                     >
                         <span className={styles.navIcon}>🎯</span>
-                        <span>Hordings</span>
+                        <span>Media</span>
                     </Link>
                 </div>
 

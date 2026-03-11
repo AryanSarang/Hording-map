@@ -1,7 +1,7 @@
 // app/explore/_components/ExploreView.js
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import DetailsPanel from './DetailsPanel';
 import FilterPanel from './FilterPanel';
@@ -12,26 +12,110 @@ const MapSection = dynamic(() => import('./MapSection'), {
     loading: () => <div className="w-full h-full bg-black flex items-center justify-center text-gray-500">Loading Map...</div>
 });
 
-export default function ExploreView({ hoardings }) {
+export default function ExploreView({ hoardings, user }) {
     const [selectedId, setSelectedId] = useState(null);
 
-    // --- PLAN MANAGEMENT STATE ---
-    const [plans, setPlans] = useState([
-        { id: 'default', name: 'New Campaign 2025', items: [] },
-    ]);
-    const [currentPlan, setCurrentPlan] = useState(plans[0]);
+    const isAuthenticated = !!user;
 
-    const handleCreatePlan = (name) => {
-        const newPlan = { id: Date.now().toString(), name: name, items: [] };
-        setPlans([...plans, newPlan]);
-        setCurrentPlan(newPlan);
+    // --- PLAN MANAGEMENT STATE (persisted per user via API) ---
+    const [plans, setPlans] = useState([]);
+    const [currentPlan, setCurrentPlan] = useState(null);
+    const [loadingPlans, setLoadingPlans] = useState(false);
+    const [planError, setPlanError] = useState(null);
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            // Guest: no server plans, keep empty state
+            setPlans([]);
+            setCurrentPlan(null);
+            setPlanError(null);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                setLoadingPlans(true);
+                setPlanError(null);
+                const res = await fetch('/api/plans', { credentials: 'include' });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (!cancelled) {
+                        setPlanError(data.error || 'Failed to load plans');
+                    }
+                    return;
+                }
+                const data = await res.json();
+                if (!cancelled) {
+                    const list = Array.isArray(data.plans) ? data.plans : [];
+                    setPlans(list);
+                    setCurrentPlan(list[0] || null);
+                }
+            } catch (err) {
+                if (!cancelled) setPlanError(err?.message || 'Failed to load plans');
+            } finally {
+                if (!cancelled) setLoadingPlans(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated]);
+
+    const handleCreatePlan = async (name) => {
+        if (!isAuthenticated) {
+            alert('Please log in to create and save plans.');
+            return;
+        }
+        try {
+            const res = await fetch('/api/plans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name, items: [] }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Failed to create plan');
+            }
+            const newPlan = data.plan;
+            const nextPlans = [newPlan, ...plans];
+            setPlans(nextPlans);
+            setCurrentPlan(newPlan);
+        } catch (err) {
+            console.error('Create plan error:', err);
+            alert(err?.message || 'Failed to create plan');
+        }
     };
 
-    const handleAddToPlan = (hoardingId) => {
-        if (currentPlan.items.includes(hoardingId)) return;
-        const updatedPlan = { ...currentPlan, items: [...currentPlan.items, hoardingId] };
-        setPlans(plans.map(p => p.id === currentPlan.id ? updatedPlan : p));
-        setCurrentPlan(updatedPlan);
+    const handleAddToPlan = async (hoardingId) => {
+        if (!isAuthenticated) {
+            alert('Please log in to add sites to a plan.');
+            return;
+        }
+        if (!currentPlan) {
+            alert('Create a plan first.');
+            return;
+        }
+        if (currentPlan.items?.includes(hoardingId)) return;
+        const updatedItems = [...(currentPlan.items || []), hoardingId];
+        try {
+            const res = await fetch(`/api/plans/${encodeURIComponent(currentPlan.id)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ items: updatedItems }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Failed to update plan');
+            }
+            const updatedPlan = data.plan;
+            setPlans(plans.map(p => (p.id === updatedPlan.id ? updatedPlan : p)));
+            setCurrentPlan(updatedPlan);
+        } catch (err) {
+            console.error('Add to plan error:', err);
+            alert(err?.message || 'Failed to add to plan');
+        }
     };
     // -----------------------------
 
@@ -90,6 +174,10 @@ export default function ExploreView({ hoardings }) {
                     currentPlan={currentPlan}
                     onSwitchPlan={setCurrentPlan}
                     onCreatePlan={handleCreatePlan}
+                    user={user}
+                    isAuthenticated={isAuthenticated}
+                    loadingPlans={loadingPlans}
+                    planError={planError}
                 />
 
                 {/* 2. PANELS AREA (Remaining Height) */}
@@ -103,6 +191,7 @@ export default function ExploreView({ hoardings }) {
                             onSelect={setSelectedId}
                             onAddToPlan={handleAddToPlan}
                             currentPlan={currentPlan}
+                            isAuthenticated={isAuthenticated}
                         />
                     </div>
 

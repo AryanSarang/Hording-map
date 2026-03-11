@@ -1,9 +1,10 @@
 // app/api/vendors/hordings/export/route.js
-// Export hordings to CSV with all fields (vendor, pricing, metafields, images)
+// Bulk-fetches data (no per-row queries) and streams CSV so large exports don't timeout.
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
+import { isValidMediaId } from '../../../../../lib/genId10';
 
-const MEDIA_TYPES = ['Digital Screens', 'Hoarding', 'Bus Shelter', 'Wall Wrap', 'Kiosk', 'Transit', 'Neon Sign', 'Other'];
+const BATCH_SIZE = 100; // max ids per .in() query to avoid URL/query size limits
 
 function escapeCsv(val) {
     if (val == null || val === '') return '';
@@ -14,136 +15,226 @@ function escapeCsv(val) {
     return s;
 }
 
-export async function GET(req) {
-    try {
-        const { searchParams } = new URL(req.url);
-        const idsParam = searchParams.get('ids'); // comma-separated, or empty = all
-
-        let hordingIds = [];
-        if (idsParam?.trim()) {
-            hordingIds = idsParam.split(',').map((id) => parseInt(id.trim())).filter((n) => !isNaN(n));
+function imagesToPipeString(media) {
+    if (Array.isArray(media)) return media.join('|');
+    if (typeof media === 'string') {
+        try {
+            const parsed = JSON.parse(media);
+            return Array.isArray(parsed) ? parsed.join('|') : media;
+        } catch {
+            return media;
         }
+    }
+    return '';
+}
 
-        let query = supabaseAdmin.from('hordings').select('*, vendor:vendors(id, name)');
-        if (hordingIds.length > 0) {
-            query = query.in('id', hordingIds);
-        }
-        const { data: hordings, error } = await query.order('id', { ascending: false });
+function chunk(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
 
-        if (error) throw error;
-        const list = hordings || [];
+// Shared export logic: mediaIds = [] means "all"
+async function runExport(mediaIds) {
+    // 1. Fetch media: explicit limit for "all" (Supabase default is often 1000)
+    let query = supabaseAdmin.from('media').select('*');
+    if (mediaIds.length > 0) {
+        query = query.in('id', mediaIds);
+    } else {
+        query = query.range(0, 99999); // fetch up to 100k when exporting "all" (avoids default 1000 limit)
+    }
+    const { data: list, error: mediaError } = await query.order('created_at', { ascending: false });
 
-        // Fetch pricing and metafields for each
-        const withPricing = [];
-        const withMetafields = [];
+    if (mediaError) throw mediaError;
+    const rows = list || [];
 
-        for (const h of list) {
-            const [pRes, mRes] = await Promise.all([
-                supabaseAdmin.from('hording_pricing').select('price_name, price, duration').eq('hording_id', h.id).order('display_order'),
-                supabaseAdmin.from('hording_metafields').select('key, value').eq('hording_id', h.id),
-            ]);
-            withPricing.push(pRes.data || []);
-            withMetafields.push(Object.fromEntries((mRes.data || []).map((r) => [r.key, r.value])));
-        }
+    // 2. Vendor names – one query
+    const vendorIds = [...new Set(rows.map((h) => h.vendor_id).filter(Boolean))];
+    let vendorMap = {};
+    if (vendorIds.length > 0) {
+        const { data: vendors } = await supabaseAdmin.from('vendors').select('id, name').in('id', vendorIds);
+        vendorMap = Object.fromEntries((vendors || []).map((v) => [v.id, v.name || '']));
+    }
 
-        // Get all vendor_metafield keys for headers (from first hording's metafields or common set)
-        const allMetaKeys = [...new Set(withMetafields.flatMap((m) => Object.keys(m)))].sort();
+    const ids = rows.map((r) => r.id);
 
-        // Build CSV headers
-        const baseHeaders = [
-            'id', 'vendor_id', 'vendor_name',
-            'city', 'state', 'address', 'landmark', 'pincode', 'zone',
-            'latitude', 'longitude',
-            'road_name', 'road_from', 'road_to', 'position_wrt_road',
-            'poc_name', 'poc_number', 'poc_email',
-            'monthly_rental', 'vendor_rate', 'payment_terms', 'minimum_booking_duration',
-            'media_type', 'hording_type', 'width', 'height',
-            'images', // pipe-separated URLs
-            'screen_size', 'screen_number', 'screen_placement', 'display_format',
-            'slot_time', 'loop_time', 'display_hours',
-            'traffic_type', 'visibility', 'dwell_time',
-            'condition', 'previous_clientele', 'compliance', 'status',
-            'pricing', // JSON array string: [{"price_name":"1 Week","price":5000,"duration":"1 week"}]
-        ];
-        const metaHeaders = allMetaKeys.map((k) => `metafield.${k}`);
-        const headers = [...baseHeaders, ...metaHeaders];
-
-        const rows = list.map((h, i) => {
-            const pricing = withPricing[i];
-            const metas = withMetafields[i];
-            const vendorName = h.vendor?.name ?? '';
-            const images = Array.isArray(h.media) ? h.media.join('|') : (h.media || '');
-            const pricingStr = JSON.stringify(
-                pricing.map((p) => ({
+    // 3. Bulk fetch all pricing (batched)
+    const pricingByMedia = {};
+    if (ids.length > 0) {
+        const idChunks = chunk(ids, BATCH_SIZE);
+        for (const idList of idChunks) {
+            const { data: pricingRows } = await supabaseAdmin
+                .from('media_pricing')
+                .select('media_id, price_name, price, duration, display_order')
+                .in('media_id', idList)
+                .order('display_order', { ascending: true });
+            for (const p of pricingRows || []) {
+                if (!pricingByMedia[p.media_id]) pricingByMedia[p.media_id] = [];
+                pricingByMedia[p.media_id].push({
                     price_name: p.price_name,
                     price: p.price,
                     duration: p.duration,
-                }))
-            );
+                });
+            }
+        }
+    }
 
-            const base = [
-                h.id,
-                h.vendor_id ?? '',
-                vendorName,
-                h.city ?? '',
-                h.state ?? '',
-                h.address ?? '',
-                h.landmark ?? '',
-                h.pincode ?? '',
-                h.zone ?? '',
-                h.latitude ?? '',
-                h.longitude ?? '',
-                h.road_name ?? '',
-                h.road_from ?? '',
-                h.road_to ?? '',
-                h.position_wrt_road ?? '',
-                h.poc_name ?? '',
-                h.poc_number ?? '',
-                h.poc_email ?? '',
-                h.monthly_rental ?? '',
-                h.vendor_rate ?? '',
-                h.payment_terms ?? '',
-                h.minimum_booking_duration ?? '',
-                h.media_type ?? '',
-                h.hording_type ?? '',
-                h.width ?? '',
-                h.height ?? '',
-                images,
-                h.screen_size ?? '',
-                h.screen_number ?? '',
-                h.screen_placement ?? '',
-                h.display_format ?? '',
-                h.slot_time ?? '',
-                h.loop_time ?? '',
-                h.display_hours ?? '',
-                h.traffic_type ?? '',
-                h.visibility ?? '',
-                h.dwell_time ?? '',
-                h.condition ?? '',
-                h.previous_clientele ?? '',
-                h.compliance ? 'true' : 'false',
-                h.status ?? '',
-                pricingStr,
-            ];
-            const metaVals = allMetaKeys.map((k) => metas[k] ?? '');
-            return [...base, ...metaVals].map(escapeCsv);
-        });
+    // 4. Bulk fetch all metafields (batched)
+    const metafieldsByMedia = {};
+    if (ids.length > 0) {
+        const idChunks = chunk(ids, BATCH_SIZE);
+        for (const idList of idChunks) {
+            const { data: metaRows } = await supabaseAdmin
+                .from('media_metafields')
+                .select('media_id, key, value')
+                .in('media_id', idList);
+            for (const m of metaRows || []) {
+                if (!metafieldsByMedia[m.media_id]) metafieldsByMedia[m.media_id] = {};
+                metafieldsByMedia[m.media_id][m.key] = m.value;
+            }
+        }
+    }
 
-        const csvLines = [headers.map(escapeCsv).join(','), ...rows.map((r) => r.join(','))];
-        const csv = csvLines.join('\n');
+    const allMetaKeys = [
+        ...new Set(
+            Object.values(metafieldsByMedia).flatMap((m) => Object.keys(m))
+        ),
+    ].sort();
 
-        return new NextResponse(csv, {
-            status: 200,
-            headers: {
-                'Content-Type': 'text/csv; charset=utf-8',
-                'Content-Disposition': `attachment; filename="hordings-export-${new Date().toISOString().slice(0, 10)}.csv"`,
-            },
-        });
+    const baseHeaders = [
+        'id', 'vendor_id', 'vendor_name',
+        'city', 'state', 'address', 'landmark', 'pincode', 'zone',
+        'latitude', 'longitude',
+        'road_name', 'road_from', 'road_to', 'position_wrt_road',
+        'poc_name', 'poc_number', 'poc_email',
+        'monthly_rental', 'vendor_rate', 'payment_terms', 'minimum_booking_duration',
+        'media_type', 'width', 'height',
+        'images',
+        'screen_size', 'screen_number', 'screen_placement', 'display_format',
+        'slot_time', 'loop_time', 'display_hours',
+        'traffic_type', 'visibility', 'dwell_time',
+        'condition', 'previous_clientele', 'status',
+        'pricing',
+    ];
+    const metaHeaders = allMetaKeys.map((k) => `metafield.${k}`);
+    const headers = [...baseHeaders, ...metaHeaders];
+    const headerLine = headers.map(escapeCsv).join(',') + '\n';
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+        async start(controller) {
+            controller.enqueue(encoder.encode(headerLine));
+            for (const h of rows) {
+                const pricing = pricingByMedia[h.id] || [];
+                const metas = metafieldsByMedia[h.id] || {};
+                const vendorName = vendorMap[h.vendor_id] ?? '';
+                const images = imagesToPipeString(h.media);
+                const pricingStr = JSON.stringify(
+                    pricing.map((p) => ({
+                        price_name: p.price_name,
+                        price: p.price,
+                        duration: p.duration,
+                    }))
+                );
+                const base = [
+                    h.id,
+                    h.vendor_id ?? '',
+                    vendorName,
+                    h.city ?? '',
+                    h.state ?? '',
+                    h.address ?? '',
+                    h.landmark ?? '',
+                    h.pincode ?? '',
+                    h.zone ?? '',
+                    h.latitude ?? '',
+                    h.longitude ?? '',
+                    h.road_name ?? '',
+                    h.road_from ?? '',
+                    h.road_to ?? '',
+                    h.position_wrt_road ?? '',
+                    h.poc_name ?? '',
+                    h.poc_number ?? '',
+                    h.poc_email ?? '',
+                    h.monthly_rental ?? '',
+                    h.vendor_rate ?? '',
+                    h.payment_terms ?? '',
+                    h.minimum_booking_duration ?? '',
+                    h.media_type ?? '',
+                    h.width ?? '',
+                    h.height ?? '',
+                    images,
+                    h.screen_size ?? '',
+                    h.screen_number ?? '',
+                    h.screen_placement ?? '',
+                    h.display_format ?? '',
+                    h.slot_time ?? '',
+                    h.loop_time ?? '',
+                    h.display_hours ?? '',
+                    h.traffic_type ?? '',
+                    h.visibility ?? '',
+                    h.dwell_time ?? '',
+                    h.condition ?? '',
+                    h.previous_clientele ?? '',
+                    h.status ?? '',
+                    pricingStr,
+                ];
+                const metaVals = allMetaKeys.map((k) => metas[k] ?? '');
+                const rowLine = [...base, ...metaVals].map(escapeCsv).join(',') + '\n';
+                controller.enqueue(encoder.encode(rowLine));
+            }
+            controller.close();
+        },
+    });
+
+    return new Response(stream, {
+        status: 200,
+        headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="media-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+    });
+}
+
+function exportError(message) {
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+}
+
+export async function GET(req) {
+    try {
+        const { searchParams } = new URL(req.url);
+        const idsParam = searchParams.get('ids');
+
+        let mediaIds = [];
+        if (idsParam?.trim()) {
+            // GET with ?ids=... can hit URL length limit (~2–8KB) with many UUIDs
+            mediaIds = idsParam.split(',').map((id) => id.trim()).filter(isValidMediaId);
+        }
+
+        return await runExport(mediaIds);
     } catch (error) {
         console.error('GET /api/vendors/hordings/export Error:', error);
-        return NextResponse.json({
-            success: false,
-            error: error.message || 'Export failed',
-        }, { status: 500 });
+        const message = error?.message || error?.error_description || String(error) || 'Export failed';
+        return exportError(message);
+    }
+}
+
+// POST: send ids in body to avoid URL length limit when exporting many selected items
+export async function POST(req) {
+    try {
+        let mediaIds = [];
+        try {
+            const body = await req.json();
+            if (Array.isArray(body?.ids)) {
+                mediaIds = body.ids.map((id) => String(id).trim()).filter(isValidMediaId);
+            }
+        } catch {
+            // no body or invalid JSON = export all
+        }
+        return await runExport(mediaIds);
+    } catch (error) {
+        console.error('POST /api/vendors/hordings/export Error:', error);
+        const message = error?.message || error?.error_description || String(error) || 'Export failed';
+        return exportError(message);
     }
 }

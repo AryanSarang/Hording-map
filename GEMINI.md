@@ -84,7 +84,6 @@ Hordings {
   - screenPlacement: enum ('Residential', 'Commercial', 'RailwayStation', 'Cafe', 'Pub', 'Club', 'Restaurant')
   - width: integer (in pixels/units)
   - height: integer (in pixels/units)
-  - hordingType: string (e.g., 'LED', 'FrontLit', 'BackLit')
   - screenSize: string
   
   PRICING & BOOKING:
@@ -111,7 +110,6 @@ Hordings {
   
   MANAGEMENT:
   - imageUrls: array (URLs to hording photos)
-  - compliance: boolean (regulatory compliance status)
   - status: string (required, 'active', 'pending', 'inactive')
   
   - createdAt: timestamp
@@ -271,7 +269,7 @@ status - 'active', 'pending', or 'inactive'
 Optional Fields
 Location: latitude, longitude, landmark, zone, road details
 
-Media: width, height, mediaType, hordingType, screenPlacement
+Media: width, height, mediaType, screenPlacement, displayFormat
 
 Pricing: rate, ourRate, paymentTerms
 

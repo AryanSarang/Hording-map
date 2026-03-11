@@ -7,7 +7,7 @@ import { headers } from 'next/headers';
  */
 export async function getCurrentUser() {
     try {
-        const headersList = headers();
+        const headersList = await headers();
         const userHeader = headersList.get('x-user');
 
         if (!userHeader) return null;

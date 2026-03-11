@@ -1,21 +1,20 @@
 // app/api/vendors/hordings/[id]/metafields/route.js
-// Get or save metafield values for a hording
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../../lib/supabase';
+import { isValidMediaId } from '../../../../../../lib/genId10';
 
 // GET - Fetch metafield values for a hording
 export async function GET(req, { params }) {
     try {
         const { id } = await params;
-        const hordingId = parseInt(id);
-        if (isNaN(hordingId)) {
-            return NextResponse.json({ success: false, error: 'Invalid hording ID' }, { status: 400 });
+        if (!isValidMediaId(id)) {
+            return NextResponse.json({ success: false, error: 'Invalid media ID' }, { status: 400 });
         }
 
         const { data, error } = await supabaseAdmin
-            .from('hording_metafields')
+            .from('media_metafields')
             .select('vendor_metafield_id, value')
-            .eq('hording_id', hordingId);
+            .eq('media_id', id);
 
         if (error) throw error;
 
@@ -40,9 +39,8 @@ export async function GET(req, { params }) {
 export async function PUT(req, { params }) {
     try {
         const { id } = await params;
-        const hordingId = parseInt(id);
-        if (isNaN(hordingId)) {
-            return NextResponse.json({ success: false, error: 'Invalid hording ID' }, { status: 400 });
+        if (!isValidMediaId(id)) {
+            return NextResponse.json({ success: false, error: 'Invalid media ID' }, { status: 400 });
         }
 
         const body = await req.json();
@@ -57,7 +55,7 @@ export async function PUT(req, { params }) {
 
         const toInsert = entries.filter(e => e.vendorMetafieldId);
         if (toInsert.length === 0) {
-            await supabaseAdmin.from('hording_metafields').delete().eq('hording_id', hordingId);
+            await supabaseAdmin.from('media_metafields').delete().eq('media_id', id);
             return NextResponse.json({ success: true, message: 'Metafields saved' }, { status: 200 });
         }
 
@@ -68,10 +66,10 @@ export async function PUT(req, { params }) {
 
         const keyMap = Object.fromEntries((vendorMetas || []).map(v => [v.id, v.key]));
 
-        await supabaseAdmin.from('hording_metafields').delete().eq('hording_id', hordingId);
+        await supabaseAdmin.from('media_metafields').delete().eq('media_id', id);
 
         const rows = toInsert.map(({ vendorMetafieldId, value }) => ({
-            hording_id: hordingId,
+            media_id: id,
             vendor_metafield_id: vendorMetafieldId,
             key: keyMap[vendorMetafieldId] || `mf_${vendorMetafieldId}`,
             value: value ?? '',
@@ -79,7 +77,7 @@ export async function PUT(req, { params }) {
         }));
 
         const { error: insertError } = await supabaseAdmin
-            .from('hording_metafields')
+            .from('media_metafields')
             .insert(rows);
 
         if (insertError) throw insertError;
