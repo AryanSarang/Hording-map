@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
+import { getCurrentUser } from '../../../../../lib/authServer';
 
 function normalizeVariant(input) {
     const out = {};
@@ -24,7 +25,25 @@ function normalizeVariant(input) {
 
 export async function PUT(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
         const { variantId } = await params;
+        const { data: variantMeta, error: variantMetaErr } = await supabaseAdmin
+            .from('media_variants')
+            .select('id, media_id')
+            .eq('id', variantId)
+            .single();
+        if (variantMetaErr || !variantMeta) return NextResponse.json({ success: false, error: 'Variant not found' }, { status: 404 });
+
+        const { data: ownedMedia, error: ownedErr } = await supabaseAdmin
+            .from('media')
+            .select('id')
+            .eq('id', variantMeta.media_id)
+            .eq('user_id', user.id)
+            .single();
+        if (ownedErr || !ownedMedia) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+
         const body = await req.json();
         const updates = normalizeVariant(body || {});
         if (Object.keys(updates).length === 1 && updates.updated_at) {
@@ -46,7 +65,25 @@ export async function PUT(req, { params }) {
 
 export async function DELETE(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
         const { variantId } = await params;
+        const { data: variantMeta, error: variantMetaErr } = await supabaseAdmin
+            .from('media_variants')
+            .select('id, media_id')
+            .eq('id', variantId)
+            .single();
+        if (variantMetaErr || !variantMeta) return NextResponse.json({ success: false, error: 'Variant not found' }, { status: 404 });
+
+        const { data: ownedMedia, error: ownedErr } = await supabaseAdmin
+            .from('media')
+            .select('id')
+            .eq('id', variantMeta.media_id)
+            .eq('user_id', user.id)
+            .single();
+        if (ownedErr || !ownedMedia) return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+
         const { error } = await supabaseAdmin.from('media_variants').delete().eq('id', variantId);
         if (error) throw error;
         return NextResponse.json({ success: true });

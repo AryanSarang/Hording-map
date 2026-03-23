@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../lib/genId10';
+import { getCurrentUser } from '../../../../../lib/authServer';
 
 const BATCH_SIZE = 100; // max ids per .in() query to avoid URL/query size limits
 
@@ -35,9 +36,9 @@ function chunk(arr, size) {
 }
 
 // Shared export logic: mediaIds = [] means "all"
-async function runExport(mediaIds) {
+async function runExport(mediaIds, userId) {
     // 1. Fetch media: explicit limit for "all" (Supabase default is often 1000)
-    let query = supabaseAdmin.from('media').select('*');
+    let query = supabaseAdmin.from('media').select('*').eq('user_id', userId);
     if (mediaIds.length > 0) {
         query = query.in('id', mediaIds);
     } else {
@@ -205,6 +206,9 @@ function exportError(message) {
 
 export async function GET(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
         const { searchParams } = new URL(req.url);
         const idsParam = searchParams.get('ids');
 
@@ -214,7 +218,7 @@ export async function GET(req) {
             mediaIds = idsParam.split(',').map((id) => id.trim()).filter(isValidMediaId);
         }
 
-        return await runExport(mediaIds);
+        return await runExport(mediaIds, user.id);
     } catch (error) {
         console.error('GET /api/vendors/hordings/export Error:', error);
         const message = error?.message || error?.error_description || String(error) || 'Export failed';
@@ -225,6 +229,9 @@ export async function GET(req) {
 // POST: send ids in body to avoid URL length limit when exporting many selected items
 export async function POST(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
         let mediaIds = [];
         try {
             const body = await req.json();
@@ -234,7 +241,7 @@ export async function POST(req) {
         } catch {
             // no body or invalid JSON = export all
         }
-        return await runExport(mediaIds);
+        return await runExport(mediaIds, user.id);
     } catch (error) {
         console.error('POST /api/vendors/hordings/export Error:', error);
         const message = error?.message || error?.error_description || String(error) || 'Export failed';

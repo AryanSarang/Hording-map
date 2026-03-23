@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../lib/genId10';
+import { getCurrentUser } from '../../../../../lib/authServer';
 
 const BATCH_SIZE = 200;
 
@@ -12,6 +13,11 @@ function chunk(arr, size) {
 
 export async function POST(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json().catch(() => ({}));
         const inputIds = Array.isArray(body?.ids) ? body.ids : [];
         const ids = inputIds.map((id) => String(id).trim()).filter(isValidMediaId);
@@ -20,7 +26,18 @@ export async function POST(req) {
             return NextResponse.json({ success: false, error: 'No valid media IDs provided' }, { status: 400 });
         }
 
-        const idChunks = chunk(ids, BATCH_SIZE);
+        const { data: ownedRows, error: ownedErr } = await supabaseAdmin
+            .from('media')
+            .select('id')
+            .eq('user_id', user.id)
+            .in('id', ids);
+        if (ownedErr) throw ownedErr;
+        const ownedIds = (ownedRows || []).map((r) => r.id);
+        if (ownedIds.length === 0) {
+            return NextResponse.json({ success: true, deleted: 0, requested: ids.length });
+        }
+
+        const idChunks = chunk(ownedIds, BATCH_SIZE);
         let deleted = 0;
 
         for (const idList of idChunks) {

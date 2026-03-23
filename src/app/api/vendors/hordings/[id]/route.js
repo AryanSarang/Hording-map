@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../lib/genId10';
+import { getCurrentUser } from '../../../../../lib/authServer';
 
 // Helper to map DB snake_case to Frontend camelCase
 function mapToFrontend(h) {
@@ -114,10 +115,16 @@ export async function GET(req, { params }) {
     }
 
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { data, error } = await supabaseAdmin
             .from('media')
             .select('*')
             .eq('id', id)
+            .eq('user_id', user.id)
             .single();
 
         if (error) throw error;
@@ -160,6 +167,11 @@ export async function PUT(req, { params }) {
     }
 
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
 
         if (Object.keys(body).length === 0) {
@@ -225,6 +237,7 @@ export async function PUT(req, { params }) {
             .from('media')
             .update(dbPayload)
             .eq('id', id)
+            .eq('user_id', user.id)
             .select()
             .single();
 
@@ -298,10 +311,16 @@ export async function DELETE(req, { params }) {
     }
 
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { error } = await supabaseAdmin
             .from('media')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('user_id', user.id);
 
         if (error) throw error;
 

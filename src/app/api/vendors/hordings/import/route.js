@@ -2,6 +2,7 @@
 // Import hordings from CSV. Validates format, returns row-level errors.
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
+import { getCurrentUser } from '../../../../../lib/authServer';
 
 const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const REQUIRED = ['city', 'state', 'address', 'latitude', 'longitude', 'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type'];
@@ -75,6 +76,11 @@ function buildKey(row) {
 
 export async function POST(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized', rowErrors: [] }, { status: 401 });
+        }
+
         const formData = await req.formData();
         const file = formData.get('file');
         if (!file || !(file instanceof Blob)) {
@@ -103,23 +109,12 @@ export async function POST(req) {
         const headerIndex = {};
         headers.forEach((h, i) => { headerIndex[h] = i; });
 
-        // Resolve vendor_id from first row for metafield lookup (vendor_id is 10-char string after migration)
-        let vendorIdForMetafields = null;
-        for (let r = headerRowIndex + 1; r < rows.length; r++) {
-            const i = headerIndex['vendor_id'];
-            if (i != null && rows[r][i] != null && String(rows[r][i]).trim()) {
-                vendorIdForMetafields = String(rows[r][i]).trim();
-                break;
-            }
-        }
         let keyToId = {};
-        if (vendorIdForMetafields) {
-            const { data: vendorMetas } = await supabaseAdmin
-                .from('vendor_metafields')
-                .select('id, key')
-                .eq('vendor_id', vendorIdForMetafields);
-            keyToId = Object.fromEntries((vendorMetas || []).map((v) => [v.key, v.id]));
-        }
+        const { data: vendorMetas } = await supabaseAdmin
+            .from('vendor_metafields')
+            .select('id, key')
+            .eq('user_id', user.id);
+        keyToId = Object.fromEntries((vendorMetas || []).map((v) => [v.key, v.id]));
 
         const rowErrors = [];
         const preparedRows = [];
@@ -288,6 +283,7 @@ export async function POST(req) {
                 .from('media')
                 .insert([{
                     ...hPayload,
+                    user_id: user.id,
                     title: base.address,
                     has_variants: true,
                     option1_name: base.option1_name || 'Option 1',

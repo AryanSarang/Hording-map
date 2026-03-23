@@ -1,6 +1,7 @@
 // app/api/vendors/hordings/route.js
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { getCurrentUser } from '../../../../lib/authServer';
 
 function normalizeVariant(input, index = 0) {
     const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
@@ -59,6 +60,11 @@ async function saveVariantsForMedia(mediaId, variantsInput = []) {
 // GET - Fetch all vendor hordings (with optional filters)
 export async function GET(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { searchParams } = new URL(req.url);
         const vendorId = searchParams.get('vendorId');
         const status = searchParams.get('status');
@@ -67,7 +73,8 @@ export async function GET(req) {
 
         let query = supabaseAdmin
             .from('media')
-            .select('*, vendor:vendors(id, name)');
+            .select('*, vendor:vendors(id, name)')
+            .eq('user_id', user.id);
 
         if (vendorId) query = query.eq('vendor_id', vendorId);
         if (status) query = query.eq('status', status);
@@ -112,6 +119,11 @@ export async function GET(req) {
 // POST - Create new hording
 export async function POST(req) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) {
+            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
 
         // Validate required fields based on schema
@@ -188,6 +200,7 @@ export async function POST(req) {
 
             status: body.status || 'active'
         };
+        dbPayload.user_id = user.id;
 
         if (body.title !== undefined) dbPayload.title = body.title || null;
         dbPayload.has_variants = true;

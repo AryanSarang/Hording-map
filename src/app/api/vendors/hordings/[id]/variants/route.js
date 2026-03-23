@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../../lib/genId10';
+import { getCurrentUser } from '../../../../../../lib/authServer';
 
 function normalizeVariant(input, index = 0) {
     const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
@@ -32,8 +33,19 @@ function normalizeVariant(input, index = 0) {
 
 export async function GET(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
         const { id } = await params;
         if (!isValidMediaId(id)) return NextResponse.json({ success: false, error: 'Invalid media ID' }, { status: 400 });
+
+        const { data: media, error: mediaErr } = await supabaseAdmin
+            .from('media')
+            .select('id')
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .single();
+        if (mediaErr || !media) return NextResponse.json({ success: false, error: 'Media not found' }, { status: 404 });
 
         const { data: variants, error } = await supabaseAdmin
             .from('media_variants')
@@ -51,8 +63,18 @@ export async function GET(req, { params }) {
 
 export async function POST(req, { params }) {
     try {
+        const user = await getCurrentUser();
+        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
         const { id } = await params;
         if (!isValidMediaId(id)) return NextResponse.json({ success: false, error: 'Invalid media ID' }, { status: 400 });
+        const { data: media, error: mediaErr } = await supabaseAdmin
+            .from('media')
+            .select('id')
+            .eq('id', id)
+            .eq('user_id', user.id)
+            .single();
+        if (mediaErr || !media) return NextResponse.json({ success: false, error: 'Media not found' }, { status: 404 });
         const body = await req.json();
         const variantsInput = Array.isArray(body?.variants) ? body.variants : [body];
         const normalized = variantsInput.map((v, i) => normalizeVariant(v, i));
