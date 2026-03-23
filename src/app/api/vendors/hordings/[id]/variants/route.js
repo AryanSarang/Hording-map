@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '../../../../../../../lib/supabase';
-import { isValidMediaId } from '../../../../../../../lib/genId10';
+import { supabaseAdmin } from '../../../../../../lib/supabase';
+import { isValidMediaId } from '../../../../../../lib/genId10';
 
 function normalizeVariant(input, index = 0) {
     const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
