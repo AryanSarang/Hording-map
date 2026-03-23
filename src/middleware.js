@@ -49,14 +49,22 @@ export async function middleware(request) {
         // Define paths
         const path = request.nextUrl.pathname;
         const isAuthPage = path.startsWith('/login') || path.startsWith('/auth') || path.startsWith('/callback');
-        const isPublicPage = path === '/' || path.startsWith('/explore'); // Homepage and Explore are public
+        const isPublicPage =
+            path === '/' ||
+            path.startsWith('/explore') ||
+            path.startsWith('/about-us') ||
+            path.startsWith('/contact-us') ||
+            path.startsWith('/privacy-policy') ||
+            path.startsWith('/terms-of-service') ||
+            path.startsWith('/cookie-policy');
+        const isPublicApi = path.startsWith('/api/contact-submissions');
         // Pending page should be public-ish for those stuck there
         const isPendingPage = path === '/pending';
 
         // SCENARIO 1: User is NOT logged in (Guest)
         if (!user) {
             // Allow Public Page & Auth Pages. Block everything else.
-            if (!isAuthPage && !isPublicPage) {
+            if (!isAuthPage && !isPublicPage && !isPublicApi) {
                 return NextResponse.redirect(new URL('/login', request.url));
             }
             return response;
@@ -82,7 +90,7 @@ export async function middleware(request) {
                     // A. NOT ONBOARDED YET
                     if (!profile.is_onboarded) {
                         // Rule: Allow Homepage, but block Login/Explore -> Force Onboarding
-                        if (path === '/') {
+                        if (isPublicPage) {
                             return response; // ✅ Allow Homepage
                         }
                         // If they try to go to Login or Explore, send them to Onboarding
@@ -94,7 +102,7 @@ export async function middleware(request) {
                     // B. PENDING APPROVAL
                     else if (profile.status === 'pending') {
                         // Rule: Allow Homepage, but block Login/Explore -> Force Pending Page
-                        if (path === '/') {
+                        if (isPublicPage) {
                             return response; // ✅ Allow Homepage
                         }
                         if (path !== '/pending') {

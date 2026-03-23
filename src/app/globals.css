@@ -14,3 +14,83 @@ input[type='number'] {
     -moz-appearance: textfield;
     /* Firefox */
 }
+
+html {
+    scroll-behavior: smooth;
+}
+
+.hero-three-canvas canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+
+.fade-up {
+    opacity: 0;
+    transform: translateY(24px);
+    animation: fadeUp 900ms ease forwards;
+}
+
+.fade-up-delay-1 {
+    animation-delay: 120ms;
+}
+
+.fade-up-delay-2 {
+    animation-delay: 220ms;
+}
+
+.fade-up-delay-3 {
+    animation-delay: 320ms;
+}
+
+.float-card {
+    animation: softFloat 6s ease-in-out infinite;
+}
+
+.marquee {
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%);
+}
+
+.marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marqueeLeft 24s linear infinite;
+}
+
+.glow-spot {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(80px);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+@keyframes fadeUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes softFloat {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes marqueeLeft {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+}
