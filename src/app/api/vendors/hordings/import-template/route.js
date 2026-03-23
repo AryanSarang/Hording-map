@@ -30,7 +30,7 @@ export async function GET() {
         const headers = [
             'city', 'state', 'address', 'landmark', 'pincode', 'zone',
             'latitude', 'longitude',
-            'road_name', 'road_from', 'road_to', 'position_wrt_road',
+            'road_name',
             'poc_name', 'poc_number', 'poc_email',
             'vendor_id', 'monthly_rental', 'vendor_rate', 'payment_terms', 'minimum_booking_duration',
             'media_type', 'width', 'height',
@@ -39,6 +39,8 @@ export async function GET() {
             'slot_time', 'loop_time', 'display_hours',
             'traffic_type', 'visibility', 'dwell_time',
             'condition', 'previous_clientele', 'status',
+            'option1_name', 'option2_name', 'option3_name',
+            'cinema_name', 'screen_code', 'auditorium', 'audience_category', 'seating', 'cinema_format', 'size', 'rate',
             'pricing',
             ...metaCols,
         ];
@@ -46,7 +48,7 @@ export async function GET() {
         const example = [
             'Mumbai', 'Maharashtra', '123 MG Road', 'Near City Mall', '400001', 'Central',
             '19.0760', '72.8777',
-            'MG Road', 'Gateway', 'Marine Drive', 'Left',
+            'MG Road',
             'John Doe', '+91 9876543210', 'john@example.com',
             '<vendor_id_10chars>', '50000', '45000', 'Net 30', '1 month',
             'Digital Screens', '20', '10',
@@ -55,6 +57,8 @@ export async function GET() {
             '10 sec', '2 min', '8am-10pm',
             'Pedestrian', 'Prime', '30 sec',
             'Good', 'Brand A, Brand B', 'active',
+            'Screen Code', 'Auditorium', 'Language',
+            'PVR Forum Mall', 'PVR/FOR_1', '1', 'Gold', '180', '3D/J2K', '4096*2160', '2500',
             '[{"price_name":"1 Week","price":15000,"duration":"1 week"},{"price_name":"1 Month","price":50000,"duration":"1 month"}]',
             ...(metaCols.map(() => '')),
         ];

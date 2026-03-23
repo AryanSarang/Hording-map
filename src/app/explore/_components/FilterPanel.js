@@ -16,14 +16,13 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
             .filter(Boolean)
         )];
 
-        const positions = getUnique('positionWRTRoad');
         const mediaTypes = getUnique('mediaType');
         const vendors = getUnique('vendorId');
 
         const rates = hoardings.map(h => h.rate).filter(r => r > 0);
         const maxRateData = rates.length > 0 ? Math.max(...rates) : 100000;
 
-        return { states, cities, positions, mediaTypes, vendors, maxRateData };
+        return { states, cities, mediaTypes, vendors, maxRateData };
     }, [hoardings, filters.state]);
 
     // --- 2. HANDLERS ---
@@ -183,27 +182,6 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
                     </div>
                 )}
 
-                {/* --- POSITION --- */}
-                {options.positions.length > 1 && (
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Road Position</h3>
-                        <div className="flex gap-2">
-                            {['LHS', 'RHS'].map((pos) => (
-                                <button
-                                    key={pos}
-                                    onClick={() => toggleArrayItem('positions', pos)}
-                                    className={`flex-1 py-2 px-3 rounded-md text-xs font-bold border transition-all ${filters.positions.includes(pos)
-                                        ? 'bg-green-600 border-green-600 text-white'
-                                        : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
-                                        }`}
-                                >
-                                    {pos}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
                 {/* --- MEDIA TYPE --- */}
                 {options.mediaTypes.length > 1 && (
                     <div>
@@ -247,7 +225,7 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
                 <button
                     onClick={() => setFilters({
                         state: '', city: '', minPrice: 0, maxPrice: options.maxRateData,
-                        positions: ['LHS', 'RHS'], mediaTypes: options.mediaTypes, vendorId: 'all'
+                        mediaTypes: options.mediaTypes, vendorId: 'all'
                     })}
                     className="w-full py-2 text-xs text-gray-500 hover:text-white underline"
                 >

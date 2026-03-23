@@ -1,5 +1,6 @@
 // app/explore/_components/DetailsPanel.js
 "use client";
+import { useEffect, useMemo, useState } from 'react';
 
 export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToPlan, currentPlan, isAuthenticated }) {
     const selectedHoarding = selectedId
@@ -8,6 +9,17 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
 
     // Check if current item is already in the selected plan
     const isAdded = selectedHoarding && currentPlan?.items?.includes(selectedHoarding.id);
+    const [selectedVariantId, setSelectedVariantId] = useState(null);
+    const variants = selectedHoarding?.variants || [];
+
+    useEffect(() => {
+        setSelectedVariantId(variants[0]?.id || null);
+    }, [selectedHoarding?.id]);
+
+    const selectedVariant = useMemo(
+        () => variants.find((v) => v.id === selectedVariantId) || variants[0] || null,
+        [variants, selectedVariantId]
+    );
 
     // ... (Formatting Helpers formatMediaType, formatHoardingType, DisplayValue remain the same) ...
     const formatMediaType = (type) => {
@@ -62,16 +74,33 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                             <div className="flex items-center gap-2 text-gray-400 text-[10px] mb-3"><span>📍 {selectedHoarding.city}, {selectedHoarding.state}</span></div>
                             <div className="flex items-center justify-between p-2 bg-green-500/5 border border-green-500/20 rounded">
                                 <span className="text-[10px] text-green-300/70 uppercase">Monthly Rate</span>
-                                <div className="flex items-baseline gap-1"><span className="text-sm font-bold text-green-400">₹{selectedHoarding.rate?.toLocaleString()}</span></div>
+                                <div className="flex items-baseline gap-1"><span className="text-sm font-bold text-green-400">₹{(selectedVariant?.rate ?? selectedHoarding.rate)?.toLocaleString()}</span></div>
                             </div>
                         </div>
 
                         {/* PILLS */}
                         <div className="flex flex-wrap gap-2">
-                            {[formatMediaType(selectedHoarding.mediaType), selectedHoarding.screenPlacement, selectedHoarding.displayFormat].filter(Boolean).map((tag, i) => (
+                            {[formatMediaType(selectedHoarding.mediaType), selectedHoarding.screenPlacement, selectedHoarding.displayFormat, selectedVariant?.option1_value, selectedVariant?.option2_value, selectedVariant?.option3_value].filter(Boolean).map((tag, i) => (
                                 <span key={i} className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-300 capitalize tracking-wide">{tag}</span>
                             ))}
                         </div>
+
+                        {variants.length > 0 && (
+                            <section>
+                                <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Variant</h3>
+                                <select
+                                    className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded p-2 outline-none"
+                                    value={selectedVariant?.id || ''}
+                                    onChange={(e) => setSelectedVariantId(e.target.value)}
+                                >
+                                    {variants.map((v) => (
+                                        <option key={v.id} value={v.id}>
+                                            {(v.variant_title || `${v.option1_value} / ${v.option2_value}`)} {v.rate ? `- ₹${v.rate}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </section>
+                        )}
 
                         <hr className="border-gray-800" />
 
@@ -80,12 +109,14 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                             selectedHoarding.screenSize ||
                             (selectedHoarding.width && selectedHoarding.height) ||
                             selectedHoarding.mediaType ||
-                            selectedHoarding.displayFormat
+                            selectedHoarding.displayFormat ||
+                            selectedVariant?.size ||
+                            selectedVariant?.cinema_format
                         ) && (
                                 <section>
                                     <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Specifications</h3>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <DisplayValue label="Screen Size" value={selectedHoarding.screenSize} />
+                                        <DisplayValue label="Screen Size" value={selectedVariant?.size || selectedHoarding.screenSize} />
                                         {selectedHoarding.width && selectedHoarding.height && (
                                             <DisplayValue
                                                 label="Dimensions"
@@ -95,16 +126,18 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                         )}
                                         <DisplayValue label="Media Type" value={formatMediaType(selectedHoarding.mediaType)} />
                                         <DisplayValue label="Display" value={selectedHoarding.displayFormat} />
+                                        <DisplayValue label="Cinema Format" value={selectedVariant?.cinema_format} />
+                                        <DisplayValue label="Audience" value={selectedVariant?.audience_category} />
+                                        <DisplayValue label="Seating" value={selectedVariant?.seating} />
                                     </div>
                                 </section>
                             )}
 
                         {/* VISIBILITY */}
-                        {(selectedHoarding.positionWRTRoad || selectedHoarding.trafficType || selectedHoarding.landmark || selectedHoarding.roadName) && (
+                        {(selectedHoarding.trafficType || selectedHoarding.landmark || selectedHoarding.roadName) && (
                             <section>
                                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Visibility</h3>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <DisplayValue label="Position" value={selectedHoarding.positionWRTRoad} />
                                     <DisplayValue label="Traffic" value={selectedHoarding.trafficType} />
                                     <div className="col-span-2">
                                         <DisplayValue label="Landmark" value={selectedHoarding.landmark || selectedHoarding.roadName} />

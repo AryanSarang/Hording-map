@@ -2,6 +2,60 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 
+function normalizeVariant(input, index = 0) {
+    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
+    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || 'Default';
+    const option3 = String(input.option3Value ?? '').trim() || null;
+    const rateRaw = input.rate ?? input.monthly_rental ?? input.price;
+    const rate = rateRaw != null && String(rateRaw).trim() !== '' ? parseInt(rateRaw) : null;
+    const customFields = input.customFields && typeof input.customFields === 'object' ? input.customFields : {};
+
+    const variant = {
+        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim(),
+        option1_value: option1,
+        option2_value: option2,
+        option3_value: option3,
+        audience_category: null,
+        seating: null,
+        cinema_format: null,
+        size: null,
+        rate: Number.isFinite(rate) ? rate : null,
+        details: String(input.details ?? '').trim() || null,
+        external_links: String(input.externalLinks ?? '').trim() || null,
+        photographs: String(input.photographs ?? '').trim() || null,
+        custom_fields: customFields,
+        is_active: input.isActive !== false,
+        display_order: Number.isFinite(Number(input.displayOrder)) ? Number(input.displayOrder) : index,
+    };
+    return variant;
+}
+
+async function saveVariantsForMedia(mediaId, variantsInput = []) {
+    const variants = (Array.isArray(variantsInput) ? variantsInput : [])
+        .map((v, i) => normalizeVariant(v, i));
+
+    // Ensure at least one variant exists
+    const normalized = variants.length > 0 ? variants : [normalizeVariant({}, 0)];
+
+    // Dedupe guard for option pair inside one media
+    const seen = new Set();
+    for (const v of normalized) {
+        const key = `${v.option1_value}__${v.option2_value}__${v.option3_value || ''}`.toLowerCase();
+        if (seen.has(key)) {
+            throw new Error(`Duplicate variant pair: ${v.option1_value} + ${v.option2_value}${v.option3_value ? ` + ${v.option3_value}` : ''}`);
+        }
+        seen.add(key);
+    }
+
+    const toInsert = normalized.map((v) => ({ ...v, media_id: mediaId }));
+    const { data: created, error } = await supabaseAdmin
+        .from('media_variants')
+        .insert(toInsert)
+        .select('*');
+    if (error) throw error;
+    return created || [];
+}
+
 // GET - Fetch all vendor hordings (with optional filters)
 export async function GET(req) {
     try {
@@ -24,10 +78,26 @@ export async function GET(req) {
 
         if (error) throw error;
 
+        const items = hordings || [];
+        const mediaIds = items.map((m) => m.id);
+        let variantCountByMedia = {};
+        if (mediaIds.length > 0) {
+            const { data: variants } = await supabaseAdmin
+                .from('media_variants')
+                .select('id, media_id')
+                .in('media_id', mediaIds);
+            (variants || []).forEach((v) => {
+                variantCountByMedia[v.media_id] = (variantCountByMedia[v.media_id] || 0) + 1;
+            });
+        }
+
         return NextResponse.json({
             success: true,
-            data: hordings || [],
-            count: hordings?.length || 0
+            data: items.map((m) => ({
+                ...m,
+                variant_count: variantCountByMedia[m.id] || 0,
+            })),
+            count: items.length
         }, { status: 200 });
 
     } catch (error) {
@@ -71,7 +141,7 @@ export async function POST(req) {
             'pocName', 'pocNumber', 'minimumBookingDuration', 'mediaType'
         ];
 
-        // Map frontend camelCase to DB snake_case. Let DB generate id (UUID or gen_id10() after migration).
+        // Map frontend camelCase to DB snake_case. Let DB generate id.
         const dbPayload = {
             vendor_id: (body.vendorId && String(body.vendorId).trim()) || null,
 
@@ -86,10 +156,6 @@ export async function POST(req) {
             longitude: parseFloat(body.longitude),
 
             road_name: body.roadName,
-            road_from: body.roadFrom,
-            road_to: body.roadTo,
-            position_wrt_road: body.positionWrtRoad,
-
             poc_name: body.pocName,
             poc_number: body.pocNumber,
             poc_email: body.pocEmail,
@@ -123,6 +189,12 @@ export async function POST(req) {
             status: body.status || 'active'
         };
 
+        if (body.title !== undefined) dbPayload.title = body.title || null;
+        dbPayload.has_variants = true;
+        dbPayload.option1_name = body.option1Name || 'Option 1';
+        dbPayload.option2_name = body.option2Name || 'Option 2';
+        dbPayload.option3_name = body.option3Name || null;
+
         // Basic validation
         for (const field of ['city', 'address', 'latitude', 'longitude', 'minimum_booking_duration', 'media_type']) {
             if (!dbPayload[field]) {
@@ -148,6 +220,9 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
+        // Save variants (Shopify-style)
+        const createdVariants = await saveVariantsForMedia(newHording.id, body.variants || []);
+
         // Save pricing tiers if provided
         const pricing = body.pricing;
         if (Array.isArray(pricing) && pricing.length > 0) {
@@ -163,6 +238,32 @@ export async function POST(req) {
                 }));
             if (pricingRows.length > 0) {
                 await supabaseAdmin.from('media_pricing').insert(pricingRows);
+            }
+        }
+
+        // Save per-variant additional pricing tiers if provided
+        if (Array.isArray(body.variantPricing) && body.variantPricing.length > 0) {
+            const rows = [];
+            for (const item of body.variantPricing) {
+                const variantId = item.variantId;
+                const foundVariant = createdVariants.find((v) => v.id === variantId || `${v.option1_value}__${v.option2_value}__${v.option3_value || ''}` === `${item.option1Value}__${item.option2Value}__${item.option3Value || ''}`);
+                if (!foundVariant) continue;
+                const tiers = Array.isArray(item.pricing) ? item.pricing : [];
+                tiers.forEach((p, i) => {
+                    if (!p?.price_name || !p?.duration || !p?.price) return;
+                    rows.push({
+                        media_variant_id: foundVariant.id,
+                        media_id: newHording.id,
+                        price_name: p.price_name,
+                        price: parseInt(p.price),
+                        duration: p.duration,
+                        display_order: Number.isFinite(Number(p.display_order)) ? Number(p.display_order) : i,
+                        is_active: p.is_active !== false,
+                    });
+                });
+            }
+            if (rows.length > 0) {
+                await supabaseAdmin.from('media_variant_pricing').insert(rows);
             }
         }
 
@@ -190,7 +291,10 @@ export async function POST(req) {
 
         return NextResponse.json({
             success: true,
-            data: newHording,
+            data: {
+                ...newHording,
+                variants: createdVariants,
+            },
             message: 'Hording created successfully'
         }, { status: 201 });
 

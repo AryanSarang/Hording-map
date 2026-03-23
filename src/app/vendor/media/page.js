@@ -19,6 +19,7 @@ export default function MediaPage() {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
     const [exporting, setExporting] = useState(false);
+    const [deletingBulk, setDeletingBulk] = useState(false);
 
     useEffect(() => { fetchOwners(); }, []);
     useEffect(() => { fetchItems(); }, [filters]);
@@ -77,18 +78,30 @@ export default function MediaPage() {
     }
 
     async function bulkDelete() {
-        if (selected.size === 0) return;
-        if (!confirm(`Delete ${selected.size} selected item(s)?`)) return;
-        let ok = 0;
-        for (const id of selected) {
-            try {
-                const res = await fetch(`/api/vendors/hordings/${id}`, { method: 'DELETE' });
-                if (res.ok) ok++;
-            } catch (e) { }
+        const idList = Array.from(selected);
+        if (idList.length === 0 || deletingBulk) return;
+        if (!confirm(`Delete ${idList.length} selected item(s)?`)) return;
+        setDeletingBulk(true);
+        try {
+            const res = await fetch('/api/vendors/hordings/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: idList }),
+                credentials: 'include',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                alert(data.error || 'Bulk delete failed');
+                return;
+            }
+            setSelected(new Set());
+            await fetchItems();
+            alert(`Deleted ${data.deleted || 0} item(s).`);
+        } catch (e) {
+            alert('Error deleting selected media');
+        } finally {
+            setDeletingBulk(false);
         }
-        setSelected(new Set());
-        fetchItems();
-        alert(`Deleted ${ok} item(s).`);
     }
 
     async function exportSelected() {
@@ -200,8 +213,8 @@ export default function MediaPage() {
                     <div className={styles.bulkBar}>
                         <span>{selected.size} selected</span>
                         <button type="button" className={styles.bulkExportBtn} onClick={exportSelected} disabled={exporting}>{exporting ? 'Exporting...' : 'Export'}</button>
-                        <button type="button" className={styles.bulkDeleteBtn} onClick={bulkDelete}>Delete</button>
-                        <button type="button" className={styles.bulkDeselectBtn} onClick={() => setSelected(new Set())}>Deselect all</button>
+                        <button type="button" className={styles.bulkDeleteBtn} onClick={bulkDelete} disabled={deletingBulk}>{deletingBulk ? 'Deleting...' : 'Delete'}</button>
+                        <button type="button" className={styles.bulkDeselectBtn} onClick={() => setSelected(new Set())} disabled={deletingBulk}>Deselect all</button>
                     </div>
                 )}
 
@@ -218,7 +231,7 @@ export default function MediaPage() {
                                 <thead>
                                     <tr>
                                         <th className={styles.checkTh}><input type="checkbox" checked={items.length > 0 && selected.size === items.length} onChange={toggleSelectAll} aria-label="Select all" /></th>
-                                        <th>Name</th><th>City</th><th>Type</th><th>Owner</th><th>Rate</th><th>Status</th><th>Actions</th>
+                                        <th>Name</th><th>City</th><th>Type</th><th>Variants</th><th>Options</th><th>Owner</th><th>Rate</th><th>Status</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -228,6 +241,8 @@ export default function MediaPage() {
                                             <td className={styles.nameTd}>{row.landmark || row.address || `Media #${row.id}`}</td>
                                             <td>{row.city || 'N/A'}</td>
                                             <td>{row.media_type || 'N/A'}</td>
+                                            <td>{row.variant_count || 0}</td>
+                                            <td>{[row.option1_name, row.option2_name, row.option3_name].filter(Boolean).join(' / ') || '—'}</td>
                                             <td>{row.vendor?.name || '—'}</td>
                                             <td>₹{row.monthly_rental?.toLocaleString() || '0'}</td>
                                             <td><span className={`${styles.badge} ${styles[`badge-${row.status}`] || styles.badgeActive}`}>{row.status}</span></td>

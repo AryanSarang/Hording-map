@@ -20,9 +20,6 @@ function mapToFrontend(h) {
         longitude: h.longitude,
 
         roadName: h.road_name,
-        roadFrom: h.road_from,
-        roadTo: h.road_to,
-        positionWrtRoad: h.position_wrt_road,
 
         pocName: h.poc_name,
         pocNumber: h.poc_number,
@@ -52,7 +49,59 @@ function mapToFrontend(h) {
 
         condition: h.condition,
         previousClientele: h.previous_clientele,
-        status: h.status
+        status: h.status,
+        title: h.title,
+        hasVariants: h.has_variants,
+        option1Name: h.option1_name || 'Option 1',
+        option2Name: h.option2_name || 'Option 2',
+        option3Name: h.option3_name || '',
+    };
+}
+
+function mapVariantToFrontend(v) {
+    return {
+        id: v.id,
+        variantTitle: v.variant_title,
+        option1Value: v.option1_value,
+        option2Value: v.option2_value,
+        option3Value: v.option3_value,
+        audienceCategory: v.audience_category,
+        seating: v.seating,
+        cinemaFormat: v.cinema_format,
+        size: v.size,
+        customFields: v.custom_fields || {},
+        rate: v.rate,
+        details: v.details,
+        externalLinks: v.external_links,
+        photographs: v.photographs,
+        isActive: v.is_active,
+        displayOrder: v.display_order,
+    };
+}
+
+function normalizeVariant(input, index = 0) {
+    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
+    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || 'Default';
+    const option3 = String(input.option3Value ?? '').trim() || null;
+    const rateRaw = input.rate ?? input.monthly_rental ?? input.price;
+    const rate = rateRaw != null && String(rateRaw).trim() !== '' ? parseInt(rateRaw) : null;
+    const customFields = input.customFields && typeof input.customFields === 'object' ? input.customFields : {};
+    return {
+        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim(),
+        option1_value: option1,
+        option2_value: option2,
+        option3_value: option3,
+        audience_category: null,
+        seating: null,
+        cinema_format: null,
+        size: null,
+        rate: Number.isFinite(rate) ? rate : null,
+        details: String(input.details ?? '').trim() || null,
+        external_links: String(input.externalLinks ?? '').trim() || null,
+        photographs: String(input.photographs ?? '').trim() || null,
+        custom_fields: customFields,
+        is_active: input.isActive !== false,
+        display_order: Number.isFinite(Number(input.displayOrder)) ? Number(input.displayOrder) : index,
     };
 }
 
@@ -74,9 +123,11 @@ export async function GET(req, { params }) {
         if (error) throw error;
         if (!data) return NextResponse.json({ success: false, error: 'Hording not found' }, { status: 404 });
 
-        const [{ data: metafieldRows }, { data: pricingRows }] = await Promise.all([
+        const [{ data: metafieldRows }, { data: pricingRows }, { data: variants }, { data: variantPricingRows }] = await Promise.all([
             supabaseAdmin.from('media_metafields').select('vendor_metafield_id, value').eq('media_id', data.id),
-            supabaseAdmin.from('media_pricing').select('price_name, price, duration, display_order').eq('media_id', data.id).order('display_order')
+            supabaseAdmin.from('media_pricing').select('price_name, price, duration, display_order').eq('media_id', data.id).order('display_order'),
+            supabaseAdmin.from('media_variants').select('*').eq('media_id', data.id).order('display_order'),
+            supabaseAdmin.from('media_variant_pricing').select('media_variant_id, price_name, price, duration, display_order').eq('media_id', data.id).order('display_order'),
         ]);
 
         const metafields = {};
@@ -90,12 +141,27 @@ export async function GET(req, { params }) {
             duration: p.duration
         }));
 
+        const variantPricingByVariant = {};
+        (variantPricingRows || []).forEach((p) => {
+            if (!variantPricingByVariant[p.media_variant_id]) variantPricingByVariant[p.media_variant_id] = [];
+            variantPricingByVariant[p.media_variant_id].push({
+                price_name: p.price_name,
+                price: p.price,
+                duration: p.duration,
+                display_order: p.display_order,
+            });
+        });
+
         return NextResponse.json({
             success: true,
             data: {
                 ...mapToFrontend(data),
                 metafields,
-                pricing: pricing.length > 0 ? pricing : [{ priceName: '', price: '', duration: '' }]
+                pricing: pricing.length > 0 ? pricing : [{ priceName: '', price: '', duration: '' }],
+                variants: (variants || []).map((v) => ({
+                    ...mapVariantToFrontend(v),
+                    pricing: variantPricingByVariant[v.id] || [],
+                })),
             }
         }, { status: 200 });
 
@@ -136,9 +202,6 @@ export async function PUT(req, { params }) {
         if (body.longitude !== undefined) dbPayload.longitude = parseFloat(body.longitude);
 
         if (body.roadName !== undefined) dbPayload.road_name = body.roadName;
-        if (body.roadFrom !== undefined) dbPayload.road_from = body.roadFrom;
-        if (body.roadTo !== undefined) dbPayload.road_to = body.roadTo;
-        if (body.positionWrtRoad !== undefined) dbPayload.position_wrt_road = body.positionWrtRoad;
 
         if (body.pocName !== undefined) dbPayload.poc_name = body.pocName;
         if (body.pocNumber !== undefined) dbPayload.poc_number = body.pocNumber;
@@ -173,6 +236,11 @@ export async function PUT(req, { params }) {
         if (body.condition !== undefined) dbPayload.condition = body.condition;
         if (body.previousClientele !== undefined) dbPayload.previous_clientele = body.previousClientele;
         if (body.status !== undefined) dbPayload.status = body.status;
+        if (body.title !== undefined) dbPayload.title = body.title || null;
+        if (body.hasVariants !== undefined) dbPayload.has_variants = !!body.hasVariants;
+        if (body.option1Name !== undefined) dbPayload.option1_name = body.option1Name || 'Option 1';
+        if (body.option2Name !== undefined) dbPayload.option2_name = body.option2Name || 'Option 2';
+        if (body.option3Name !== undefined) dbPayload.option3_name = body.option3Name || null;
 
         const { data, error } = await supabaseAdmin
             .from('media')
@@ -182,6 +250,52 @@ export async function PUT(req, { params }) {
             .single();
 
         if (error) throw error;
+
+        // Save variants set if provided (replace-all strategy)
+        if (Array.isArray(body.variants)) {
+            const normalized = body.variants.map((v, i) => normalizeVariant(v, i));
+            const withDefault = normalized.length > 0 ? normalized : [normalizeVariant({}, 0)];
+
+            const pairSet = new Set();
+            for (const v of withDefault) {
+                const key = `${v.option1_value}__${v.option2_value}__${v.option3_value || ''}`.toLowerCase();
+                if (pairSet.has(key)) {
+                    return NextResponse.json({ success: false, error: `Duplicate variant pair: ${v.option1_value} + ${v.option2_value}${v.option3_value ? ` + ${v.option3_value}` : ''}` }, { status: 400 });
+                }
+                pairSet.add(key);
+            }
+
+            await supabaseAdmin.from('media_variant_pricing').delete().eq('media_id', id);
+            await supabaseAdmin.from('media_variants').delete().eq('media_id', id);
+
+            const { data: insertedVariants, error: variantInsertError } = await supabaseAdmin
+                .from('media_variants')
+                .insert(withDefault.map((v) => ({ ...v, media_id: id })))
+                .select('*');
+            if (variantInsertError) throw variantInsertError;
+
+            // Save per-variant pricing if supplied in each variant
+            const pricingRowsToInsert = [];
+            (insertedVariants || []).forEach((variant, idx) => {
+                const inVariant = body.variants[idx] || {};
+                const tiers = Array.isArray(inVariant.pricing) ? inVariant.pricing : [];
+                tiers.forEach((p, i) => {
+                    if (!p?.price_name || !p?.duration || !p?.price) return;
+                    pricingRowsToInsert.push({
+                        media_variant_id: variant.id,
+                        media_id: id,
+                        price_name: p.price_name,
+                        price: parseInt(p.price),
+                        duration: p.duration,
+                        display_order: Number.isFinite(Number(p.display_order)) ? Number(p.display_order) : i,
+                        is_active: p.is_active !== false,
+                    });
+                });
+            });
+            if (pricingRowsToInsert.length > 0) {
+                await supabaseAdmin.from('media_variant_pricing').insert(pricingRowsToInsert);
+            }
+        }
 
         // Save pricing tiers if provided
         if (Array.isArray(body.pricing) && body.pricing.length > 0) {

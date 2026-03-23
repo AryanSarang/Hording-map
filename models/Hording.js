@@ -40,18 +40,6 @@ const Hording = sequelize.define('Hording', {
         type: DataTypes.STRING,
         allowNull: true,
     },
-    roadFrom: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    roadTo: {
-        type: DataTypes.STRING,
-        allowNull: true,
-    },
-    positionWRTRoad: {
-        type: DataTypes.ENUM('LHS', 'RHS'),
-        allowNull: true,
-    },
     trafficType: {
         type: DataTypes.ENUM('Morning', 'Evening'),
         allowNull: true,

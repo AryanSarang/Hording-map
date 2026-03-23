@@ -95,6 +95,45 @@ async function runExport(mediaIds) {
         }
     }
 
+    // 5. Fetch variants and variant pricing
+    const variantsByMedia = {};
+    const variantIds = [];
+    if (ids.length > 0) {
+        const idChunks = chunk(ids, BATCH_SIZE);
+        for (const idList of idChunks) {
+            const { data: variantRows } = await supabaseAdmin
+                .from('media_variants')
+                .select('*')
+                .in('media_id', idList)
+                .order('display_order', { ascending: true });
+            for (const v of variantRows || []) {
+                if (!variantsByMedia[v.media_id]) variantsByMedia[v.media_id] = [];
+                variantsByMedia[v.media_id].push(v);
+                variantIds.push(v.id);
+            }
+        }
+    }
+
+    const variantPricingByVariant = {};
+    if (variantIds.length > 0) {
+        const variantChunks = chunk(variantIds, BATCH_SIZE);
+        for (const vList of variantChunks) {
+            const { data: vpRows } = await supabaseAdmin
+                .from('media_variant_pricing')
+                .select('media_variant_id, price_name, price, duration, display_order')
+                .in('media_variant_id', vList)
+                .order('display_order', { ascending: true });
+            for (const p of vpRows || []) {
+                if (!variantPricingByVariant[p.media_variant_id]) variantPricingByVariant[p.media_variant_id] = [];
+                variantPricingByVariant[p.media_variant_id].push({
+                    price_name: p.price_name,
+                    price: p.price,
+                    duration: p.duration,
+                });
+            }
+        }
+    }
+
     const allMetaKeys = [
         ...new Set(
             Object.values(metafieldsByMedia).flatMap((m) => Object.keys(m))
@@ -105,7 +144,7 @@ async function runExport(mediaIds) {
         'id', 'vendor_id', 'vendor_name',
         'city', 'state', 'address', 'landmark', 'pincode', 'zone',
         'latitude', 'longitude',
-        'road_name', 'road_from', 'road_to', 'position_wrt_road',
+        'road_name',
         'poc_name', 'poc_number', 'poc_email',
         'monthly_rental', 'vendor_rate', 'payment_terms', 'minimum_booking_duration',
         'media_type', 'width', 'height',
@@ -114,7 +153,10 @@ async function runExport(mediaIds) {
         'slot_time', 'loop_time', 'display_hours',
         'traffic_type', 'visibility', 'dwell_time',
         'condition', 'previous_clientele', 'status',
+        'variant_id', 'option1_name', 'option2_name', 'option3_name', 'option1_value', 'option2_value', 'option3_value', 'variant_title',
+        'audience_category', 'seating', 'cinema_format', 'size', 'variant_rate',
         'pricing',
+        'variant_pricing',
     ];
     const metaHeaders = allMetaKeys.map((k) => `metafield.${k}`);
     const headers = [...baseHeaders, ...metaHeaders];
@@ -136,51 +178,76 @@ async function runExport(mediaIds) {
                         duration: p.duration,
                     }))
                 );
-                const base = [
-                    h.id,
-                    h.vendor_id ?? '',
-                    vendorName,
-                    h.city ?? '',
-                    h.state ?? '',
-                    h.address ?? '',
-                    h.landmark ?? '',
-                    h.pincode ?? '',
-                    h.zone ?? '',
-                    h.latitude ?? '',
-                    h.longitude ?? '',
-                    h.road_name ?? '',
-                    h.road_from ?? '',
-                    h.road_to ?? '',
-                    h.position_wrt_road ?? '',
-                    h.poc_name ?? '',
-                    h.poc_number ?? '',
-                    h.poc_email ?? '',
-                    h.monthly_rental ?? '',
-                    h.vendor_rate ?? '',
-                    h.payment_terms ?? '',
-                    h.minimum_booking_duration ?? '',
-                    h.media_type ?? '',
-                    h.width ?? '',
-                    h.height ?? '',
-                    images,
-                    h.screen_size ?? '',
-                    h.screen_number ?? '',
-                    h.screen_placement ?? '',
-                    h.display_format ?? '',
-                    h.slot_time ?? '',
-                    h.loop_time ?? '',
-                    h.display_hours ?? '',
-                    h.traffic_type ?? '',
-                    h.visibility ?? '',
-                    h.dwell_time ?? '',
-                    h.condition ?? '',
-                    h.previous_clientele ?? '',
-                    h.status ?? '',
-                    pricingStr,
-                ];
-                const metaVals = allMetaKeys.map((k) => metas[k] ?? '');
-                const rowLine = [...base, ...metaVals].map(escapeCsv).join(',') + '\n';
-                controller.enqueue(encoder.encode(rowLine));
+                const mediaVariants = variantsByMedia[h.id] || [];
+                const exportRows = mediaVariants.length > 0 ? mediaVariants : [null];
+
+                for (const v of exportRows) {
+                    const variantPricing = v ? (variantPricingByVariant[v.id] || []) : [];
+                    const variantPricingStr = JSON.stringify(
+                        variantPricing.map((p) => ({
+                            price_name: p.price_name,
+                            price: p.price,
+                            duration: p.duration,
+                        }))
+                    );
+
+                    const base = [
+                        h.id,
+                        h.vendor_id ?? '',
+                        vendorName,
+                        h.city ?? '',
+                        h.state ?? '',
+                        h.address ?? '',
+                        h.landmark ?? '',
+                        h.pincode ?? '',
+                        h.zone ?? '',
+                        h.latitude ?? '',
+                        h.longitude ?? '',
+                        h.road_name ?? '',
+                        h.poc_name ?? '',
+                        h.poc_number ?? '',
+                        h.poc_email ?? '',
+                        h.monthly_rental ?? '',
+                        h.vendor_rate ?? '',
+                        h.payment_terms ?? '',
+                        h.minimum_booking_duration ?? '',
+                        h.media_type ?? '',
+                        h.width ?? '',
+                        h.height ?? '',
+                        images,
+                        h.screen_size ?? '',
+                        h.screen_number ?? '',
+                        h.screen_placement ?? '',
+                        h.display_format ?? '',
+                        h.slot_time ?? '',
+                        h.loop_time ?? '',
+                        h.display_hours ?? '',
+                        h.traffic_type ?? '',
+                        h.visibility ?? '',
+                        h.dwell_time ?? '',
+                        h.condition ?? '',
+                        h.previous_clientele ?? '',
+                        h.status ?? '',
+                        v?.id ?? '',
+                        h.option1_name ?? '',
+                        h.option2_name ?? '',
+                        h.option3_name ?? '',
+                        v?.option1_value ?? '',
+                        v?.option2_value ?? '',
+                        v?.option3_value ?? '',
+                        v?.variant_title ?? '',
+                        v?.audience_category ?? '',
+                        v?.seating ?? '',
+                        v?.cinema_format ?? '',
+                        v?.size ?? '',
+                        v?.rate ?? '',
+                        pricingStr,
+                        variantPricingStr,
+                    ];
+                    const metaVals = allMetaKeys.map((k) => metas[k] ?? '');
+                    const rowLine = [...base, ...metaVals].map(escapeCsv).join(',') + '\n';
+                    controller.enqueue(encoder.encode(rowLine));
+                }
             }
             controller.close();
         },

@@ -21,7 +21,7 @@ const initialForm = {
     vendorId: null,
     city: '', state: '', address: '', landmark: '', pincode: '', zone: '',
     latitude: '', longitude: '',
-    roadName: '', roadFrom: '', roadTo: '', positionWrtRoad: '',
+    roadName: '',
     pocName: '', pocNumber: '', pocEmail: '',
     rate: '', ourRate: '', paymentTerms: '', minimumBookingDuration: '',
     mediaType: '', width: '', height: '',
@@ -30,12 +30,18 @@ const initialForm = {
     trafficType: '', visibility: 'Prime', dwellTime: '',
     condition: '', previousClientele: '', status: 'active',
     imageUrls: '',
+    option1Name: 'Option 1',
+    option2Name: 'Option 2',
+    option3Name: '',
 };
 
 export default function NewMediaPage() {
     const router = useRouter();
     const [formData, setFormData] = useState(initialForm);
     const [pricingRows, setPricingRows] = useState([{ priceName: '', price: '', duration: '' }]);
+    const [variantRows, setVariantRows] = useState([{ option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]);
+    const [optionValues, setOptionValues] = useState({ option1: '', option2: '', option3: '' });
+    const [variantCustomFieldDefs, setVariantCustomFieldDefs] = useState(['']);
     const [loading, setLoading] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState(null);
@@ -64,6 +70,36 @@ export default function NewMediaPage() {
     function addPricingRow() { setPricingRows(prev => [...prev, { priceName: '', price: '', duration: '' }]); }
     function removePricingRow(i) { setPricingRows(prev => prev.filter((_, idx) => idx !== i)); }
     function updatePricing(i, field, val) { setPricingRows(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: val } : row)); }
+    function addVariantRow() { setVariantRows(prev => [...prev, { option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]); }
+    function removeVariantRow(i) { setVariantRows(prev => prev.filter((_, idx) => idx !== i)); }
+    function updateVariant(i, field, val) { setVariantRows(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: val } : row)); }
+    function updateVariantCustomField(i, key, val) {
+        setVariantRows(prev => prev.map((row, idx) => idx === i ? { ...row, customFields: { ...(row.customFields || {}), [key]: val } } : row));
+    }
+    function addVariantCustomFieldDef() { setVariantCustomFieldDefs(prev => [...prev, '']); }
+    function updateVariantCustomFieldDef(i, val) { setVariantCustomFieldDefs(prev => prev.map((k, idx) => idx === i ? val : k)); }
+    function removeVariantCustomFieldDef(i) { setVariantCustomFieldDefs(prev => prev.filter((_, idx) => idx !== i)); }
+    function generateVariantCombinations() {
+        const parseValues = (s) => String(s || '').split(',').map(v => v.trim()).filter(Boolean);
+        const v1 = parseValues(optionValues.option1);
+        const v2 = parseValues(optionValues.option2);
+        const v3 = parseValues(optionValues.option3);
+        if (v1.length === 0 || v2.length === 0) {
+            setError('Add comma-separated values for Option 1 and Option 2 to generate variants.');
+            return;
+        }
+        const all = [];
+        for (const a of v1) {
+            for (const b of v2) {
+                if (v3.length > 0) {
+                    for (const c of v3) all.push({ option1Value: a, option2Value: b, option3Value: c, rate: '', customFields: {} });
+                } else {
+                    all.push({ option1Value: a, option2Value: b, option3Value: '', rate: '', customFields: {} });
+                }
+            }
+        }
+        setVariantRows(all);
+    }
 
     async function handleSubmit(e) {
         e.preventDefault();
@@ -78,6 +114,29 @@ export default function NewMediaPage() {
             return;
         }
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { setError('Invalid coordinates.'); return; }
+        const normalizedVariants = variantRows
+            .filter(v => v.option1Value?.trim() || v.option2Value?.trim() || v.option3Value?.trim() || v.rate)
+            .map((v, i) => ({
+                option1Value: v.option1Value?.trim() || 'Default',
+                option2Value: v.option2Value?.trim() || 'Default',
+                option3Value: v.option3Value?.trim() || null,
+                rate: v.rate ? parseInt(v.rate) : null,
+                customFields: v.customFields || {},
+                displayOrder: i,
+            }));
+        if (normalizedVariants.length === 0) {
+            setError('Add at least one variant.');
+            return;
+        }
+        const pairSet = new Set();
+        for (const v of normalizedVariants) {
+            const key = `${v.option1Value}__${v.option2Value}__${v.option3Value || ''}`.toLowerCase();
+            if (pairSet.has(key)) {
+                setError(`Duplicate variant option combination: ${v.option1Value} / ${v.option2Value}${v.option3Value ? ` / ${v.option3Value}` : ''}`);
+                return;
+            }
+            pairSet.add(key);
+        }
 
         setLoading(true);
         setError(null);
@@ -90,7 +149,7 @@ export default function NewMediaPage() {
             const res = await fetch('/api/vendors/hordings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, imageUrls, pricing, metafields: metafieldValues }),
+                body: JSON.stringify({ ...formData, imageUrls, pricing, variants: normalizedVariants, option1Name: formData.option1Name, option2Name: formData.option2Name, option3Name: formData.option3Name, metafields: metafieldValues }),
             });
             const data = await res.json();
             if (data.success) {
@@ -190,9 +249,6 @@ export default function NewMediaPage() {
                             </div>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Road Name</label><input type="text" name="roadName" value={formData.roadName} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Road From</label><input type="text" name="roadFrom" value={formData.roadFrom} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Road To</label><input type="text" name="roadTo" value={formData.roadTo} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Position w.r.t Road</label><input type="text" name="positionWrtRoad" value={formData.positionWrtRoad} onChange={handleChange} /></div>
                             </div>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label className={styles.required}>Latitude</label><input type="text" name="latitude" value={formData.latitude || ''} readOnly placeholder="Select on map" className={styles.readOnlyInput} /></div>
@@ -249,6 +305,55 @@ export default function NewMediaPage() {
                                 <div className={styles.formGroup}><label>Loop Time</label><input type="text" name="loopTime" placeholder="Loop duration" value={formData.loopTime} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label>Display Hours</label><input type="text" name="displayHours" placeholder="e.g., 8am-10pm" value={formData.displayHours} onChange={handleChange} /></div>
                             </div>
+                        </div>
+
+                        {/* VARIANTS */}
+                        <div className={styles.formSection}>
+                            <h3 className={styles.sectionHead}>Variants (Shopify-style)</h3>
+                            <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>Define options, add values, generate combinations, then set rate and custom fields.</p>
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}><label>Option 1 Name</label><input type="text" name="option1Name" value={formData.option1Name} onChange={handleChange} placeholder="e.g. Screen Code / Color / Size" /></div>
+                                <div className={styles.formGroup}><label>Option 2 Name</label><input type="text" name="option2Name" value={formData.option2Name} onChange={handleChange} placeholder="e.g. Auditorium / Material" /></div>
+                                <div className={styles.formGroup}><label>Option 3 Name (optional)</label><input type="text" name="option3Name" value={formData.option3Name} onChange={handleChange} placeholder="e.g. Language / Format" /></div>
+                            </div>
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}><label>{formData.option1Name || 'Option 1'} values (comma separated)</label><input type="text" value={optionValues.option1} onChange={(e) => setOptionValues(prev => ({ ...prev, option1: e.target.value }))} placeholder="Red, Green, Yellow" /></div>
+                                <div className={styles.formGroup}><label>{formData.option2Name || 'Option 2'} values (comma separated)</label><input type="text" value={optionValues.option2} onChange={(e) => setOptionValues(prev => ({ ...prev, option2: e.target.value }))} placeholder="S, M, L" /></div>
+                                <div className={styles.formGroup}><label>{formData.option3Name || 'Option 3'} values (optional)</label><input type="text" value={optionValues.option3} onChange={(e) => setOptionValues(prev => ({ ...prev, option3: e.target.value }))} placeholder="Cotton, Silk" /></div>
+                            </div>
+                            <div className={styles.formRow}>
+                                <button type="button" className={styles.pricingAddBtn} onClick={generateVariantCombinations}>Generate Variant Combinations</button>
+                            </div>
+                            <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Variant Custom Fields</h4>
+                            {variantCustomFieldDefs.map((fieldKey, idx) => (
+                                <div key={idx} className={styles.formRow}>
+                                    <div className={styles.formGroup}>
+                                        <label>Field key</label>
+                                        <input type="text" placeholder="e.g. projector_type" value={fieldKey} onChange={(e) => updateVariantCustomFieldDef(idx, e.target.value)} />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        {idx === variantCustomFieldDefs.length - 1
+                                            ? <button type="button" className={styles.pricingAddBtn} onClick={addVariantCustomFieldDef}>+ Add Field</button>
+                                            : <button type="button" className={styles.pricingRemoveBtn} onClick={() => removeVariantCustomFieldDef(idx)}>Remove</button>}
+                                    </div>
+                                </div>
+                            ))}
+                            <div className={styles.variantHeader}>
+                                <span>Variant</span>
+                                <span>Price</span>
+                                {variantCustomFieldDefs.map((f, i) => <span key={i}>{f || `Custom ${i + 1}`}</span>)}
+                                <span></span>
+                            </div>
+                            {variantRows.map((row, i) => (
+                                <div key={i} className={styles.variantRow}>
+                                    <div className={styles.variantLabelCell}>{[row.option1Value, row.option2Value, row.option3Value].filter(Boolean).join(' / ') || 'Default Variant'}</div>
+                                    <input type="number" placeholder="Rate" value={row.rate} onChange={e => updateVariant(i, 'rate', e.target.value)} />
+                                    {variantCustomFieldDefs.map((f, idx) => (
+                                        <input key={idx} type="text" placeholder={f || `Custom ${idx + 1}`} value={row.customFields?.[f] || ''} onChange={e => updateVariantCustomField(i, f, e.target.value)} />
+                                    ))}
+                                    <button type="button" className={styles.pricingRemoveBtn} onClick={() => removeVariantRow(i)}>Remove</button>
+                                </div>
+                            ))}
                         </div>
 
                         {/* TRAFFIC & VISIBILITY */}

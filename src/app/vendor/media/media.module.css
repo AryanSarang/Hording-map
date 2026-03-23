@@ -555,6 +555,48 @@
     min-width: 0;
 }
 
+.variantHeader {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}
+
+.variantRow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.variantRow input {
+    padding: 8px 10px;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    background: #131922;
+    color: #e2e8f0;
+    font-size: 12px;
+    min-width: 0;
+}
+
+.variantLabelCell {
+    padding: 8px 10px;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 12px;
+    line-height: 1.4;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+}
+
 .pricingAddBtn,
 .pricingRemoveBtn {
     padding: 8px 10px;
@@ -607,5 +649,10 @@
     .pricingTiersHeader,
     .pricingRow {
         grid-template-columns: 1fr 80px 1fr 70px;
+    }
+
+    .variantHeader,
+    .variantRow {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
 }

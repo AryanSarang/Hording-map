@@ -51,6 +51,28 @@ function parseCsv(text) {
     return lines;
 }
 
+function normalizeHeader(h) {
+    return String(h || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[()]/g, '')
+        .replace(/\./g, '')
+        .replace(/-/g, '_');
+}
+
+function buildKey(row) {
+    return [
+        row.vendor_id || '',
+        row.media_type || '',
+        row.address || '',
+        row.city || '',
+        row.state || '',
+        row.latitude || '',
+        row.longitude || '',
+    ].map((s) => String(s).trim().toLowerCase()).join('|');
+}
+
 export async function POST(req) {
     try {
         const formData = await req.formData();
@@ -73,13 +95,17 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
-        const headers = rows[0].map((h) => String(h || '').trim().toLowerCase());
+        // Some files have grouping labels on row 1 and real headers on row 2.
+        const headerRowIndex = rows[0]?.some((h) => normalizeHeader(h) === 'city' || normalizeHeader(h) === 'media_type')
+            ? 0
+            : 1;
+        const headers = (rows[headerRowIndex] || []).map((h) => normalizeHeader(h));
         const headerIndex = {};
         headers.forEach((h, i) => { headerIndex[h] = i; });
 
         // Resolve vendor_id from first row for metafield lookup (vendor_id is 10-char string after migration)
         let vendorIdForMetafields = null;
-        for (let r = 1; r < rows.length; r++) {
+        for (let r = headerRowIndex + 1; r < rows.length; r++) {
             const i = headerIndex['vendor_id'];
             if (i != null && rows[r][i] != null && String(rows[r][i]).trim()) {
                 vendorIdForMetafields = String(rows[r][i]).trim();
@@ -96,9 +122,9 @@ export async function POST(req) {
         }
 
         const rowErrors = [];
-        const toInsert = [];
+        const preparedRows = [];
 
-        for (let r = 1; r < rows.length; r++) {
+        for (let r = headerRowIndex + 1; r < rows.length; r++) {
             const cells = rows[r];
             const rowNum = r + 1;
             const errs = [];
@@ -107,15 +133,32 @@ export async function POST(req) {
                 return i != null && cells[i] != null ? String(cells[i]).trim() : '';
             };
 
+            if (!cells || cells.length === 0 || cells.every((c) => !String(c || '').trim())) continue;
+
+            // CSV aliases (sheet-style)
+            const mediaType = get('media_type') || get('media_type_');
             const city = get('city');
             const state = get('state');
             const address = get('address');
             const latStr = get('latitude');
             const lngStr = get('longitude');
-            const pocName = get('poc_name');
-            const pocNumber = get('poc_number');
-            const minBooking = get('minimum_booking_duration');
-            const mediaType = get('media_type');
+            const pocName = get('poc_name') || get('poc_name_');
+            const pocNumber = get('poc_number') || get('poc_number_');
+            const pocEmail = get('poc_email') || get('poc_email_');
+            const minBooking = get('minimum_booking_duration') || '1 month';
+
+            const cinemaName = get('cinema_name');
+            const screenCode = get('screen_code');
+            const auditorium = get('auditorium');
+            const option1Name = get('option1_name') || 'Screen Code';
+            const option2Name = get('option2_name') || 'Auditorium';
+            const option3Name = get('option3_name') || '';
+            const option3Value = get('option3_value');
+            const audienceCategory = get('audience_category');
+            const seating = get('seating');
+            const cinemaFormat = get('cinema_format');
+            const size = get('size');
+            const variantRate = get('rate');
 
             if (!city) errs.push('city is required');
             if (!state) errs.push('state is required');
@@ -178,7 +221,17 @@ export async function POST(req) {
                 continue;
             }
 
-            toInsert.push({
+            preparedRows.push({
+                rowNum,
+                key: buildKey({
+                    vendor_id: vendorId,
+                    media_type: mediaType,
+                    address,
+                    city,
+                    state,
+                    latitude: lat,
+                    longitude: lng,
+                }),
                 vendor_id: vendorId,
                 city,
                 state,
@@ -189,9 +242,6 @@ export async function POST(req) {
                 latitude: lat,
                 longitude: lng,
                 road_name: get('road_name'),
-                road_from: get('road_from'),
-                road_to: get('road_to'),
-                position_wrt_road: get('position_wrt_road'),
                 poc_name: pocName,
                 poc_number: pocNumber,
                 poc_email: get('poc_email'),
@@ -218,10 +268,25 @@ export async function POST(req) {
                 status: statusVal,
                 pricing,
                 metafields,
+                variants: [{
+                    variantTitle: cinemaName || [screenCode || 'Default', auditorium || 'Default', option3Value || null].filter(Boolean).join(' / '),
+                    option1Value: screenCode || 'Default',
+                    option2Value: auditorium || 'Default',
+                    option3Value: option3Value || null,
+                    audienceCategory: audienceCategory || null,
+                    seating: seating ? parseInt(seating) : null,
+                    cinemaFormat: cinemaFormat || null,
+                    size: size || get('screen_size') || null,
+                    rate: variantRate ? parseInt(variantRate) : (get('monthly_rental') ? parseInt(get('monthly_rental')) : null),
+                    displayOrder: 0,
+                }],
+                option1_name: option1Name,
+                option2_name: option2Name,
+                option3_name: option3Name || null,
             });
         }
 
-        if (rowErrors.length > 0 && toInsert.length === 0) {
+        if (rowErrors.length > 0 && preparedRows.length === 0) {
             return NextResponse.json({
                 success: false,
                 error: 'All rows have format errors. Fix the CSV and try again.',
@@ -230,20 +295,35 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
+        // Group rows by site key -> one parent media, many variants
+        const grouped = new Map();
+        for (const row of preparedRows) {
+            if (!grouped.has(row.key)) grouped.set(row.key, []);
+            grouped.get(row.key).push(row);
+        }
+
         let imported = 0;
-        for (const item of toInsert) {
-            const { pricing: p, metafields: m, ...hPayload } = item;
+        for (const [, groupRows] of grouped) {
+            const base = groupRows[0];
+            const { pricing: p, metafields: m, variants: _, key, rowNum, ...hPayload } = base;
             const { data: newH, error: insertErr } = await supabaseAdmin
                 .from('media')
-                .insert([hPayload])
+                .insert([{
+                    ...hPayload,
+                    title: base.address,
+                    has_variants: true,
+                    option1_name: base.option1_name || 'Option 1',
+                    option2_name: base.option2_name || 'Option 2',
+                    option3_name: base.option3_name || null,
+                }])
                 .select()
                 .single();
 
             if (insertErr) {
                 rowErrors.push({
-                    row: imported + rowErrors.length + 2,
+                    row: rowNum,
                     errors: [insertErr.message],
-                    preview: item.address || item.city,
+                    preview: base.address || base.city,
                 });
                 continue;
             }
@@ -277,6 +357,45 @@ export async function POST(req) {
                     }))
                 );
             }
+
+            // Save grouped variants for this parent media
+            const variantsToInsert = [];
+            const dedupe = new Set();
+            groupRows.forEach((row, idx) => {
+                (row.variants || []).forEach((v) => {
+                    const k = `${v.option1Value}__${v.option2Value}__${v.option3Value || ''}`.toLowerCase();
+                    if (dedupe.has(k)) return;
+                    dedupe.add(k);
+                    variantsToInsert.push({
+                        media_id: newH.id,
+                        variant_title: v.variantTitle,
+                        option1_value: v.option1Value,
+                        option2_value: v.option2Value,
+                        option3_value: v.option3Value || null,
+                        audience_category: v.audienceCategory,
+                        seating: v.seating,
+                        cinema_format: v.cinemaFormat,
+                        size: v.size,
+                        rate: v.rate,
+                        display_order: idx,
+                        is_active: true,
+                    });
+                });
+            });
+
+            if (variantsToInsert.length === 0) {
+                variantsToInsert.push({
+                    media_id: newH.id,
+                    variant_title: 'Default',
+                    option1_value: 'Default',
+                    option2_value: 'Default',
+                    option3_value: null,
+                    rate: newH.monthly_rental,
+                    display_order: 0,
+                    is_active: true,
+                });
+            }
+            await supabaseAdmin.from('media_variants').insert(variantsToInsert);
             imported++;
         }
 
