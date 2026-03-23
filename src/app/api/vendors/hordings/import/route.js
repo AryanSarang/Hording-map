@@ -182,27 +182,6 @@ export async function POST(req) {
             const imagesStr = get('images');
             const media = imagesStr ? imagesStr.split('|').map((s) => s.trim()).filter(Boolean) : [];
 
-            let pricing = [];
-            try {
-                const pricingStr = get('pricing');
-                if (pricingStr) {
-                    pricing = JSON.parse(pricingStr);
-                    if (!Array.isArray(pricing)) pricing = [];
-                    else {
-                        pricing = pricing
-                            .filter((p) => p && (p.price_name || p.price || p.duration))
-                            .map((p) => ({
-                                price_name: String(p.price_name || '').trim() || 'Custom',
-                                price: parseInt(p.price) || 0,
-                                duration: String(p.duration || '').trim() || 'N/A',
-                            }))
-                            .filter((p) => p.price > 0);
-                    }
-                }
-            } catch {
-                errs.push('pricing must be valid JSON array, e.g. [{"price_name":"1 Week","price":5000,"duration":"1 week"}]');
-            }
-
             const metafields = {};
             for (const [h, idx] of Object.entries(headerIndex)) {
                 if (h.startsWith('metafield.')) {
@@ -266,7 +245,6 @@ export async function POST(req) {
                 condition: get('condition') || null,
                 previous_clientele: get('previous_clientele') || null,
                 status: statusVal,
-                pricing,
                 metafields,
                 variants: [{
                     variantTitle: cinemaName || [screenCode || 'Default', auditorium || 'Default', option3Value || null].filter(Boolean).join(' / '),
@@ -305,7 +283,7 @@ export async function POST(req) {
         let imported = 0;
         for (const [, groupRows] of grouped) {
             const base = groupRows[0];
-            const { pricing: p, metafields: m, variants: _, key, rowNum, ...hPayload } = base;
+            const { metafields: m, variants: _, key, rowNum, ...hPayload } = base;
             const { data: newH, error: insertErr } = await supabaseAdmin
                 .from('media')
                 .insert([{
@@ -326,19 +304,6 @@ export async function POST(req) {
                     preview: base.address || base.city,
                 });
                 continue;
-            }
-
-            if (Array.isArray(p) && p.length > 0) {
-                await supabaseAdmin.from('media_pricing').insert(
-                    p.map((pr, i) => ({
-                        media_id: newH.id,
-                        price_name: pr.price_name,
-                        price: pr.price,
-                        duration: pr.duration,
-                        display_order: i,
-                        is_active: true,
-                    }))
-                );
             }
 
             if (m && Object.keys(m).length > 0) {

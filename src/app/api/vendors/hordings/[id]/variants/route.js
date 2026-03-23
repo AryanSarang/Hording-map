@@ -35,25 +35,14 @@ export async function GET(req, { params }) {
         const { id } = await params;
         if (!isValidMediaId(id)) return NextResponse.json({ success: false, error: 'Invalid media ID' }, { status: 400 });
 
-        const [{ data: variants, error }, { data: pricingRows }] = await Promise.all([
-            supabaseAdmin.from('media_variants').select('*').eq('media_id', id).order('display_order', { ascending: true }),
-            supabaseAdmin.from('media_variant_pricing').select('media_variant_id, price_name, price, duration, display_order').eq('media_id', id).order('display_order', { ascending: true }),
-        ]);
+        const { data: variants, error } = await supabaseAdmin
+            .from('media_variants')
+            .select('*')
+            .eq('media_id', id)
+            .order('display_order', { ascending: true });
         if (error) throw error;
 
-        const pricingByVariant = {};
-        (pricingRows || []).forEach((p) => {
-            if (!pricingByVariant[p.media_variant_id]) pricingByVariant[p.media_variant_id] = [];
-            pricingByVariant[p.media_variant_id].push(p);
-        });
-
-        return NextResponse.json({
-            success: true,
-            data: (variants || []).map((v) => ({
-                ...v,
-                pricing: pricingByVariant[v.id] || [],
-            })),
-        });
+        return NextResponse.json({ success: true, data: variants || [] });
     } catch (error) {
         console.error('GET variants Error:', error);
         return NextResponse.json({ success: false, error: error.message || 'Failed to fetch variants' }, { status: 500 });

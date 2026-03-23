@@ -123,11 +123,9 @@ export async function GET(req, { params }) {
         if (error) throw error;
         if (!data) return NextResponse.json({ success: false, error: 'Hording not found' }, { status: 404 });
 
-        const [{ data: metafieldRows }, { data: pricingRows }, { data: variants }, { data: variantPricingRows }] = await Promise.all([
+        const [{ data: metafieldRows }, { data: variants }] = await Promise.all([
             supabaseAdmin.from('media_metafields').select('vendor_metafield_id, value').eq('media_id', data.id),
-            supabaseAdmin.from('media_pricing').select('price_name, price, duration, display_order').eq('media_id', data.id).order('display_order'),
             supabaseAdmin.from('media_variants').select('*').eq('media_id', data.id).order('display_order'),
-            supabaseAdmin.from('media_variant_pricing').select('media_variant_id, price_name, price, duration, display_order').eq('media_id', data.id).order('display_order'),
         ]);
 
         const metafields = {};
@@ -135,32 +133,13 @@ export async function GET(req, { params }) {
             if (row.vendor_metafield_id) metafields[row.vendor_metafield_id] = row.value ?? '';
         });
 
-        const pricing = (pricingRows || []).map(p => ({
-            priceName: p.price_name,
-            price: p.price,
-            duration: p.duration
-        }));
-
-        const variantPricingByVariant = {};
-        (variantPricingRows || []).forEach((p) => {
-            if (!variantPricingByVariant[p.media_variant_id]) variantPricingByVariant[p.media_variant_id] = [];
-            variantPricingByVariant[p.media_variant_id].push({
-                price_name: p.price_name,
-                price: p.price,
-                duration: p.duration,
-                display_order: p.display_order,
-            });
-        });
-
         return NextResponse.json({
             success: true,
             data: {
                 ...mapToFrontend(data),
                 metafields,
-                pricing: pricing.length > 0 ? pricing : [{ priceName: '', price: '', duration: '' }],
                 variants: (variants || []).map((v) => ({
                     ...mapVariantToFrontend(v),
-                    pricing: variantPricingByVariant[v.id] || [],
                 })),
             }
         }, { status: 200 });
@@ -265,54 +244,15 @@ export async function PUT(req, { params }) {
                 pairSet.add(key);
             }
 
-            await supabaseAdmin.from('media_variant_pricing').delete().eq('media_id', id);
             await supabaseAdmin.from('media_variants').delete().eq('media_id', id);
 
-            const { data: insertedVariants, error: variantInsertError } = await supabaseAdmin
+            const { error: variantInsertError } = await supabaseAdmin
                 .from('media_variants')
                 .insert(withDefault.map((v) => ({ ...v, media_id: id })))
                 .select('*');
             if (variantInsertError) throw variantInsertError;
 
-            // Save per-variant pricing if supplied in each variant
-            const pricingRowsToInsert = [];
-            (insertedVariants || []).forEach((variant, idx) => {
-                const inVariant = body.variants[idx] || {};
-                const tiers = Array.isArray(inVariant.pricing) ? inVariant.pricing : [];
-                tiers.forEach((p, i) => {
-                    if (!p?.price_name || !p?.duration || !p?.price) return;
-                    pricingRowsToInsert.push({
-                        media_variant_id: variant.id,
-                        media_id: id,
-                        price_name: p.price_name,
-                        price: parseInt(p.price),
-                        duration: p.duration,
-                        display_order: Number.isFinite(Number(p.display_order)) ? Number(p.display_order) : i,
-                        is_active: p.is_active !== false,
-                    });
-                });
-            });
-            if (pricingRowsToInsert.length > 0) {
-                await supabaseAdmin.from('media_variant_pricing').insert(pricingRowsToInsert);
-            }
-        }
-
-        // Save pricing tiers if provided
-        if (Array.isArray(body.pricing) && body.pricing.length > 0) {
-            await supabaseAdmin.from('media_pricing').delete().eq('media_id', id);
-            const pricingRows = body.pricing
-                .filter(p => p.priceName?.trim() && p.price > 0 && p.duration?.trim())
-                .map((p, i) => ({
-                    media_id: id,
-                    price_name: p.priceName.trim(),
-                    price: parseInt(p.price),
-                    duration: p.duration.trim(),
-                    display_order: i,
-                    is_active: true
-                }));
-            if (pricingRows.length > 0) {
-                await supabaseAdmin.from('media_pricing').insert(pricingRows);
-            }
+            // Variants now only use fixed rate and custom fields.
         }
 
         // Save metafield values if provided

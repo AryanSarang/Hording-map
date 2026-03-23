@@ -38,7 +38,6 @@ const initialForm = {
 export default function NewMediaPage() {
     const router = useRouter();
     const [formData, setFormData] = useState(initialForm);
-    const [pricingRows, setPricingRows] = useState([{ priceName: '', price: '', duration: '' }]);
     const [variantRows, setVariantRows] = useState([{ option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]);
     const [optionValues, setOptionValues] = useState({ option1: '', option2: '', option3: '' });
     const [variantCustomFieldDefs, setVariantCustomFieldDefs] = useState(['']);
@@ -67,9 +66,6 @@ export default function NewMediaPage() {
         setError(null);
     }
 
-    function addPricingRow() { setPricingRows(prev => [...prev, { priceName: '', price: '', duration: '' }]); }
-    function removePricingRow(i) { setPricingRows(prev => prev.filter((_, idx) => idx !== i)); }
-    function updatePricing(i, field, val) { setPricingRows(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: val } : row)); }
     function addVariantRow() { setVariantRows(prev => [...prev, { option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]); }
     function removeVariantRow(i) { setVariantRows(prev => prev.filter((_, idx) => idx !== i)); }
     function updateVariant(i, field, val) { setVariantRows(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: val } : row)); }
@@ -142,14 +138,11 @@ export default function NewMediaPage() {
         setError(null);
         try {
             const imageUrls = formData.imageUrls ? formData.imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean) : [];
-            const pricing = pricingRows
-                .filter(r => r.priceName?.trim() && r.price && r.duration?.trim())
-                .map((r, i) => ({ price_name: r.priceName.trim(), price: parseInt(r.price) || 0, duration: r.duration.trim(), display_order: i }));
 
             const res = await fetch('/api/vendors/hordings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, imageUrls, pricing, variants: normalizedVariants, option1Name: formData.option1Name, option2Name: formData.option2Name, option3Name: formData.option3Name, metafields: metafieldValues }),
+                body: JSON.stringify({ ...formData, imageUrls, variants: normalizedVariants, option1Name: formData.option1Name, option2Name: formData.option2Name, option3Name: formData.option3Name, metafields: metafieldValues }),
             });
             const data = await res.json();
             if (data.success) {
@@ -168,25 +161,25 @@ export default function NewMediaPage() {
 
     return (
         <>
-            <div className={styles.topbar}>
+            <div className={`${styles.topbar} ${styles.createMediaPage}`}>
                 <h1 className={styles.title}>Create Media</h1>
                 <Link href="/vendor/media" className={styles.cancelBtn}>Back to List</Link>
             </div>
-            <div className={styles.content}>
-                <div className={styles.section}>
+            <div className={`${styles.content} ${styles.createMediaPage} ${styles.createMediaContent}`}>
+                <div className={`${styles.section} ${styles.createMediaShell}`}>
                     {error && <div className={styles.error}>{error}</div>}
-                    <form onSubmit={handleSubmit} className={styles.form}>
+                    <form onSubmit={handleSubmit} className={`${styles.form} ${styles.createMediaForm}`}>
                         {/* OWNER */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Owner (Vendor)</h3>
-                            <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12 }}>Select the vendor who owns this media.</p>
+                            <p className={styles.sectionHint}>Select the vendor who owns this media.</p>
                             <div className={styles.formRow}>
                                 <VendorDropdown value={formData.vendorId} onChange={v => setFormData(prev => ({ ...prev, vendorId: v }))} placeholder="No owner (optional)" />
                             </div>
                         </div>
 
                         {/* MEDIA DETAILS - ON TOP */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Media Details</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}>
@@ -233,7 +226,7 @@ export default function NewMediaPage() {
                         </div>
 
                         {/* LOCATION */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Location</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label className={styles.required}>City</label><input type="text" name="city" value={formData.city} onChange={handleChange} required /></div>
@@ -263,7 +256,7 @@ export default function NewMediaPage() {
                         </div>
 
                         {/* CONTACT */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Point of Contact</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label className={styles.required}>POC Name</label><input type="text" name="pocName" value={formData.pocName} onChange={handleChange} required /></div>
@@ -273,7 +266,7 @@ export default function NewMediaPage() {
                         </div>
 
                         {/* PRICING */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Pricing & Booking</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Monthly Rental (₹)</label><input type="number" name="rate" value={formData.rate} onChange={handleChange} /></div>
@@ -281,20 +274,10 @@ export default function NewMediaPage() {
                                 <div className={styles.formGroup}><label>Payment Terms</label><input type="text" name="paymentTerms" value={formData.paymentTerms} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label className={styles.required}>Min. Booking Duration</label><input type="text" name="minimumBookingDuration" value={formData.minimumBookingDuration} onChange={handleChange} required /></div>
                             </div>
-                            <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Additional Price Tiers</h4>
-                            <div className={styles.pricingTiersHeader}><span>Price name</span><span>Price (₹)</span><span>Duration</span><span></span></div>
-                            {pricingRows.map((row, i) => (
-                                <div key={i} className={styles.pricingRow}>
-                                    <input type="text" placeholder="Price name" value={row.priceName} onChange={e => updatePricing(i, 'priceName', e.target.value)} />
-                                    <input type="number" placeholder="Price (₹)" value={row.price} onChange={e => updatePricing(i, 'price', e.target.value)} />
-                                    <input type="text" placeholder="Duration" value={row.duration} onChange={e => updatePricing(i, 'duration', e.target.value)} />
-                                    {i === pricingRows.length - 1 ? <button type="button" className={styles.pricingAddBtn} onClick={addPricingRow}>+ Add</button> : <button type="button" className={styles.pricingRemoveBtn} onClick={() => removePricingRow(i)}>Remove</button>}
-                                </div>
-                            ))}
                         </div>
 
                         {/* SCREEN / DISPLAY */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Screen / Display Details</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Screen Size</label><input type="text" name="screenSize" placeholder="e.g., 10x6" value={formData.screenSize} onChange={handleChange} /></div>
@@ -308,9 +291,9 @@ export default function NewMediaPage() {
                         </div>
 
                         {/* VARIANTS */}
-                        <div className={styles.formSection}>
-                            <h3 className={styles.sectionHead}>Variants (Shopify-style)</h3>
-                            <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>Define options, add values, generate combinations, then set rate and custom fields.</p>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
+                            <h3 className={styles.sectionHead}>Variants</h3>
+                            <p className={styles.sectionHint}>Define options, add values, generate combinations, then set rate and custom fields.</p>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Option 1 Name</label><input type="text" name="option1Name" value={formData.option1Name} onChange={handleChange} placeholder="e.g. Screen Code / Color / Size" /></div>
                                 <div className={styles.formGroup}><label>Option 2 Name</label><input type="text" name="option2Name" value={formData.option2Name} onChange={handleChange} placeholder="e.g. Auditorium / Material" /></div>
@@ -324,7 +307,7 @@ export default function NewMediaPage() {
                             <div className={styles.formRow}>
                                 <button type="button" className={styles.pricingAddBtn} onClick={generateVariantCombinations}>Generate Variant Combinations</button>
                             </div>
-                            <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Variant Custom Fields</h4>
+                            <h4 className={styles.subSectionHead}>Variant Custom Fields</h4>
                             {variantCustomFieldDefs.map((fieldKey, idx) => (
                                 <div key={idx} className={styles.formRow}>
                                     <div className={styles.formGroup}>
@@ -357,7 +340,7 @@ export default function NewMediaPage() {
                         </div>
 
                         {/* TRAFFIC & VISIBILITY */}
-                        <div className={styles.formSection}>
+                        <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Traffic & Visibility</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Traffic Type</label><input type="text" name="trafficType" value={formData.trafficType} onChange={handleChange} /></div>
@@ -375,7 +358,7 @@ export default function NewMediaPage() {
 
                         <MetafieldSection vendorMetafields={vendorMetafields} values={metafieldValues} onValuesChange={setMetafieldValues} />
 
-                        <div className={styles.formActions}>
+                        <div className={`${styles.formActions} ${styles.stickyFormActions}`}>
                             <button type="submit" className={`${styles.submitBtn} ${saved ? styles.saved : ''}`} disabled={loading || saved}>{loading ? 'Creating...' : saved ? 'Saved!' : 'Create Media'}</button>
                             <button type="button" className={styles.cancelBtn} onClick={() => router.back()} disabled={loading || saved}>Cancel</button>
                         </div>

@@ -41,7 +41,6 @@ export async function GET() {
             'condition', 'previous_clientele', 'status',
             'option1_name', 'option2_name', 'option3_name',
             'cinema_name', 'screen_code', 'auditorium', 'audience_category', 'seating', 'cinema_format', 'size', 'rate',
-            'pricing',
             ...metaCols,
         ];
 
@@ -59,7 +58,6 @@ export async function GET() {
             'Good', 'Brand A, Brand B', 'active',
             'Screen Code', 'Auditorium', 'Language',
             'PVR Forum Mall', 'PVR/FOR_1', '1', 'Gold', '180', '3D/J2K', '4096*2160', '2500',
-            '[{"price_name":"1 Week","price":15000,"duration":"1 week"},{"price_name":"1 Month","price":50000,"duration":"1 month"}]',
             ...(metaCols.map(() => '')),
         ];
 

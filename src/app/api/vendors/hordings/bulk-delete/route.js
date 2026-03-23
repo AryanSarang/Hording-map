@@ -24,8 +24,6 @@ export async function POST(req) {
         let deleted = 0;
 
         for (const idList of idChunks) {
-            await supabaseAdmin.from('media_variant_pricing').delete().in('media_id', idList);
-            await supabaseAdmin.from('media_pricing').delete().in('media_id', idList);
             await supabaseAdmin.from('media_metafields').delete().in('media_id', idList);
             await supabaseAdmin.from('media_variants').delete().in('media_id', idList);
 

@@ -58,28 +58,7 @@ async function runExport(mediaIds) {
 
     const ids = rows.map((r) => r.id);
 
-    // 3. Bulk fetch all pricing (batched)
-    const pricingByMedia = {};
-    if (ids.length > 0) {
-        const idChunks = chunk(ids, BATCH_SIZE);
-        for (const idList of idChunks) {
-            const { data: pricingRows } = await supabaseAdmin
-                .from('media_pricing')
-                .select('media_id, price_name, price, duration, display_order')
-                .in('media_id', idList)
-                .order('display_order', { ascending: true });
-            for (const p of pricingRows || []) {
-                if (!pricingByMedia[p.media_id]) pricingByMedia[p.media_id] = [];
-                pricingByMedia[p.media_id].push({
-                    price_name: p.price_name,
-                    price: p.price,
-                    duration: p.duration,
-                });
-            }
-        }
-    }
-
-    // 4. Bulk fetch all metafields (batched)
+    // 3. Bulk fetch all metafields (batched)
     const metafieldsByMedia = {};
     if (ids.length > 0) {
         const idChunks = chunk(ids, BATCH_SIZE);
@@ -95,9 +74,8 @@ async function runExport(mediaIds) {
         }
     }
 
-    // 5. Fetch variants and variant pricing
+    // 4. Fetch variants
     const variantsByMedia = {};
-    const variantIds = [];
     if (ids.length > 0) {
         const idChunks = chunk(ids, BATCH_SIZE);
         for (const idList of idChunks) {
@@ -109,27 +87,6 @@ async function runExport(mediaIds) {
             for (const v of variantRows || []) {
                 if (!variantsByMedia[v.media_id]) variantsByMedia[v.media_id] = [];
                 variantsByMedia[v.media_id].push(v);
-                variantIds.push(v.id);
-            }
-        }
-    }
-
-    const variantPricingByVariant = {};
-    if (variantIds.length > 0) {
-        const variantChunks = chunk(variantIds, BATCH_SIZE);
-        for (const vList of variantChunks) {
-            const { data: vpRows } = await supabaseAdmin
-                .from('media_variant_pricing')
-                .select('media_variant_id, price_name, price, duration, display_order')
-                .in('media_variant_id', vList)
-                .order('display_order', { ascending: true });
-            for (const p of vpRows || []) {
-                if (!variantPricingByVariant[p.media_variant_id]) variantPricingByVariant[p.media_variant_id] = [];
-                variantPricingByVariant[p.media_variant_id].push({
-                    price_name: p.price_name,
-                    price: p.price,
-                    duration: p.duration,
-                });
             }
         }
     }
@@ -155,8 +112,6 @@ async function runExport(mediaIds) {
         'condition', 'previous_clientele', 'status',
         'variant_id', 'option1_name', 'option2_name', 'option3_name', 'option1_value', 'option2_value', 'option3_value', 'variant_title',
         'audience_category', 'seating', 'cinema_format', 'size', 'variant_rate',
-        'pricing',
-        'variant_pricing',
     ];
     const metaHeaders = allMetaKeys.map((k) => `metafield.${k}`);
     const headers = [...baseHeaders, ...metaHeaders];
@@ -167,30 +122,13 @@ async function runExport(mediaIds) {
         async start(controller) {
             controller.enqueue(encoder.encode(headerLine));
             for (const h of rows) {
-                const pricing = pricingByMedia[h.id] || [];
                 const metas = metafieldsByMedia[h.id] || {};
                 const vendorName = vendorMap[h.vendor_id] ?? '';
                 const images = imagesToPipeString(h.media);
-                const pricingStr = JSON.stringify(
-                    pricing.map((p) => ({
-                        price_name: p.price_name,
-                        price: p.price,
-                        duration: p.duration,
-                    }))
-                );
                 const mediaVariants = variantsByMedia[h.id] || [];
                 const exportRows = mediaVariants.length > 0 ? mediaVariants : [null];
 
                 for (const v of exportRows) {
-                    const variantPricing = v ? (variantPricingByVariant[v.id] || []) : [];
-                    const variantPricingStr = JSON.stringify(
-                        variantPricing.map((p) => ({
-                            price_name: p.price_name,
-                            price: p.price,
-                            duration: p.duration,
-                        }))
-                    );
-
                     const base = [
                         h.id,
                         h.vendor_id ?? '',
@@ -241,8 +179,6 @@ async function runExport(mediaIds) {
                         v?.cinema_format ?? '',
                         v?.size ?? '',
                         v?.rate ?? '',
-                        pricingStr,
-                        variantPricingStr,
                     ];
                     const metaVals = allMetaKeys.map((k) => metas[k] ?? '');
                     const rowLine = [...base, ...metaVals].map(escapeCsv).join(',') + '\n';

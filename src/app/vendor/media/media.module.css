@@ -644,7 +644,117 @@
     font-size: 13px;
 }
 
+/* Create page redesign (scoped, sidebar untouched) */
+.createMediaPage {
+    --cm-bg: #0b1220;
+    --cm-card: #0f172a;
+    --cm-border: #1e293b;
+}
+
+.createMediaContent {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 22px;
+}
+
+.createMediaShell {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.85), rgba(11, 18, 32, 0.92));
+    border: 1px solid var(--cm-border);
+    border-radius: 14px;
+    padding: 18px;
+}
+
+.createMediaForm {
+    gap: 16px;
+}
+
+.cardSection {
+    background: var(--cm-card);
+    border: 1px solid var(--cm-border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 0;
+}
+
+.createMediaPage .formSection {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.createMediaPage .sectionHead {
+    font-size: 15px;
+    margin-bottom: 10px;
+}
+
+.sectionHint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 0 0 12px;
+}
+
+.subSectionHead {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 2px 0 10px;
+}
+
+.createMediaPage .formRow {
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.createMediaPage .formGroup {
+    flex: 1 1 220px;
+}
+
+.createMediaPage .formGroup.wide {
+    flex-basis: 100%;
+}
+
+.createMediaPage .formGroup label {
+    margin-bottom: 2px;
+}
+
+.createMediaPage .formGroup input,
+.createMediaPage .formGroup textarea,
+.createMediaPage .formGroup select {
+    min-height: 40px;
+    border-radius: 8px;
+    background: #0b1324;
+}
+
+.createMediaPage .pricingRow input,
+.createMediaPage .variantRow input,
+.createMediaPage .variantLabelCell {
+    min-height: 38px;
+    border-radius: 8px;
+}
+
+.stickyFormActions {
+    position: sticky;
+    bottom: -16px;
+    z-index: 3;
+    background: rgba(11, 18, 32, 0.96);
+    backdrop-filter: blur(4px);
+    padding: 14px 12px;
+    border: 1px solid var(--cm-border);
+    border-radius: 12px;
+}
+
 @media (max-width: 768px) {
+
+    .createMediaContent {
+        padding: 12px;
+    }
+
+    .createMediaShell {
+        padding: 12px;
+    }
+
+    .cardSection {
+        padding: 12px;
+    }
 
     .pricingTiersHeader,
     .pricingRow {

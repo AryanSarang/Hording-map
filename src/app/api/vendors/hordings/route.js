@@ -220,52 +220,7 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
-        // Save variants (Shopify-style)
         const createdVariants = await saveVariantsForMedia(newHording.id, body.variants || []);
-
-        // Save pricing tiers if provided
-        const pricing = body.pricing;
-        if (Array.isArray(pricing) && pricing.length > 0) {
-            const pricingRows = pricing
-                .filter(p => p.price_name && p.price > 0 && p.duration)
-                .map((p, i) => ({
-                    media_id: newHording.id,
-                    price_name: p.price_name,
-                    price: parseInt(p.price),
-                    duration: p.duration,
-                    display_order: i,
-                    is_active: true
-                }));
-            if (pricingRows.length > 0) {
-                await supabaseAdmin.from('media_pricing').insert(pricingRows);
-            }
-        }
-
-        // Save per-variant additional pricing tiers if provided
-        if (Array.isArray(body.variantPricing) && body.variantPricing.length > 0) {
-            const rows = [];
-            for (const item of body.variantPricing) {
-                const variantId = item.variantId;
-                const foundVariant = createdVariants.find((v) => v.id === variantId || `${v.option1_value}__${v.option2_value}__${v.option3_value || ''}` === `${item.option1Value}__${item.option2Value}__${item.option3Value || ''}`);
-                if (!foundVariant) continue;
-                const tiers = Array.isArray(item.pricing) ? item.pricing : [];
-                tiers.forEach((p, i) => {
-                    if (!p?.price_name || !p?.duration || !p?.price) return;
-                    rows.push({
-                        media_variant_id: foundVariant.id,
-                        media_id: newHording.id,
-                        price_name: p.price_name,
-                        price: parseInt(p.price),
-                        duration: p.duration,
-                        display_order: Number.isFinite(Number(p.display_order)) ? Number(p.display_order) : i,
-                        is_active: p.is_active !== false,
-                    });
-                });
-            }
-            if (rows.length > 0) {
-                await supabaseAdmin.from('media_variant_pricing').insert(rows);
-            }
-        }
 
         // Save metafield values if provided
         const metafields = body.metafields;

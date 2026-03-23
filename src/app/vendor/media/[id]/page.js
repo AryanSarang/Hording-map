@@ -21,7 +21,6 @@ export default function EditMediaPage() {
     const router = useRouter();
     const params = useParams();
     const [formData, setFormData] = useState(null);
-    const [pricingRows, setPricingRows] = useState([{ priceName: '', price: '', duration: '' }]);
     const [variantRows, setVariantRows] = useState([{ option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]);
     const [optionValues, setOptionValues] = useState({ option1: '', option2: '', option3: '' });
     const [variantCustomFieldDefs, setVariantCustomFieldDefs] = useState(['']);
@@ -50,7 +49,6 @@ export default function EditMediaPage() {
                 const d = data.data;
                 setFormData({ ...d, option1Name: d.option1Name || 'Option 1', option2Name: d.option2Name || 'Option 2', option3Name: d.option3Name || '' });
                 setMetafieldValues(d.metafields || {});
-                setPricingRows(d.pricing?.length ? d.pricing : [{ priceName: '', price: '', duration: '' }]);
                 setVariantRows(
                     Array.isArray(d.variants) && d.variants.length > 0
                         ? d.variants.map((v) => ({
@@ -80,9 +78,6 @@ export default function EditMediaPage() {
         setFormData(prev => ({ ...prev, latitude: String(lat), longitude: String(lng) }));
     }
 
-    function addPricingRow() { setPricingRows(prev => [...prev, { priceName: '', price: '', duration: '' }]); }
-    function removePricingRow(i) { setPricingRows(prev => prev.filter((_, idx) => idx !== i)); }
-    function updatePricing(i, field, val) { setPricingRows(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: val } : row)); }
     function addVariantRow() { setVariantRows(prev => [...prev, { option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]); }
     function removeVariantRow(i) { setVariantRows(prev => prev.filter((_, idx) => idx !== i)); }
     function updateVariant(i, field, val) { setVariantRows(prev => prev.map((row, idx) => idx === i ? { ...row, [field]: val } : row)); }
@@ -139,12 +134,11 @@ export default function EditMediaPage() {
         setSaving(true);
         setError(null);
         try {
-            const pricing = pricingRows.filter(r => r.priceName?.trim() && r.price && r.duration?.trim()).map((r, i) => ({ price_name: r.priceName.trim(), price: parseInt(r.price) || 0, duration: r.duration.trim(), display_order: i }));
             const imageUrls = typeof formData.imageUrls === 'string' ? formData.imageUrls : (Array.isArray(formData.imageUrls) ? formData.imageUrls.join('\n') : '');
             const res = await fetch(`/api/vendors/hordings/${params.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, imageUrls: imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean), pricing, variants: normalizedVariants, option1Name: formData.option1Name, option2Name: formData.option2Name, option3Name: formData.option3Name, metafields: metafieldValues }),
+                body: JSON.stringify({ ...formData, imageUrls: imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean), variants: normalizedVariants, option1Name: formData.option1Name, option2Name: formData.option2Name, option3Name: formData.option3Name, metafields: metafieldValues }),
             });
             const data = await res.json();
             if (data.success) {
@@ -257,15 +251,6 @@ export default function EditMediaPage() {
                                 <div className={styles.formGroup}><label>Payment Terms</label><input type="text" name="paymentTerms" value={formData?.paymentTerms || ''} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label className={styles.required}>Min. Booking Duration</label><input type="text" name="minimumBookingDuration" value={formData?.minimumBookingDuration || ''} onChange={handleChange} required /></div>
                             </div>
-                            <div className={styles.pricingTiersHeader}><span>Price name</span><span>Price (₹)</span><span>Duration</span><span></span></div>
-                            {pricingRows.map((row, i) => (
-                                <div key={i} className={styles.pricingRow}>
-                                    <input type="text" placeholder="Price name" value={row.priceName} onChange={e => updatePricing(i, 'priceName', e.target.value)} />
-                                    <input type="number" placeholder="Price (₹)" value={row.price} onChange={e => updatePricing(i, 'price', e.target.value)} />
-                                    <input type="text" placeholder="Duration" value={row.duration} onChange={e => updatePricing(i, 'duration', e.target.value)} />
-                                    {i === pricingRows.length - 1 ? <button type="button" className={styles.pricingAddBtn} onClick={addPricingRow}>+ Add</button> : <button type="button" className={styles.pricingRemoveBtn} onClick={() => removePricingRow(i)}>Remove</button>}
-                                </div>
-                            ))}
                         </div>
 
                         <div className={styles.formSection}><h3 className={styles.sectionHead}>Screen / Display Details</h3>
@@ -281,7 +266,7 @@ export default function EditMediaPage() {
                         </div>
 
                         <div className={styles.formSection}>
-                            <h3 className={styles.sectionHead}>Variants (Shopify-style)</h3>
+                            <h3 className={styles.sectionHead}>Variants</h3>
                             <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>Define options, add values, generate combinations, then set rate and custom fields.</p>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Option 1 Name</label><input type="text" name="option1Name" value={formData?.option1Name || ''} onChange={handleChange} /></div>
