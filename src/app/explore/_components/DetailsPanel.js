@@ -85,7 +85,7 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                             ))}
                         </div>
 
-                        {variants.length > 0 && (
+                        {variants.length > 1 && (
                             <section>
                                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Variant</h3>
                                 <select
