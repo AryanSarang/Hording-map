@@ -652,8 +652,6 @@
 }
 
 .createMediaContent {
-    max-width: 1280px;
-    margin: 0 auto;
     padding: 22px;
 }
 
@@ -716,6 +714,36 @@
     margin-bottom: 2px;
 }
 
+.ownerRow {
+    align-items: flex-end;
+}
+
+.ownerVendorGroup {
+    flex: 2 1 420px;
+}
+
+.ownerStatusGroup {
+    flex: 1 1 240px;
+    max-width: 360px;
+}
+
+.customFieldRow {
+    align-items: flex-end;
+}
+
+.customFieldKeyGroup {
+    flex: 1 1 360px;
+}
+
+.customFieldActionGroup {
+    flex: 0 0 200px;
+}
+
+.customFieldActionGroup .pricingAddBtn,
+.customFieldActionGroup .pricingRemoveBtn {
+    width: 100%;
+}
+
 .createMediaPage .formGroup input,
 .createMediaPage .formGroup textarea,
 .createMediaPage .formGroup select {
@@ -764,5 +792,13 @@
     .variantHeader,
     .variantRow {
         grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .ownerVendorGroup,
+    .ownerStatusGroup,
+    .customFieldKeyGroup,
+    .customFieldActionGroup {
+        flex: 1 1 100%;
+        max-width: none;
     }
 }

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { getCurrentUser } from '../../../../../lib/authServer';
 
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const REQUIRED = ['city', 'state', 'address', 'latitude', 'longitude', 'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type'];
 
 function parseCsvLine(line) {
@@ -58,7 +58,6 @@ function normalizeHeader(h) {
         .toLowerCase()
         .replace(/\s+/g, '_')
         .replace(/[()]/g, '')
-        .replace(/\./g, '')
         .replace(/-/g, '_');
 }
 
@@ -145,10 +144,13 @@ export async function POST(req) {
             const cinemaName = get('cinema_name');
             const screenCode = get('screen_code');
             const auditorium = get('auditorium');
-            const option1Name = get('option1_name') || 'Screen Code';
-            const option2Name = get('option2_name') || 'Auditorium';
+            const option1Name = get('option1_name') || 'Option 1';
+            const option2Name = get('option2_name') || null;
             const option3Name = get('option3_name') || '';
+            const option1Value = get('option1_value') || screenCode || auditorium || '';
+            const option2Value = get('option2_value') || null;
             const option3Value = get('option3_value');
+            const variantTitle = get('variant_title') || cinemaName || [option1Value, option2Value, option3Value || null].filter(Boolean).join(' / ');
             const audienceCategory = get('audience_category');
             const seating = get('seating');
             const cinemaFormat = get('cinema_format');
@@ -178,6 +180,7 @@ export async function POST(req) {
             const media = imagesStr ? imagesStr.split('|').map((s) => s.trim()).filter(Boolean) : [];
 
             const metafields = {};
+            const variantCustomFields = {};
             for (const [h, idx] of Object.entries(headerIndex)) {
                 if (h.startsWith('metafield.')) {
                     const key = h.slice(10);
@@ -187,6 +190,10 @@ export async function POST(req) {
                     } else if (val && key) {
                         errs.push(`metafield "${key}" is not a created metafield - create it in Metafields first`);
                     }
+                } else if (h.startsWith('variant.')) {
+                    const key = h.slice(8);
+                    const val = cells[idx] != null ? String(cells[idx]).trim() : '';
+                    if (key && val) variantCustomFields[key] = val;
                 }
             }
 
@@ -215,47 +222,37 @@ export async function POST(req) {
                 zone: get('zone'),
                 latitude: lat,
                 longitude: lng,
-                road_name: get('road_name'),
+                locality: get('locality'),
                 poc_name: pocName,
                 poc_number: pocNumber,
                 poc_email: get('poc_email'),
                 monthly_rental: get('monthly_rental') ? parseInt(get('monthly_rental')) : null,
                 vendor_rate: get('vendor_rate') ? parseInt(get('vendor_rate')) : null,
-                payment_terms: get('payment_terms'),
                 minimum_booking_duration: minBooking,
                 media_type: mediaType,
-                width: get('width') ? parseInt(get('width')) : null,
-                height: get('height') ? parseInt(get('height')) : null,
                 media: media,
                 screen_size: get('screen_size') || null,
-                screen_number: get('screen_number') ? parseInt(get('screen_number')) : null,
-                screen_placement: get('screen_placement') || null,
                 display_format: get('display_format') || null,
-                slot_time: get('slot_time') || null,
-                loop_time: get('loop_time') || null,
                 display_hours: get('display_hours') || null,
-                traffic_type: get('traffic_type') || null,
-                visibility: get('visibility') || 'Prime',
-                dwell_time: get('dwell_time') || null,
-                condition: get('condition') || null,
-                previous_clientele: get('previous_clientele') || null,
                 status: statusVal,
                 metafields,
                 variants: [{
-                    variantTitle: cinemaName || [screenCode || 'Default', auditorium || 'Default', option3Value || null].filter(Boolean).join(' / '),
-                    option1Value: screenCode || 'Default',
-                    option2Value: auditorium || 'Default',
+                    variantTitle,
+                    option1Value,
+                    option2Value,
                     option3Value: option3Value || null,
                     audienceCategory: audienceCategory || null,
                     seating: seating ? parseInt(seating) : null,
                     cinemaFormat: cinemaFormat || null,
                     size: size || get('screen_size') || null,
                     rate: variantRate ? parseInt(variantRate) : (get('monthly_rental') ? parseInt(get('monthly_rental')) : null),
+                    customFields: variantCustomFields,
                     displayOrder: 0,
                 }],
                 option1_name: option1Name,
                 option2_name: option2Name,
                 option3_name: option3Name || null,
+                pricing_rules: get('pricing_rules'),
             });
         }
 
@@ -278,17 +275,41 @@ export async function POST(req) {
         let imported = 0;
         for (const [, groupRows] of grouped) {
             const base = groupRows[0];
-            const { metafields: m, variants: _, key, rowNum, ...hPayload } = base;
+            const { metafields: m, variants: _, key, rowNum, pricing_rules, ...hPayload } = base;
+            const dedupe = new Set();
+            const variantsToInsert = [];
+            groupRows.forEach((row, idx) => {
+                (row.variants || []).forEach((v) => {
+                    if (!v.option1Value) return;
+                    const k = `${v.option1Value}__${v.option2Value || ''}__${v.option3Value || ''}`.toLowerCase();
+                    if (dedupe.has(k)) return;
+                    dedupe.add(k);
+                    variantsToInsert.push({
+                        variant_title: v.variantTitle || null,
+                        option1_value: v.option1Value,
+                        option2_value: v.option2Value || null,
+                        option3_value: v.option3Value || null,
+                        audience_category: v.audienceCategory,
+                        seating: v.seating,
+                        cinema_format: v.cinemaFormat,
+                        size: v.size,
+                        rate: v.rate,
+                        custom_fields: v.customFields || {},
+                        display_order: idx,
+                        is_active: true,
+                    });
+                });
+            });
             const { data: newH, error: insertErr } = await supabaseAdmin
                 .from('media')
                 .insert([{
                     ...hPayload,
                     user_id: user.id,
                     title: base.address,
-                    has_variants: true,
-                    option1_name: base.option1_name || 'Option 1',
-                    option2_name: base.option2_name || 'Option 2',
-                    option3_name: base.option3_name || null,
+                    has_variants: variantsToInsert.length > 0,
+                    option1_name: variantsToInsert.length > 0 ? (base.option1_name || 'Option 1') : null,
+                    option2_name: variantsToInsert.length > 0 ? (base.option2_name || null) : null,
+                    option3_name: variantsToInsert.length > 0 ? (base.option3_name || null) : null,
                 }])
                 .select()
                 .single();
@@ -319,44 +340,32 @@ export async function POST(req) {
                 );
             }
 
-            // Save grouped variants for this parent media
-            const variantsToInsert = [];
-            const dedupe = new Set();
-            groupRows.forEach((row, idx) => {
-                (row.variants || []).forEach((v) => {
-                    const k = `${v.option1Value}__${v.option2Value}__${v.option3Value || ''}`.toLowerCase();
-                    if (dedupe.has(k)) return;
-                    dedupe.add(k);
-                    variantsToInsert.push({
-                        media_id: newH.id,
-                        variant_title: v.variantTitle,
-                        option1_value: v.option1Value,
-                        option2_value: v.option2Value,
-                        option3_value: v.option3Value || null,
-                        audience_category: v.audienceCategory,
-                        seating: v.seating,
-                        cinema_format: v.cinemaFormat,
-                        size: v.size,
-                        rate: v.rate,
-                        display_order: idx,
-                        is_active: true,
-                    });
-                });
-            });
-
-            if (variantsToInsert.length === 0) {
-                variantsToInsert.push({
-                    media_id: newH.id,
-                    variant_title: 'Default',
-                    option1_value: 'Default',
-                    option2_value: 'Default',
-                    option3_value: null,
-                    rate: newH.monthly_rental,
-                    display_order: 0,
-                    is_active: true,
-                });
+            if (variantsToInsert.length > 0) {
+                await supabaseAdmin
+                    .from('media_variants')
+                    .insert(variantsToInsert.map((v) => ({ ...v, media_id: newH.id })));
             }
-            await supabaseAdmin.from('media_variants').insert(variantsToInsert);
+
+            const pricingRules = String(pricing_rules || '')
+                .split('|')
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((entry, idx) => {
+                    const [ruleName, optionLabel, multiplierStr] = entry.split(':').map((v) => String(v || '').trim());
+                    const multiplier = Number(multiplierStr);
+                    if (!ruleName || !optionLabel || !Number.isFinite(multiplier) || multiplier <= 0) return null;
+                    return {
+                        media_id: newH.id,
+                        rule_name: ruleName,
+                        option_label: optionLabel,
+                        multiplier,
+                        display_order: idx,
+                    };
+                })
+                .filter(Boolean);
+            if (pricingRules.length > 0) {
+                await supabaseAdmin.from('media_pricing_rules').insert(pricingRules);
+            }
             imported++;
         }
 

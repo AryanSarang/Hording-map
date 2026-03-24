@@ -63,8 +63,7 @@ export default function ExploreView({ hoardings, user }) {
 
     const handleCreatePlan = async (name) => {
         if (!isAuthenticated) {
-            alert('Please log in to create and save plans.');
-            return;
+            return { success: false, error: 'Please log in to create and save plans.' };
         }
         try {
             const res = await fetch('/api/plans', {
@@ -81,9 +80,10 @@ export default function ExploreView({ hoardings, user }) {
             const nextPlans = [newPlan, ...plans];
             setPlans(nextPlans);
             setCurrentPlan(newPlan);
+            return { success: true, plan: newPlan };
         } catch (err) {
             console.error('Create plan error:', err);
-            alert(err?.message || 'Failed to create plan');
+            return { success: false, error: err?.message || 'Failed to create plan' };
         }
     };
 
@@ -115,6 +115,32 @@ export default function ExploreView({ hoardings, user }) {
         } catch (err) {
             console.error('Add to plan error:', err);
             alert(err?.message || 'Failed to add to plan');
+        }
+    };
+
+    const handleCreateAiPlan = async (payload) => {
+        if (!isAuthenticated) {
+            return { success: false, error: 'Please log in to create and save plans.' };
+        }
+        try {
+            const res = await fetch('/api/plans/ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Failed to create AI plan');
+            }
+            const created = data.plan;
+            const nextPlans = [created, ...plans];
+            setPlans(nextPlans);
+            setCurrentPlan(created);
+            return { success: true, plan: created, analysis: data.analysis };
+        } catch (err) {
+            console.error('AI plan creation error:', err);
+            return { success: false, error: err?.message || 'Failed to create AI plan' };
         }
     };
     // -----------------------------
@@ -172,6 +198,7 @@ export default function ExploreView({ hoardings, user }) {
                     currentPlan={currentPlan}
                     onSwitchPlan={setCurrentPlan}
                     onCreatePlan={handleCreatePlan}
+                    onCreateAiPlan={handleCreateAiPlan}
                     user={user}
                     isAuthenticated={isAuthenticated}
                     loadingPlans={loadingPlans}

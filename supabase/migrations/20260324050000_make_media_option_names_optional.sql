@@ -1,0 +1,3 @@
+ALTER TABLE public.media
+  ALTER COLUMN option1_name DROP NOT NULL,
+  ALTER COLUMN option2_name DROP NOT NULL;

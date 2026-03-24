@@ -1,8 +1,9 @@
 // app/explore/_components/ExploreHeader.js
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
+import { Sparkles } from 'lucide-react';
 
 function getDisplayName(user) {
     if (!user) return 'Guest';
@@ -17,10 +18,14 @@ function getUserInitials(user) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCreatePlan, user, isAuthenticated, loadingPlans, planError }) {
+export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCreatePlan, onCreateAiPlan, user, isAuthenticated, loadingPlans, planError }) {
     const [isPlanOpen, setIsPlanOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [newPlanName, setNewPlanName] = useState("");
+    const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiBusy, setAiBusy] = useState(false);
+    const [aiNotice, setAiNotice] = useState(null);
 
     const handleCreate = async (e) => {
         e.preventDefault();
@@ -35,11 +40,51 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
         }
     };
 
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('explore_ai_prompt_v1');
+            if (saved) setAiPrompt(saved);
+        } catch {
+            // ignore storage failures
+        }
+    }, []);
+
+    const handleAiSubmit = async (e) => {
+        e.preventDefault();
+        if (!isAuthenticated) {
+            setAiNotice({ type: 'error', text: 'Please log in to use AI planning.' });
+            return;
+        }
+        if (!aiPrompt.trim()) {
+            setAiNotice({ type: 'error', text: 'Describe your campaign in one sentence.' });
+            return;
+        }
+        try {
+            localStorage.setItem('explore_ai_prompt_v1', aiPrompt);
+        } catch {
+            // ignore storage failures
+        }
+        setAiBusy(true);
+        setAiNotice(null);
+        const result = await onCreateAiPlan({ prompt: aiPrompt });
+        setAiBusy(false);
+        if (result?.success) {
+            setAiNotice({
+                type: 'success',
+                text: `Plan created: ${result.plan?.name || 'AI Plan'} | ${result.analysis?.selectedCount || 0} media | ₹${(result.analysis?.spend || 0).toLocaleString()}`,
+            });
+            setIsAiPanelOpen(false);
+            setAiPrompt('');
+        } else {
+            setAiNotice({ type: 'error', text: result?.error || 'Failed to create AI plan.' });
+        }
+    };
+
     return (
         <header className="h-14 bg-black border-b border-gray-800 flex items-center justify-between px-4 sticky top-0 z-50 shrink-0">
 
             {/* LEFT: PLAN SWITCHER */}
-            <div className="relative">
+            <div className="relative flex items-center gap-2">
                 <button
                     onClick={() => isAuthenticated && setIsPlanOpen(!isPlanOpen)}
                     disabled={!isAuthenticated}
@@ -60,6 +105,17 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                             <span className="text-[10px] text-gray-500 mt-1">▼</span>
                         </div>
                     </div>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setIsAiPanelOpen(true)}
+                    className="h-9 min-w-[260px] rounded-lg border border-gray-700 bg-[#0f1115] px-3 text-left text-xs text-gray-300 hover:border-green-500 focus:border-green-500"
+                >
+                    <span className="flex items-center gap-2">
+                        <Sparkles size={14} className="text-cyan-300" />
+                        <span className="text-gray-400">Create plan with AI</span>
+                    </span>
                 </button>
 
                 {isPlanOpen && isAuthenticated && (
@@ -115,6 +171,39 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                         </div>
                     </div>
                 )}
+
+                {isAiPanelOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-[420px] bg-[#111] border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                        <div className="px-4 py-3 border-b border-gray-800">
+                            <p className="text-xs font-bold text-white">AI Plan Builder</p>
+                            <p className="text-[11px] text-gray-500">Type naturally. AI will extract city, budget, media types and preferences.</p>
+                        </div>
+                        <form onSubmit={handleAiSubmit} className="p-4 space-y-3">
+                            <textarea
+                                rows={5}
+                                required
+                                value={aiPrompt}
+                                onChange={(e) => setAiPrompt(e.target.value)}
+                                placeholder="Example: Create a plan for my medicine brand in Mumbai. Budget is 4 lakh. Prefer cinema and bus shelter near hospitals and high traffic areas."
+                                className="w-full resize-none bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-white outline-none focus:border-green-500 placeholder-gray-500"
+                            />
+                            <div className="flex items-center justify-end">
+                                <button
+                                    type="submit"
+                                    disabled={aiBusy}
+                                    className="bg-green-600 hover:bg-green-500 disabled:opacity-60 text-black px-4 py-2 rounded text-xs font-bold transition-colors"
+                                >
+                                    {aiBusy ? 'Planning...' : 'Create Plan'}
+                                </button>
+                            </div>
+                            {aiNotice && (
+                                <div className={`rounded px-2 py-1 text-[11px] ${aiNotice.type === 'success' ? 'bg-green-500/10 text-green-300 border border-green-500/30' : 'bg-red-500/10 text-red-300 border border-red-500/30'}`}>
+                                    {aiNotice.text}
+                                </div>
+                            )}
+                        </form>
+                    </div>
+                )}
             </div>
 
             {/* RIGHT: PROFILE MENU */}
@@ -162,10 +251,10 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                 )}
             </div>
 
-            {(isPlanOpen || isProfileOpen) && (
+            {(isPlanOpen || isProfileOpen || isAiPanelOpen) && (
                 <div
                     className="fixed inset-0 z-40 bg-transparent"
-                    onClick={() => { setIsPlanOpen(false); setIsProfileOpen(false); }}
+                    onClick={() => { setIsPlanOpen(false); setIsProfileOpen(false); setIsAiPanelOpen(false); }}
                 />
             )}
         </header>

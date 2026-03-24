@@ -15,12 +15,11 @@ function mapToFrontend(h) {
         state: h.state,
         address: h.address,
         landmark: h.landmark,
+        locality: h.locality,
         pincode: h.pincode,
         zone: h.zone,
         latitude: h.latitude,
         longitude: h.longitude,
-
-        roadName: h.road_name,
 
         pocName: h.poc_name,
         pocNumber: h.poc_number,
@@ -28,33 +27,19 @@ function mapToFrontend(h) {
 
         rate: h.monthly_rental,
         ourRate: h.vendor_rate,
-        paymentTerms: h.payment_terms,
         minimumBookingDuration: h.minimum_booking_duration,
 
         mediaType: h.media_type,
-        width: h.width,
-        height: h.height,
         imageUrls: Array.isArray(h.media) ? h.media.join('\n') : (h.media || ''),
 
         screenSize: h.screen_size,
-        screenNumber: h.screen_number,
-        screenPlacement: h.screen_placement,
         displayFormat: h.display_format,
-        slotTime: h.slot_time,
-        loopTime: h.loop_time,
         displayHours: h.display_hours,
-
-        trafficType: h.traffic_type,
-        visibility: h.visibility,
-        dwellTime: h.dwell_time,
-
-        condition: h.condition,
-        previousClientele: h.previous_clientele,
         status: h.status,
         title: h.title,
         hasVariants: h.has_variants,
-        option1Name: h.option1_name || 'Option 1',
-        option2Name: h.option2_name || 'Option 2',
+        option1Name: h.option1_name || '',
+        option2Name: h.option2_name || '',
         option3Name: h.option3_name || '',
     };
 }
@@ -81,14 +66,14 @@ function mapVariantToFrontend(v) {
 }
 
 function normalizeVariant(input, index = 0) {
-    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
-    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || 'Default';
+    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim();
+    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || null;
     const option3 = String(input.option3Value ?? '').trim() || null;
     const rateRaw = input.rate ?? input.monthly_rental ?? input.price;
     const rate = rateRaw != null && String(rateRaw).trim() !== '' ? parseInt(rateRaw) : null;
     const customFields = input.customFields && typeof input.customFields === 'object' ? input.customFields : {};
     return {
-        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim(),
+        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim() || null,
         option1_value: option1,
         option2_value: option2,
         option3_value: option3,
@@ -102,6 +87,19 @@ function normalizeVariant(input, index = 0) {
         photographs: String(input.photographs ?? '').trim() || null,
         custom_fields: customFields,
         is_active: input.isActive !== false,
+        display_order: Number.isFinite(Number(input.displayOrder)) ? Number(input.displayOrder) : index,
+    };
+}
+
+function normalizePricingRule(input, index = 0) {
+    const ruleName = String(input.ruleName ?? '').trim();
+    const optionLabel = String(input.optionLabel ?? '').trim();
+    const multiplier = Number(input.multiplier);
+    if (!ruleName || !optionLabel || !Number.isFinite(multiplier) || multiplier <= 0) return null;
+    return {
+        rule_name: ruleName,
+        option_label: optionLabel,
+        multiplier,
         display_order: Number.isFinite(Number(input.displayOrder)) ? Number(input.displayOrder) : index,
     };
 }
@@ -130,9 +128,10 @@ export async function GET(req, { params }) {
         if (error) throw error;
         if (!data) return NextResponse.json({ success: false, error: 'Hording not found' }, { status: 404 });
 
-        const [{ data: metafieldRows }, { data: variants }] = await Promise.all([
+        const [{ data: metafieldRows }, { data: variants }, { data: pricingRules }] = await Promise.all([
             supabaseAdmin.from('media_metafields').select('vendor_metafield_id, value').eq('media_id', data.id),
             supabaseAdmin.from('media_variants').select('*').eq('media_id', data.id).order('display_order'),
+            supabaseAdmin.from('media_pricing_rules').select('*').eq('media_id', data.id).order('display_order'),
         ]);
 
         const metafields = {};
@@ -147,6 +146,13 @@ export async function GET(req, { params }) {
                 metafields,
                 variants: (variants || []).map((v) => ({
                     ...mapVariantToFrontend(v),
+                })),
+                pricingRules: (pricingRules || []).map((r) => ({
+                    id: r.id,
+                    ruleName: r.rule_name,
+                    optionLabel: r.option_label,
+                    multiplier: r.multiplier,
+                    displayOrder: r.display_order,
                 })),
             }
         }, { status: 200 });
@@ -186,13 +192,12 @@ export async function PUT(req, { params }) {
         if (body.state !== undefined) dbPayload.state = body.state;
         if (body.address !== undefined) dbPayload.address = body.address;
         if (body.landmark !== undefined) dbPayload.landmark = body.landmark;
+        if (body.locality !== undefined) dbPayload.locality = body.locality;
         if (body.pincode !== undefined) dbPayload.pincode = body.pincode;
         if (body.zone !== undefined) dbPayload.zone = body.zone;
 
         if (body.latitude !== undefined) dbPayload.latitude = parseFloat(body.latitude);
         if (body.longitude !== undefined) dbPayload.longitude = parseFloat(body.longitude);
-
-        if (body.roadName !== undefined) dbPayload.road_name = body.roadName;
 
         if (body.pocName !== undefined) dbPayload.poc_name = body.pocName;
         if (body.pocNumber !== undefined) dbPayload.poc_number = body.pocNumber;
@@ -200,12 +205,9 @@ export async function PUT(req, { params }) {
 
         if (body.rate !== undefined) dbPayload.monthly_rental = body.rate ? parseInt(body.rate) : null;
         if (body.ourRate !== undefined) dbPayload.vendor_rate = body.ourRate ? parseInt(body.ourRate) : null;
-        if (body.paymentTerms !== undefined) dbPayload.payment_terms = body.paymentTerms;
         if (body.minimumBookingDuration !== undefined) dbPayload.minimum_booking_duration = body.minimumBookingDuration;
 
         if (body.mediaType !== undefined) dbPayload.media_type = body.mediaType;
-        if (body.width !== undefined) dbPayload.width = body.width ? parseInt(body.width) : null;
-        if (body.height !== undefined) dbPayload.height = body.height ? parseInt(body.height) : null;
         if (body.imageUrls !== undefined) {
             dbPayload.media = typeof body.imageUrls === 'string'
                 ? body.imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
@@ -213,25 +215,32 @@ export async function PUT(req, { params }) {
         }
 
         if (body.screenSize !== undefined) dbPayload.screen_size = body.screenSize;
-        if (body.screenNumber !== undefined) dbPayload.screen_number = body.screenNumber ? parseInt(body.screenNumber) : null;
-        if (body.screenPlacement !== undefined) dbPayload.screen_placement = body.screenPlacement;
         if (body.displayFormat !== undefined) dbPayload.display_format = body.displayFormat;
-        if (body.slotTime !== undefined) dbPayload.slot_time = body.slotTime;
-        if (body.loopTime !== undefined) dbPayload.loop_time = body.loopTime;
         if (body.displayHours !== undefined) dbPayload.display_hours = body.displayHours;
-
-        if (body.trafficType !== undefined) dbPayload.traffic_type = body.trafficType;
-        if (body.visibility !== undefined) dbPayload.visibility = body.visibility;
-        if (body.dwellTime !== undefined) dbPayload.dwell_time = body.dwellTime;
-
-        if (body.condition !== undefined) dbPayload.condition = body.condition;
-        if (body.previousClientele !== undefined) dbPayload.previous_clientele = body.previousClientele;
         if (body.status !== undefined) dbPayload.status = body.status;
         if (body.title !== undefined) dbPayload.title = body.title || null;
         if (body.hasVariants !== undefined) dbPayload.has_variants = !!body.hasVariants;
         if (body.option1Name !== undefined) dbPayload.option1_name = body.option1Name || 'Option 1';
-        if (body.option2Name !== undefined) dbPayload.option2_name = body.option2Name || 'Option 2';
+        if (body.option2Name !== undefined) dbPayload.option2_name = body.option2Name || null;
         if (body.option3Name !== undefined) dbPayload.option3_name = body.option3Name || null;
+
+        const normalizedVariantsForSave = Array.isArray(body.variants)
+            ? body.variants
+                .map((v, i) => normalizeVariant(v, i))
+                .filter((v) => v.option1_value)
+            : null;
+        if (Array.isArray(body.variants)) {
+            dbPayload.has_variants = normalizedVariantsForSave.length > 0;
+            if (!dbPayload.has_variants) {
+                dbPayload.option1_name = null;
+                dbPayload.option2_name = null;
+                dbPayload.option3_name = null;
+            } else {
+                dbPayload.option1_name = body.option1Name || 'Option 1';
+                dbPayload.option2_name = body.option2Name || null;
+                dbPayload.option3_name = body.option3Name || null;
+            }
+        }
 
         const { data, error } = await supabaseAdmin
             .from('media')
@@ -245,12 +254,11 @@ export async function PUT(req, { params }) {
 
         // Save variants set if provided (replace-all strategy)
         if (Array.isArray(body.variants)) {
-            const normalized = body.variants.map((v, i) => normalizeVariant(v, i));
-            const withDefault = normalized.length > 0 ? normalized : [normalizeVariant({}, 0)];
+            const normalized = normalizedVariantsForSave;
 
             const pairSet = new Set();
-            for (const v of withDefault) {
-                const key = `${v.option1_value}__${v.option2_value}__${v.option3_value || ''}`.toLowerCase();
+            for (const v of normalized) {
+                const key = `${v.option1_value}__${v.option2_value || ''}__${v.option3_value || ''}`.toLowerCase();
                 if (pairSet.has(key)) {
                     return NextResponse.json({ success: false, error: `Duplicate variant pair: ${v.option1_value} + ${v.option2_value}${v.option3_value ? ` + ${v.option3_value}` : ''}` }, { status: 400 });
                 }
@@ -259,13 +267,27 @@ export async function PUT(req, { params }) {
 
             await supabaseAdmin.from('media_variants').delete().eq('media_id', id);
 
-            const { error: variantInsertError } = await supabaseAdmin
-                .from('media_variants')
-                .insert(withDefault.map((v) => ({ ...v, media_id: id })))
-                .select('*');
-            if (variantInsertError) throw variantInsertError;
+            if (normalized.length > 0) {
+                const { error: variantInsertError } = await supabaseAdmin
+                    .from('media_variants')
+                    .insert(normalized.map((v) => ({ ...v, media_id: id })))
+                    .select('*');
+                if (variantInsertError) throw variantInsertError;
+            }
 
             // Variants now only use fixed rate and custom fields.
+        }
+
+        if (Array.isArray(body.pricingRules)) {
+            const normalizedRules = body.pricingRules
+                .map((r, i) => normalizePricingRule(r, i))
+                .filter(Boolean);
+            await supabaseAdmin.from('media_pricing_rules').delete().eq('media_id', id);
+            if (normalizedRules.length > 0) {
+                await supabaseAdmin
+                    .from('media_pricing_rules')
+                    .insert(normalizedRules.map((r) => ({ ...r, media_id: id })));
+            }
         }
 
         // Save metafield values if provided

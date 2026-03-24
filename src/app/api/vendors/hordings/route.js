@@ -4,15 +4,15 @@ import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
 
 function normalizeVariant(input, index = 0) {
-    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
-    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || 'Default';
+    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim();
+    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || null;
     const option3 = String(input.option3Value ?? '').trim() || null;
     const rateRaw = input.rate ?? input.monthly_rental ?? input.price;
     const rate = rateRaw != null && String(rateRaw).trim() !== '' ? parseInt(rateRaw) : null;
     const customFields = input.customFields && typeof input.customFields === 'object' ? input.customFields : {};
 
     const variant = {
-        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim(),
+        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim() || null,
         option1_value: option1,
         option2_value: option2,
         option3_value: option3,
@@ -31,17 +31,30 @@ function normalizeVariant(input, index = 0) {
     return variant;
 }
 
+function normalizePricingRule(input, index = 0) {
+    const ruleName = String(input.ruleName ?? '').trim();
+    const optionLabel = String(input.optionLabel ?? '').trim();
+    const multiplier = Number(input.multiplier);
+    if (!ruleName || !optionLabel || !Number.isFinite(multiplier) || multiplier <= 0) return null;
+    return {
+        rule_name: ruleName,
+        option_label: optionLabel,
+        multiplier,
+        display_order: Number.isFinite(Number(input.displayOrder)) ? Number(input.displayOrder) : index,
+    };
+}
+
 async function saveVariantsForMedia(mediaId, variantsInput = []) {
     const variants = (Array.isArray(variantsInput) ? variantsInput : [])
         .map((v, i) => normalizeVariant(v, i));
 
-    // Ensure at least one variant exists
-    const normalized = variants.length > 0 ? variants : [normalizeVariant({}, 0)];
+    const normalized = variants.filter((v) => v.option1_value);
+    if (normalized.length === 0) return [];
 
     // Dedupe guard for option pair inside one media
     const seen = new Set();
     for (const v of normalized) {
-        const key = `${v.option1_value}__${v.option2_value}__${v.option3_value || ''}`.toLowerCase();
+        const key = `${v.option1_value}__${v.option2_value || ''}__${v.option3_value || ''}`.toLowerCase();
         if (seen.has(key)) {
             throw new Error(`Duplicate variant pair: ${v.option1_value} + ${v.option2_value}${v.option3_value ? ` + ${v.option3_value}` : ''}`);
         }
@@ -161,52 +174,40 @@ export async function POST(req) {
             state: body.state,
             address: body.address,
             landmark: body.landmark,
+            locality: body.locality,
             pincode: body.pincode,
             zone: body.zone,
 
             latitude: parseFloat(body.latitude),
             longitude: parseFloat(body.longitude),
 
-            road_name: body.roadName,
             poc_name: body.pocName,
             poc_number: body.pocNumber,
             poc_email: body.pocEmail,
 
             monthly_rental: body.rate ? parseInt(body.rate) : null,
             vendor_rate: body.ourRate ? parseInt(body.ourRate) : null,
-            payment_terms: body.paymentTerms,
             minimum_booking_duration: body.minimumBookingDuration,
 
             media_type: body.mediaType,
             media: body.imageUrls || [],
 
-            width: body.width ? parseInt(body.width) : null,
-            height: body.height ? parseInt(body.height) : null,
-
             screen_size: body.screenSize,
-            screen_number: body.screenNumber ? parseInt(body.screenNumber) : null,
-            screen_placement: body.screenPlacement,
             display_format: body.displayFormat,
-            slot_time: body.slotTime,
-            loop_time: body.loopTime,
             display_hours: body.displayHours,
-
-            traffic_type: body.trafficType,
-            visibility: body.visibility,
-            dwell_time: body.dwellTime,
-
-            condition: body.condition,
-            previous_clientele: body.previousClientele,
 
             status: body.status || 'active'
         };
         dbPayload.user_id = user.id;
 
         if (body.title !== undefined) dbPayload.title = body.title || null;
-        dbPayload.has_variants = true;
-        dbPayload.option1_name = body.option1Name || 'Option 1';
-        dbPayload.option2_name = body.option2Name || 'Option 2';
-        dbPayload.option3_name = body.option3Name || null;
+        const normalizedVariantsInput = (Array.isArray(body.variants) ? body.variants : [])
+            .map((v, i) => normalizeVariant(v, i))
+            .filter((v) => v.option1_value);
+        dbPayload.has_variants = normalizedVariantsInput.length > 0;
+        dbPayload.option1_name = dbPayload.has_variants ? (body.option1Name || 'Option 1') : null;
+        dbPayload.option2_name = dbPayload.has_variants ? (body.option2Name || null) : null;
+        dbPayload.option3_name = dbPayload.has_variants ? (body.option3Name || null) : null;
 
         // Basic validation
         for (const field of ['city', 'address', 'latitude', 'longitude', 'minimum_booking_duration', 'media_type']) {
@@ -233,7 +234,15 @@ export async function POST(req) {
             }, { status: 400 });
         }
 
-        const createdVariants = await saveVariantsForMedia(newHording.id, body.variants || []);
+        const createdVariants = await saveVariantsForMedia(newHording.id, normalizedVariantsInput);
+        const pricingRules = (Array.isArray(body.pricingRules) ? body.pricingRules : [])
+            .map((r, i) => normalizePricingRule(r, i))
+            .filter(Boolean);
+        if (pricingRules.length > 0) {
+            await supabaseAdmin
+                .from('media_pricing_rules')
+                .insert(pricingRules.map((r) => ({ ...r, media_id: newHording.id })));
+        }
 
         // Save metafield values if provided
         const metafields = body.metafields;

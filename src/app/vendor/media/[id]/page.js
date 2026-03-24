@@ -13,15 +13,15 @@ const LocationPicker = dynamic(() => import('../components/LocationPicker'), {
     loading: () => <div className={styles.mapPlaceholder}>Loading map...</div>,
 });
 
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
-const SCREEN_PLACEMENT_OPTIONS = ['Residential', 'Corporate', 'Cinema'];
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const STATUS_OPTIONS = ['active', 'inactive', 'maintenance'];
 
 export default function EditMediaPage() {
     const router = useRouter();
     const params = useParams();
     const [formData, setFormData] = useState(null);
-    const [variantRows, setVariantRows] = useState([{ option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]);
+    const [variantRows, setVariantRows] = useState([]);
+    const [pricingRules, setPricingRules] = useState([{ ruleName: '', optionLabel: '', multiplier: '' }]);
     const [optionValues, setOptionValues] = useState({ option1: '', option2: '', option3: '' });
     const [variantCustomFieldDefs, setVariantCustomFieldDefs] = useState(['']);
     const [loading, setLoading] = useState(true);
@@ -30,9 +30,6 @@ export default function EditMediaPage() {
     const [saved, setSaved] = useState(false);
     const [vendorMetafields, setVendorMetafields] = useState([]);
     const [metafieldValues, setMetafieldValues] = useState({});
-
-    const isDigitalScreens = formData?.mediaType === 'Digital Screens';
-    const isResidentialOrCorporate = formData?.mediaType === 'Residential' || formData?.mediaType === 'Corporate';
 
     useEffect(() => {
         fetchItem();
@@ -47,7 +44,7 @@ export default function EditMediaPage() {
             const data = await res.json();
             if (data.success) {
                 const d = data.data;
-                setFormData({ ...d, option1Name: d.option1Name || 'Option 1', option2Name: d.option2Name || 'Option 2', option3Name: d.option3Name || '' });
+                setFormData({ ...d, option1Name: d.option1Name || '', option2Name: d.option2Name || '', option3Name: d.option3Name || '' });
                 setMetafieldValues(d.metafields || {});
                 setVariantRows(
                     Array.isArray(d.variants) && d.variants.length > 0
@@ -59,11 +56,22 @@ export default function EditMediaPage() {
                             rate: v.rate ?? '',
                             customFields: v.customFields || {},
                         }))
-                        : [{ option1Value: '', option2Value: '', option3Value: '', rate: '', customFields: {} }]
+                        : []
                 );
                 const defs = new Set();
                 (d.variants || []).forEach((v) => Object.keys(v.customFields || {}).forEach((k) => k && defs.add(k)));
                 setVariantCustomFieldDefs(defs.size > 0 ? Array.from(defs) : ['']);
+                setPricingRules(
+                    Array.isArray(d.pricingRules) && d.pricingRules.length > 0
+                        ? d.pricingRules.map((r) => ({
+                            id: r.id,
+                            ruleName: r.ruleName || '',
+                            optionLabel: r.optionLabel || '',
+                            multiplier: r.multiplier ?? '',
+                            displayOrder: r.displayOrder ?? 0,
+                        }))
+                        : [{ ruleName: '', optionLabel: '', multiplier: '' }]
+                );
             } else setError(data.error || 'Failed to fetch media');
         } catch (err) { setError('Error fetching media'); }
         finally { setLoading(false); }
@@ -85,24 +93,33 @@ export default function EditMediaPage() {
     function addVariantCustomFieldDef() { setVariantCustomFieldDefs(prev => [...prev, '']); }
     function updateVariantCustomFieldDef(i, val) { setVariantCustomFieldDefs(prev => prev.map((k, idx) => idx === i ? val : k)); }
     function removeVariantCustomFieldDef(i) { setVariantCustomFieldDefs(prev => prev.filter((_, idx) => idx !== i)); }
+    function addPricingRule() { setPricingRules(prev => [...prev, { ruleName: '', optionLabel: '', multiplier: '' }]); }
+    function removePricingRule(i) { setPricingRules(prev => prev.filter((_, idx) => idx !== i)); }
+    function updatePricingRule(i, key, val) { setPricingRules(prev => prev.map((row, idx) => idx === i ? { ...row, [key]: val } : row)); }
     function generateVariantCombinations() {
         const parseValues = (s) => String(s || '').split(',').map(v => v.trim()).filter(Boolean);
         const v1 = parseValues(optionValues.option1);
         const v2 = parseValues(optionValues.option2);
         const v3 = parseValues(optionValues.option3);
-        if (v1.length === 0 || v2.length === 0) {
-            setError('Add comma-separated values for Option 1 and Option 2 to generate variants.');
+        if (v1.length === 0 && v2.length === 0 && v3.length === 0) {
+            setError('Add comma-separated values for at least one option to generate variants.');
             return;
         }
         const all = [];
-        for (const a of v1) {
-            for (const b of v2) {
-                if (v3.length > 0) {
-                    for (const c of v3) all.push({ option1Value: a, option2Value: b, option3Value: c, rate: '', customFields: {} });
-                } else {
-                    all.push({ option1Value: a, option2Value: b, option3Value: '', rate: '', customFields: {} });
-                }
-            }
+        if (v1.length > 0 && v2.length === 0 && v3.length === 0) {
+            v1.forEach((a) => all.push({ option1Value: a, option2Value: '', option3Value: '', rate: '', customFields: {} }));
+        } else if (v1.length > 0 && v2.length > 0 && v3.length === 0) {
+            for (const a of v1) for (const b of v2) all.push({ option1Value: a, option2Value: b, option3Value: '', rate: '', customFields: {} });
+        } else if (v1.length > 0 && v2.length > 0 && v3.length > 0) {
+            for (const a of v1) for (const b of v2) for (const c of v3) all.push({ option1Value: a, option2Value: b, option3Value: c, rate: '', customFields: {} });
+        } else if (v1.length === 0 && v2.length > 0 && v3.length === 0) {
+            v2.forEach((b) => all.push({ option1Value: b, option2Value: '', option3Value: '', rate: '', customFields: {} }));
+        } else if (v1.length === 0 && v2.length === 0 && v3.length > 0) {
+            v3.forEach((c) => all.push({ option1Value: c, option2Value: '', option3Value: '', rate: '', customFields: {} }));
+        } else if (v1.length === 0 && v2.length > 0 && v3.length > 0) {
+            for (const b of v2) for (const c of v3) all.push({ option1Value: b, option2Value: c, option3Value: '', rate: '', customFields: {} });
+        } else if (v1.length > 0 && v2.length === 0 && v3.length > 0) {
+            for (const a of v1) for (const c of v3) all.push({ option1Value: a, option2Value: c, option3Value: '', rate: '', customFields: {} });
         }
         setVariantRows(all);
     }
@@ -114,23 +131,32 @@ export default function EditMediaPage() {
         const lng = parseFloat(formData.longitude);
         if (!formData.latitude || !formData.longitude || isNaN(lat) || isNaN(lng)) { setError('Please select a location on the map'); return; }
         const normalizedVariants = variantRows
-            .filter(v => v.option1Value?.trim() || v.option2Value?.trim() || v.option3Value?.trim() || v.rate)
+            .filter(v => v.option1Value?.trim() || v.option2Value?.trim() || v.option3Value?.trim() || v.rate || Object.keys(v.customFields || {}).length > 0)
             .map((v, i) => ({
                 id: v.id,
-                option1Value: v.option1Value?.trim() || 'Default',
-                option2Value: v.option2Value?.trim() || 'Default',
+                option1Value: v.option1Value?.trim() || '',
+                option2Value: v.option2Value?.trim() || null,
                 option3Value: v.option3Value?.trim() || null,
                 rate: v.rate ? parseInt(v.rate) : null,
                 customFields: v.customFields || {},
                 displayOrder: i,
-            }));
-        if (normalizedVariants.length === 0) { setError('Add at least one variant.'); return; }
+            }))
+            .filter((v) => v.option1Value);
         const pairSet = new Set();
         for (const v of normalizedVariants) {
-            const key = `${v.option1Value}__${v.option2Value}__${v.option3Value || ''}`.toLowerCase();
+            const key = `${v.option1Value}__${v.option2Value || ''}__${v.option3Value || ''}`.toLowerCase();
             if (pairSet.has(key)) { setError(`Duplicate variant option combination: ${v.option1Value} / ${v.option2Value}${v.option3Value ? ` / ${v.option3Value}` : ''}`); return; }
             pairSet.add(key);
         }
+        const normalizedPricingRules = pricingRules
+            .map((r, i) => ({
+                id: r.id,
+                ruleName: String(r.ruleName || '').trim(),
+                optionLabel: String(r.optionLabel || '').trim(),
+                multiplier: r.multiplier ? Number(r.multiplier) : null,
+                displayOrder: i,
+            }))
+            .filter((r) => r.ruleName && r.optionLabel && Number.isFinite(r.multiplier) && r.multiplier > 0);
         setSaving(true);
         setError(null);
         try {
@@ -138,7 +164,17 @@ export default function EditMediaPage() {
             const res = await fetch(`/api/vendors/hordings/${params.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, imageUrls: imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean), variants: normalizedVariants, option1Name: formData.option1Name, option2Name: formData.option2Name, option3Name: formData.option3Name, metafields: metafieldValues }),
+                body: JSON.stringify({
+                    ...formData,
+                    imageUrls: imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean),
+                    variants: normalizedVariants,
+                    hasVariants: normalizedVariants.length > 0,
+                    pricingRules: normalizedPricingRules,
+                    option1Name: normalizedVariants.length > 0 ? formData.option1Name : null,
+                    option2Name: normalizedVariants.length > 0 ? formData.option2Name : null,
+                    option3Name: normalizedVariants.length > 0 ? formData.option3Name : null,
+                    metafields: metafieldValues
+                }),
             });
             const data = await res.json();
             if (data.success) {
@@ -176,8 +212,16 @@ export default function EditMediaPage() {
                     <form onSubmit={handleSubmit} className={styles.form}>
                         <div className={styles.formSection}>
                             <h3 className={styles.sectionHead}>Owner (Vendor)</h3>
-                            <div className={styles.formRow}>
-                                <VendorDropdown value={formData?.vendorId ?? null} onChange={v => setFormData(prev => ({ ...prev, vendorId: v }))} placeholder="No owner (optional)" />
+                            <div className={`${styles.formRow} ${styles.ownerRow}`}>
+                                <div className={`${styles.formGroup} ${styles.ownerVendorGroup}`}>
+                                    <VendorDropdown value={formData?.vendorId ?? null} onChange={v => setFormData(prev => ({ ...prev, vendorId: v }))} placeholder="No owner (optional)" />
+                                </div>
+                                <div className={`${styles.formGroup} ${styles.ownerStatusGroup}`}>
+                                    <label>Status</label>
+                                    <select name="status" value={formData?.status || 'active'} onChange={handleChange}>
+                                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -190,24 +234,7 @@ export default function EditMediaPage() {
                                         {MEDIA_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
-                                <div className={styles.formGroup}><label>Width (ft)</label><input type="number" name="width" value={formData?.width ?? ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Height (ft)</label><input type="number" name="height" value={formData?.height ?? ''} onChange={handleChange} /></div>
                             </div>
-                            {isDigitalScreens && (
-                                <div className={styles.formRow}>
-                                    <div className={styles.formGroup}><label>Screen Placement</label>
-                                        <select name="screenPlacement" value={formData?.screenPlacement || ''} onChange={handleChange}>
-                                            <option value="">Select</option>
-                                            {SCREEN_PLACEMENT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                            )}
-                            {isResidentialOrCorporate && (
-                                <div className={styles.formRow}>
-                                    <div className={styles.formGroup}><label>Number of screens</label><input type="number" name="screenNumber" value={formData?.screenNumber ?? ''} onChange={handleChange} min={0} /></div>
-                                </div>
-                            )}
                             <div className={styles.formRow}>
                                 <div className={`${styles.formGroup} ${styles.wide}`}><label>Image URLs</label><textarea name="imageUrls" className={styles.imageUrlsInput} value={formData?.imageUrls || ''} onChange={handleChange} /></div>
                             </div>
@@ -215,17 +242,15 @@ export default function EditMediaPage() {
 
                         <div className={styles.formSection}><h3 className={styles.sectionHead}>Location</h3>
                             <div className={styles.formRow}>
-                                <div className={styles.formGroup}><label className={styles.required}>City</label><input type="text" name="city" value={formData?.city || ''} onChange={handleChange} required /></div>
                                 <div className={styles.formGroup}><label className={styles.required}>State</label><input type="text" name="state" value={formData?.state || ''} onChange={handleChange} required /></div>
-                                <div className={styles.formGroup}><label>Pincode</label><input type="text" name="pincode" value={formData?.pincode || ''} onChange={handleChange} /></div>
+                                <div className={styles.formGroup}><label className={styles.required}>City</label><input type="text" name="city" value={formData?.city || ''} onChange={handleChange} required /></div>
+                                <div className={styles.formGroup}><label>Area</label><input type="text" name="zone" value={formData?.zone || ''} onChange={handleChange} /></div>
+                                <div className={styles.formGroup}><label>Locality</label><input type="text" name="locality" value={formData?.locality || ''} onChange={handleChange} /></div>
                             </div>
                             <div className={styles.formRow}><div className={`${styles.formGroup} ${styles.wide}`}><label className={styles.required}>Address</label><textarea name="address" value={formData?.address || ''} onChange={handleChange} rows="2" required /></div></div>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Landmark</label><input type="text" name="landmark" value={formData?.landmark || ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Zone</label><input type="text" name="zone" value={formData?.zone || ''} onChange={handleChange} /></div>
-                            </div>
-                            <div className={styles.formRow}>
-                                <div className={styles.formGroup}><label>Road Name</label><input type="text" name="roadName" value={formData?.roadName || ''} onChange={handleChange} /></div>
+                                <div className={styles.formGroup}><label>Pincode</label><input type="text" name="pincode" value={formData?.pincode || ''} onChange={handleChange} /></div>
                             </div>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label className={styles.required}>Latitude</label><input type="text" name="latitude" value={formData?.latitude ?? ''} readOnly className={styles.readOnlyInput} /></div>
@@ -248,7 +273,6 @@ export default function EditMediaPage() {
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Monthly Rental (₹)</label><input type="number" name="rate" value={formData?.rate ?? ''} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label>Vendor Rate (₹)</label><input type="number" name="ourRate" value={formData?.ourRate ?? ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Payment Terms</label><input type="text" name="paymentTerms" value={formData?.paymentTerms || ''} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label className={styles.required}>Min. Booking Duration</label><input type="text" name="minimumBookingDuration" value={formData?.minimumBookingDuration || ''} onChange={handleChange} required /></div>
                             </div>
                         </div>
@@ -256,11 +280,7 @@ export default function EditMediaPage() {
                         <div className={styles.formSection}><h3 className={styles.sectionHead}>Screen / Display Details</h3>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label>Screen Size</label><input type="text" name="screenSize" value={formData?.screenSize || ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Screen Number</label><input type="number" name="screenNumber" value={formData?.screenNumber ?? ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Screen Placement</label><input type="text" name="screenPlacement" value={formData?.screenPlacement || ''} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label>Display Format (16:9)</label><input type="text" name="displayFormat" value={formData?.displayFormat || ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Slot Time</label><input type="text" name="slotTime" value={formData?.slotTime || ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Loop Time</label><input type="text" name="loopTime" value={formData?.loopTime || ''} onChange={handleChange} /></div>
                                 <div className={styles.formGroup}><label>Display Hours</label><input type="text" name="displayHours" value={formData?.displayHours || ''} onChange={handleChange} /></div>
                             </div>
                         </div>
@@ -283,9 +303,9 @@ export default function EditMediaPage() {
                             </div>
                             <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginBottom: 10 }}>Variant Custom Fields</h4>
                             {variantCustomFieldDefs.map((fieldKey, idx) => (
-                                <div key={idx} className={styles.formRow}>
-                                    <div className={styles.formGroup}><label>Field key</label><input type="text" value={fieldKey} onChange={(e) => updateVariantCustomFieldDef(idx, e.target.value)} placeholder="e.g. projector_type" /></div>
-                                    <div className={styles.formGroup}>
+                                <div key={idx} className={`${styles.formRow} ${styles.customFieldRow}`}>
+                                    <div className={`${styles.formGroup} ${styles.customFieldKeyGroup}`}><label>Field key</label><input type="text" value={fieldKey} onChange={(e) => updateVariantCustomFieldDef(idx, e.target.value)} placeholder="e.g. projector_type" /></div>
+                                    <div className={`${styles.formGroup} ${styles.customFieldActionGroup}`}>
                                         {idx === variantCustomFieldDefs.length - 1
                                             ? <button type="button" className={styles.pricingAddBtn} onClick={addVariantCustomFieldDef}>+ Add Field</button>
                                             : <button type="button" className={styles.pricingRemoveBtn} onClick={() => removeVariantCustomFieldDef(idx)}>Remove</button>}
@@ -300,7 +320,7 @@ export default function EditMediaPage() {
                             </div>
                             {variantRows.map((row, i) => (
                                 <div key={row.id || i} className={styles.variantRow}>
-                                    <div className={styles.variantLabelCell}>{[row.option1Value, row.option2Value, row.option3Value].filter(Boolean).join(' / ') || 'Default Variant'}</div>
+                                    <div className={styles.variantLabelCell}>{[row.option1Value, row.option2Value, row.option3Value].filter(Boolean).join(' / ') || 'Variant'}</div>
                                     <input type="number" placeholder="Rate" value={row.rate} onChange={e => updateVariant(i, 'rate', e.target.value)} />
                                     {variantCustomFieldDefs.map((f, idx) => (
                                         <input key={idx} type="text" placeholder={f || `Custom ${idx + 1}`} value={row.customFields?.[f] || ''} onChange={e => updateVariantCustomField(i, f, e.target.value)} />
@@ -310,18 +330,24 @@ export default function EditMediaPage() {
                             ))}
                         </div>
 
-                        <div className={styles.formSection}><h3 className={styles.sectionHead}>Traffic & Visibility</h3>
-                            <div className={styles.formRow}>
-                                <div className={styles.formGroup}><label>Traffic Type</label><input type="text" name="trafficType" value={formData?.trafficType || ''} onChange={handleChange} /></div>
-                                <div className={styles.formGroup}><label>Visibility</label><select name="visibility" value={formData?.visibility || 'Prime'} onChange={handleChange}><option value="Prime">Prime</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
-                                <div className={styles.formGroup}><label>Dwell Time</label><input type="text" name="dwellTime" value={formData?.dwellTime || ''} onChange={handleChange} /></div>
+                        <div className={styles.formSection}><h3 className={styles.sectionHead}>Pricing Conditions</h3>
+                            <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 10 }}>Add multiplier rules like Festive = 1.2x base rate.</p>
+                            <div className={styles.variantHeader}>
+                                <span>Variant Name</span>
+                                <span>Option</span>
+                                <span>Multiplier (x)</span>
+                                <span></span>
                             </div>
+                            {pricingRules.map((row, i) => (
+                                <div key={row.id || i} className={styles.variantRow}>
+                                    <input type="text" placeholder="e.g. Season" value={row.ruleName} onChange={e => updatePricingRule(i, 'ruleName', e.target.value)} />
+                                    <input type="text" placeholder="e.g. Festive" value={row.optionLabel} onChange={e => updatePricingRule(i, 'optionLabel', e.target.value)} />
+                                    <input type="number" min="0" step="0.01" placeholder="1.20" value={row.multiplier} onChange={e => updatePricingRule(i, 'multiplier', e.target.value)} />
+                                    <button type="button" className={styles.pricingRemoveBtn} onClick={() => removePricingRule(i)}>Remove</button>
+                                </div>
+                            ))}
                             <div className={styles.formRow}>
-                                <div className={styles.formGroup}><label>Condition</label><input type="text" name="condition" value={formData?.condition || ''} onChange={handleChange} /></div>
-                                <div className={`${styles.formGroup} ${styles.wide}`}><label>Previous Clientele</label><textarea name="previousClientele" value={formData?.previousClientele || ''} onChange={handleChange} rows="2" /></div>
-                            </div>
-                            <div className={styles.formRow}>
-                                <div className={styles.formGroup}><label>Status</label><select name="status" value={formData?.status || 'active'} onChange={handleChange}>{STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}</select></div>
+                                <button type="button" className={styles.pricingAddBtn} onClick={addPricingRule}>+ Add Condition</button>
                             </div>
                         </div>
 

@@ -95,7 +95,7 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                 >
                                     {variants.map((v) => (
                                         <option key={v.id} value={v.id}>
-                                            {(v.variant_title || `${v.option1_value} / ${v.option2_value}`)} {v.rate ? `- ₹${v.rate}` : ''}
+                                            {(v.variant_title || [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / '))} {v.rate ? `- ₹${v.rate}` : ''}
                                         </option>
                                     ))}
                                 </select>

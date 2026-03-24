@@ -4,8 +4,8 @@ import { isValidMediaId } from '../../../../../../lib/genId10';
 import { getCurrentUser } from '../../../../../../lib/authServer';
 
 function normalizeVariant(input, index = 0) {
-    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim() || 'Default';
-    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || 'Default';
+    const option1 = String(input.option1Value ?? input.screenCode ?? '').trim();
+    const option2 = String(input.option2Value ?? input.auditorium ?? '').trim() || null;
     const option3 = String(input.option3Value ?? '').trim() || null;
     const customFields = input.customFields && typeof input.customFields === 'object' ? input.customFields : {};
     const rateRaw = input.rate ?? input.monthly_rental ?? input.price;
@@ -13,7 +13,7 @@ function normalizeVariant(input, index = 0) {
     const seatingRaw = input.seating;
     const seating = seatingRaw != null && String(seatingRaw).trim() !== '' ? parseInt(seatingRaw) : null;
     return {
-        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim(),
+        variant_title: String(input.variantTitle ?? [option1, option2, option3].filter(Boolean).join(' / ')).trim() || null,
         option1_value: option1,
         option2_value: option2,
         option3_value: option3,
@@ -77,7 +77,12 @@ export async function POST(req, { params }) {
         if (mediaErr || !media) return NextResponse.json({ success: false, error: 'Media not found' }, { status: 404 });
         const body = await req.json();
         const variantsInput = Array.isArray(body?.variants) ? body.variants : [body];
-        const normalized = variantsInput.map((v, i) => normalizeVariant(v, i));
+        const normalized = variantsInput
+            .map((v, i) => normalizeVariant(v, i))
+            .filter((v) => v.option1_value);
+        if (normalized.length === 0) {
+            return NextResponse.json({ success: true, data: [] }, { status: 200 });
+        }
         const { data, error } = await supabaseAdmin
             .from('media_variants')
             .insert(normalized.map((v) => ({ ...v, media_id: id })))

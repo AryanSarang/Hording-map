@@ -5,8 +5,11 @@ import { getCurrentUser } from '../../../../../lib/authServer';
 function normalizeVariant(input) {
     const out = {};
     if (input.variantTitle !== undefined) out.variant_title = input.variantTitle || null;
-    if (input.option1Value !== undefined) out.option1_value = input.option1Value || 'Default';
-    if (input.option2Value !== undefined) out.option2_value = input.option2Value || 'Default';
+    if (input.option1Value !== undefined) {
+        const option1 = String(input.option1Value || '').trim();
+        if (option1) out.option1_value = option1;
+    }
+    if (input.option2Value !== undefined) out.option2_value = String(input.option2Value || '').trim() || null;
     if (input.option3Value !== undefined) out.option3_value = input.option3Value || null;
     if (input.customFields !== undefined) out.custom_fields = (input.customFields && typeof input.customFields === 'object') ? input.customFields : {};
     if (input.audienceCategory !== undefined) out.audience_category = input.audienceCategory || null;

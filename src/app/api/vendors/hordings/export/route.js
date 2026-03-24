@@ -77,17 +77,29 @@ async function runExport(mediaIds, userId) {
 
     // 4. Fetch variants
     const variantsByMedia = {};
+    const pricingRulesByMedia = {};
     if (ids.length > 0) {
         const idChunks = chunk(ids, BATCH_SIZE);
         for (const idList of idChunks) {
-            const { data: variantRows } = await supabaseAdmin
-                .from('media_variants')
-                .select('*')
-                .in('media_id', idList)
-                .order('display_order', { ascending: true });
+            const [{ data: variantRows }, { data: pricingRuleRows }] = await Promise.all([
+                supabaseAdmin
+                    .from('media_variants')
+                    .select('*')
+                    .in('media_id', idList)
+                    .order('display_order', { ascending: true }),
+                supabaseAdmin
+                    .from('media_pricing_rules')
+                    .select('media_id, rule_name, option_label, multiplier, display_order')
+                    .in('media_id', idList)
+                    .order('display_order', { ascending: true }),
+            ]);
             for (const v of variantRows || []) {
                 if (!variantsByMedia[v.media_id]) variantsByMedia[v.media_id] = [];
                 variantsByMedia[v.media_id].push(v);
+            }
+            for (const r of pricingRuleRows || []) {
+                if (!pricingRulesByMedia[r.media_id]) pricingRulesByMedia[r.media_id] = [];
+                pricingRulesByMedia[r.media_id].push(r);
             }
         }
     }
@@ -100,17 +112,15 @@ async function runExport(mediaIds, userId) {
 
     const baseHeaders = [
         'id', 'vendor_id', 'vendor_name',
-        'city', 'state', 'address', 'landmark', 'pincode', 'zone',
+        'state', 'city', 'zone', 'locality', 'address', 'pincode', 'landmark',
         'latitude', 'longitude',
-        'road_name',
         'poc_name', 'poc_number', 'poc_email',
-        'monthly_rental', 'vendor_rate', 'payment_terms', 'minimum_booking_duration',
-        'media_type', 'width', 'height',
+        'monthly_rental', 'vendor_rate', 'minimum_booking_duration',
+        'media_type',
         'images',
-        'screen_size', 'screen_number', 'screen_placement', 'display_format',
-        'slot_time', 'loop_time', 'display_hours',
-        'traffic_type', 'visibility', 'dwell_time',
-        'condition', 'previous_clientele', 'status',
+        'screen_size', 'display_format', 'display_hours',
+        'status',
+        'pricing_rules',
         'variant_id', 'option1_name', 'option2_name', 'option3_name', 'option1_value', 'option2_value', 'option3_value', 'variant_title',
         'audience_category', 'seating', 'cinema_format', 'size', 'variant_rate',
     ];
@@ -126,6 +136,10 @@ async function runExport(mediaIds, userId) {
                 const metas = metafieldsByMedia[h.id] || {};
                 const vendorName = vendorMap[h.vendor_id] ?? '';
                 const images = imagesToPipeString(h.media);
+                const pricingRules = pricingRulesByMedia[h.id] || [];
+                const pricingRulesStr = pricingRules.length > 0
+                    ? pricingRules.map((r) => `${r.rule_name}:${r.option_label}:${r.multiplier}`).join('|')
+                    : '';
                 const mediaVariants = variantsByMedia[h.id] || [];
                 const exportRows = mediaVariants.length > 0 ? mediaVariants : [null];
 
@@ -134,39 +148,28 @@ async function runExport(mediaIds, userId) {
                         h.id,
                         h.vendor_id ?? '',
                         vendorName,
-                        h.city ?? '',
                         h.state ?? '',
-                        h.address ?? '',
-                        h.landmark ?? '',
-                        h.pincode ?? '',
+                        h.city ?? '',
                         h.zone ?? '',
+                        h.locality ?? '',
+                        h.address ?? '',
+                        h.pincode ?? '',
+                        h.landmark ?? '',
                         h.latitude ?? '',
                         h.longitude ?? '',
-                        h.road_name ?? '',
                         h.poc_name ?? '',
                         h.poc_number ?? '',
                         h.poc_email ?? '',
                         h.monthly_rental ?? '',
                         h.vendor_rate ?? '',
-                        h.payment_terms ?? '',
                         h.minimum_booking_duration ?? '',
                         h.media_type ?? '',
-                        h.width ?? '',
-                        h.height ?? '',
                         images,
                         h.screen_size ?? '',
-                        h.screen_number ?? '',
-                        h.screen_placement ?? '',
                         h.display_format ?? '',
-                        h.slot_time ?? '',
-                        h.loop_time ?? '',
                         h.display_hours ?? '',
-                        h.traffic_type ?? '',
-                        h.visibility ?? '',
-                        h.dwell_time ?? '',
-                        h.condition ?? '',
-                        h.previous_clientele ?? '',
                         h.status ?? '',
+                        pricingRulesStr,
                         v?.id ?? '',
                         h.option1_name ?? '',
                         h.option2_name ?? '',
