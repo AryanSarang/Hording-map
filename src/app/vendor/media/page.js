@@ -158,11 +158,24 @@ export default function MediaPage() {
         if (!importFile) { setImportResult({ success: false, error: 'Please select a CSV file' }); return; }
         setImporting(true);
         setImportResult(null);
-        try {
+
+        const runImport = async (replaceExisting) => {
             const fd = new FormData();
             fd.append('file', importFile);
+            fd.append('replaceExisting', replaceExisting ? 'true' : 'false');
             const res = await fetch('/api/vendors/hordings/import', { method: 'POST', body: fd });
             const data = await res.json();
+            return { res, data };
+        };
+
+        try {
+            let { res, data } = await runImport(false);
+            if (res.status === 409 && data?.requiresConfirmation) {
+                const ok = confirm(`${data.error}\n\nDo you want to replace existing duplicates and continue import?`);
+                if (ok) {
+                    ({ res, data } = await runImport(true));
+                }
+            }
             setImportResult(data);
             if (data.success && data.imported > 0) { setImportFile(null); fetchItems(); }
         } catch (err) { setImportResult({ success: false, error: err.message }); }

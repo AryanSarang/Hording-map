@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, FolderOpen, Settings, CreditCard, LogOut, LogIn, ChevronDown } from 'lucide-react';
+import Link from 'next/link';
 
 function getDisplayName(user) {
     if (!user) return 'Guest';
@@ -102,7 +103,7 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                             <p className="text-xs font-bold text-white leading-none mt-1 max-w-[120px] truncate">
                                 {currentPlan?.name || (isAuthenticated ? 'No plans yet' : 'Guest')}
                             </p>
-                            <span className="text-[10px] text-gray-500 mt-1">▼</span>
+                            <ChevronDown size={12} className="text-gray-500 mt-1" />
                         </div>
                     </div>
                 </button>
@@ -168,6 +169,14 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                                     +
                                 </button>
                             </form>
+                            <Link
+                                href="/plans"
+                                onClick={() => setIsPlanOpen(false)}
+                                className="mt-2 w-full inline-flex items-center justify-center gap-2 bg-gray-900 border border-gray-700 hover:border-green-500 rounded px-3 py-2 text-xs text-gray-200 transition-colors"
+                            >
+                                <FolderOpen size={14} />
+                                View Plans
+                            </Link>
                         </div>
                     </div>
                 )}
@@ -231,19 +240,19 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                             {isAuthenticated ? (
                                 <>
                                     <button className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 rounded-lg flex items-center gap-2">
-                                        <span>⚙️</span> Account Settings
+                                        <Settings size={14} /> Account Settings
                                     </button>
                                     <button className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 rounded-lg flex items-center gap-2">
-                                        <span>💳</span> Billing
+                                        <CreditCard size={14} /> Billing
                                     </button>
                                     <div className="h-px bg-gray-800 my-1"></div>
                                     <button type="button" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/explore'; }} className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2">
-                                        <span>🚪</span> Log Out
+                                        <LogOut size={14} /> Log Out
                                     </button>
                                 </>
                             ) : (
                                 <a href="/login" className="w-full text-left px-3 py-2 text-xs text-green-400 hover:bg-gray-800 rounded-lg flex items-center gap-2">
-                                    <span>🔐</span> Log In
+                                    <LogIn size={14} /> Log In
                                 </a>
                             )}
                         </div>

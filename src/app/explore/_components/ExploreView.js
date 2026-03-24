@@ -13,6 +13,22 @@ const MapSection = dynamic(() => import('./MapSection'), {
 });
 
 export default function ExploreView({ hoardings, user }) {
+    const normalizePlanItems = (items) => {
+        if (!Array.isArray(items)) return [];
+        const merged = new Map();
+        for (const raw of items) {
+            if (!raw) continue;
+            const mediaId = typeof raw === 'string' ? raw : String(raw.mediaId || raw.id || '').trim();
+            if (!mediaId) continue;
+            const incomingVariantIds = Array.isArray(raw?.variantIds) ? raw.variantIds.map(String).filter(Boolean) : [];
+            if (!merged.has(mediaId)) merged.set(mediaId, { mediaId, variantIds: [] });
+            const prev = merged.get(mediaId);
+            prev.variantIds = Array.from(new Set([...(prev.variantIds || []), ...incomingVariantIds]));
+            merged.set(mediaId, prev);
+        }
+        return Array.from(merged.values());
+    };
+
     const [selectedId, setSelectedId] = useState(null);
 
     const isAuthenticated = !!user;
@@ -22,6 +38,7 @@ export default function ExploreView({ hoardings, user }) {
     const [currentPlan, setCurrentPlan] = useState(null);
     const [loadingPlans, setLoadingPlans] = useState(false);
     const [planError, setPlanError] = useState(null);
+    const [planMutatingMediaIds, setPlanMutatingMediaIds] = useState(new Set());
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -46,7 +63,10 @@ export default function ExploreView({ hoardings, user }) {
                 }
                 const data = await res.json();
                 if (!cancelled) {
-                    const list = Array.isArray(data.plans) ? data.plans : [];
+                    const list = (Array.isArray(data.plans) ? data.plans : []).map((p) => ({
+                        ...p,
+                        items: normalizePlanItems(p.items),
+                    }));
                     setPlans(list);
                     setCurrentPlan(list[0] || null);
                 }
@@ -87,7 +107,7 @@ export default function ExploreView({ hoardings, user }) {
         }
     };
 
-    const handleAddToPlan = async (hoardingId) => {
+    const handleAddToPlan = async (hoardingId, selectedVariantIds = []) => {
         if (!isAuthenticated) {
             alert('Please log in to add sites to a plan.');
             return;
@@ -96,8 +116,25 @@ export default function ExploreView({ hoardings, user }) {
             alert('Create a plan first.');
             return;
         }
-        if (currentPlan.items?.includes(hoardingId)) return;
-        const updatedItems = [...(currentPlan.items || []), hoardingId];
+        setPlanMutatingMediaIds((prev) => new Set(prev).add(hoardingId));
+        const currentItems = normalizePlanItems(currentPlan.items);
+        const idx = currentItems.findIndex((i) => i.mediaId === hoardingId);
+        const safeSelectedVariantIds = Array.isArray(selectedVariantIds)
+            ? selectedVariantIds.map(String).filter(Boolean)
+            : [];
+        let updatedItems = currentItems;
+        if (idx === -1) {
+            updatedItems = [...currentItems, { mediaId: hoardingId, variantIds: safeSelectedVariantIds }];
+        } else {
+            const existing = currentItems[idx];
+            const mergedVariantIds = Array.from(new Set([...(existing.variantIds || []), ...safeSelectedVariantIds]));
+            updatedItems = currentItems.map((it, i) => i === idx ? { ...it, variantIds: mergedVariantIds } : it);
+        }
+        const optimisticPlan = { ...currentPlan, items: updatedItems };
+        const previousPlan = currentPlan;
+        const previousPlans = plans;
+        setCurrentPlan(optimisticPlan);
+        setPlans(plans.map((p) => (p.id === optimisticPlan.id ? optimisticPlan : p)));
         try {
             const res = await fetch(`/api/plans/${encodeURIComponent(currentPlan.id)}`, {
                 method: 'PUT',
@@ -110,11 +147,19 @@ export default function ExploreView({ hoardings, user }) {
                 throw new Error(data.error || 'Failed to update plan');
             }
             const updatedPlan = data.plan;
-            setPlans(plans.map(p => (p.id === updatedPlan.id ? updatedPlan : p)));
+            setPlans((prev) => prev.map(p => (p.id === updatedPlan.id ? updatedPlan : p)));
             setCurrentPlan(updatedPlan);
         } catch (err) {
             console.error('Add to plan error:', err);
             alert(err?.message || 'Failed to add to plan');
+            setCurrentPlan(previousPlan);
+            setPlans(previousPlans);
+        } finally {
+            setPlanMutatingMediaIds((prev) => {
+                const next = new Set(prev);
+                next.delete(hoardingId);
+                return next;
+            });
         }
     };
 
@@ -217,6 +262,7 @@ export default function ExploreView({ hoardings, user }) {
                             onAddToPlan={handleAddToPlan}
                             currentPlan={currentPlan}
                             isAuthenticated={isAuthenticated}
+                            planMutatingMediaIds={planMutatingMediaIds}
                         />
                     </div>
 

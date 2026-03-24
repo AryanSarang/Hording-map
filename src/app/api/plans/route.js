@@ -3,6 +3,29 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { getCurrentUser } from '../../../lib/authServer';
 
+function normalizePlanItems(items) {
+    if (!Array.isArray(items)) return [];
+    const merged = new Map();
+    for (const raw of items) {
+        if (raw == null) continue;
+        const mediaId = typeof raw === 'string'
+            ? raw
+            : String(raw.mediaId || raw.id || '').trim();
+        if (!mediaId) continue;
+        const incomingVariantIds = Array.isArray(raw?.variantIds)
+            ? raw.variantIds.map((v) => String(v).trim()).filter(Boolean)
+            : [];
+        if (!merged.has(mediaId)) {
+            merged.set(mediaId, { mediaId, variantIds: [] });
+        }
+        const entry = merged.get(mediaId);
+        const nextSet = new Set([...(entry.variantIds || []), ...incomingVariantIds]);
+        entry.variantIds = Array.from(nextSet);
+        merged.set(mediaId, entry);
+    }
+    return Array.from(merged.values());
+}
+
 // Get all plans for the current authenticated user
 export async function GET() {
     try {
@@ -19,7 +42,11 @@ export async function GET() {
 
         if (error) throw error;
 
-        return NextResponse.json({ success: true, plans: data || [] });
+        const plans = (data || []).map((p) => ({
+            ...p,
+            items: normalizePlanItems(p.items),
+        }));
+        return NextResponse.json({ success: true, plans });
     } catch (error) {
         console.error('GET /api/plans error:', error);
         return NextResponse.json(
@@ -39,7 +66,7 @@ export async function POST(req) {
 
         const body = await req.json();
         const name = (body.name || '').trim();
-        const items = Array.isArray(body.items) ? body.items : [];
+        const items = normalizePlanItems(body.items);
 
         if (!name) {
             return NextResponse.json({ success: false, error: 'Plan name is required' }, { status: 400 });

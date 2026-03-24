@@ -73,6 +73,18 @@ function buildKey(row) {
     ].map((s) => String(s).trim().toLowerCase()).join('|');
 }
 
+function buildKeyFromExistingMedia(row) {
+    return buildKey({
+        vendor_id: row.vendor_id,
+        media_type: row.media_type,
+        address: row.address,
+        city: row.city,
+        state: row.state,
+        latitude: row.latitude,
+        longitude: row.longitude,
+    });
+}
+
 export async function POST(req) {
     try {
         const user = await getCurrentUser();
@@ -82,6 +94,7 @@ export async function POST(req) {
 
         const formData = await req.formData();
         const file = formData.get('file');
+        const replaceExisting = String(formData.get('replaceExisting') || '').toLowerCase() === 'true';
         if (!file || !(file instanceof Blob)) {
             return NextResponse.json({
                 success: false,
@@ -272,7 +285,41 @@ export async function POST(req) {
             grouped.get(row.key).push(row);
         }
 
+        // Detect duplicates for this user before mutating data.
+        const { data: existingMediaRows } = await supabaseAdmin
+            .from('media')
+            .select('id, vendor_id, media_type, address, city, state, latitude, longitude, title')
+            .eq('user_id', user.id);
+        const existingByKey = new Map();
+        for (const m of existingMediaRows || []) {
+            const k = buildKeyFromExistingMedia(m);
+            if (!existingByKey.has(k)) existingByKey.set(k, []);
+            existingByKey.get(k).push(m);
+        }
+        const duplicateGroups = [];
+        for (const [k, groupRows] of grouped.entries()) {
+            const matches = existingByKey.get(k) || [];
+            if (matches.length > 0) {
+                duplicateGroups.push({
+                    key: k,
+                    incomingPreview: groupRows[0]?.address || groupRows[0]?.city || 'Unknown media',
+                    existingCount: matches.length,
+                    existingIds: matches.map((m) => m.id),
+                });
+            }
+        }
+        if (duplicateGroups.length > 0 && !replaceExisting) {
+            return NextResponse.json({
+                success: false,
+                requiresConfirmation: true,
+                error: `${duplicateGroups.length} duplicate media group(s) found for this user. Confirm replace to overwrite old media with uploaded rows.`,
+                duplicateGroups: duplicateGroups.slice(0, 50),
+                duplicateCount: duplicateGroups.length,
+            }, { status: 409 });
+        }
+
         let imported = 0;
+        let replaced = 0;
         for (const [, groupRows] of grouped) {
             const base = groupRows[0];
             const { metafields: m, variants: _, key, rowNum, pricing_rules, ...hPayload } = base;
@@ -300,6 +347,28 @@ export async function POST(req) {
                     });
                 });
             });
+
+            if (replaceExisting) {
+                const duplicates = existingByKey.get(base.key) || [];
+                if (duplicates.length > 0) {
+                    const duplicateIds = duplicates.map((d) => d.id).filter(Boolean);
+                    const { error: deleteErr } = await supabaseAdmin
+                        .from('media')
+                        .delete()
+                        .in('id', duplicateIds)
+                        .eq('user_id', user.id);
+                    if (deleteErr) {
+                        rowErrors.push({
+                            row: rowNum,
+                            errors: [`Failed to replace duplicates: ${deleteErr.message}`],
+                            preview: base.address || base.city,
+                        });
+                        continue;
+                    }
+                    replaced += duplicateIds.length;
+                    existingByKey.delete(base.key);
+                }
+            }
             const { data: newH, error: insertErr } = await supabaseAdmin
                 .from('media')
                 .insert([{
@@ -372,8 +441,9 @@ export async function POST(req) {
         return NextResponse.json({
             success: true,
             imported,
+            replaced,
             rowErrors: rowErrors.length > 0 ? rowErrors : undefined,
-            message: `Imported ${imported} hording(s)${rowErrors.length > 0 ? `. ${rowErrors.length} row(s) had errors.` : ''}`,
+            message: `Imported ${imported} hording(s)${replaceExisting ? ` and replaced ${replaced} existing duplicate(s)` : ''}${rowErrors.length > 0 ? `. ${rowErrors.length} row(s) had errors.` : ''}`,
         }, { status: 200 });
     } catch (error) {
         console.error('POST /api/vendors/hordings/import Error:', error);
