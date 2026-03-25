@@ -96,7 +96,7 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                     </div>
                     <div className="text-left">
                         <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider leading-none">
-                            {isAuthenticated ? 'Current Plan' : 'Login to create plan'}
+                            {isAuthenticated ? 'Plan' : 'Plans'}
                         </p>
                         <div className="flex items-center gap-1">
                             {/* Added max-width to prevent overflow on long plan names */}
@@ -224,9 +224,6 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                     <div className="text-right hidden xl:block">
                         <p className="text-xs font-bold text-white">
                             {getDisplayName(user)}
-                        </p>
-                        <p className="text-[10px] text-gray-500">
-                            {isAuthenticated ? 'Logged in' : 'Not logged in'}
                         </p>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-green-500 to-emerald-700 flex items-center justify-center text-xs font-bold text-white border border-gray-600 shadow-sm">

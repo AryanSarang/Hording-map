@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Inbox } from 'lucide-react';
 import styles from './media.module.css';
 
 const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
@@ -233,7 +234,9 @@ export default function MediaPage() {
 
                 {loading ? <div className={styles.loading}>Loading media...</div> : items.length === 0 ? (
                     <div className={styles.empty}>
-                        <div className={styles.emptyIcon}>📭</div>
+                        <div className={styles.emptyIcon}>
+                            <Inbox size={24} />
+                        </div>
                         <p>No media found</p>
                         <Link href="/vendor/media/new" className={styles.createLink}>Create your first media</Link>
                     </div>

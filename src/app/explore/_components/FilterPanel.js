@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo } from 'react';
+import Dropdown from './Dropdown';
 
 export default function FilterPanel({ hoardings, filters, setFilters }) {
 
@@ -35,9 +36,7 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
         }
     };
 
-    const handleVendorChange = (e) => {
-        setFilters({ ...filters, vendorId: e.target.value });
-    };
+    // Vendor dropdown now uses custom component; no native event handler needed.
 
     // --- 3. DUAL SLIDER LOGIC ---
     const minPrice = filters.minPrice;
@@ -160,24 +159,26 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
                     <div className="space-y-4">
                         <h3 className="text-xs font-bold text-gray-500 uppercase">Location</h3>
                         {options.states.length > 1 && (
-                            <select
+                            <Dropdown
                                 value={filters.state}
-                                onChange={(e) => setFilters({ ...filters, state: e.target.value, city: '' })}
-                                className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg p-2.5 outline-none focus:border-green-500"
-                            >
-                                <option value="">All States</option>
-                                {options.states.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                                onChange={(next) => setFilters({ ...filters, state: String(next || ''), city: '' })}
+                                placeholder="All States"
+                                options={[
+                                    { value: '', label: 'All States' },
+                                    ...options.states.map((s) => ({ value: s, label: s }))
+                                ]}
+                            />
                         )}
                         {options.cities.length > 0 && (
-                            <select
+                            <Dropdown
                                 value={filters.city}
-                                onChange={(e) => setFilters({ ...filters, city: e.target.value })}
-                                className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg p-2.5 outline-none focus:border-green-500"
-                            >
-                                <option value="">All Cities</option>
-                                {options.cities.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
+                                onChange={(next) => setFilters({ ...filters, city: String(next || '') })}
+                                placeholder="All Cities"
+                                options={[
+                                    { value: '', label: 'All Cities' },
+                                    ...options.cities.map((c) => ({ value: c, label: c }))
+                                ]}
+                            />
                         )}
                     </div>
                 )}
@@ -207,14 +208,16 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
                 {options.vendors.length > 1 && (
                     <div>
                         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Vendor</h3>
-                        <select
-                            value={filters.vendorId || "all"}
-                            onChange={handleVendorChange}
-                            className="w-full bg-gray-900 border border-gray-700 text-white text-sm rounded-lg p-2.5 outline-none focus:border-green-500"
-                        >
-                            <option value="all">All Vendors</option>
-                            {options.vendors.map(vId => <option key={vId} value={vId}>Vendor #{vId}</option>)}
-                        </select>
+                        <Dropdown
+                            value={filters.vendorId || 'all'}
+                            onChange={(next) => setFilters({ ...filters, vendorId: String(next || 'all') })}
+                            placeholder="All Vendors"
+                            options={[
+                                { value: 'all', label: 'All Vendors' },
+                                ...options.vendors.map((vId) => ({ value: String(vId), label: `Vendor #${vId}` }))
+                            ]}
+                            allowSearch={false}
+                        />
                     </div>
                 )}
 

@@ -50,10 +50,10 @@ export default async function Page() {
 
           <div className="mx-auto grid max-w-7xl gap-10 px-4 py-24 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
             <div>
-              <p className="fade-up mb-3 inline-flex rounded-full border border-cyan-400/40 bg-cyan-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-200">
+              <p className="fade-up mb-3 inline-flex rounded-full border border-cyan-400/40 bg-cyan-500/15 px-3 py-1 text-xs font-medium uppercase tracking-wide text-cyan-200">
                 B2B OOH Intelligence Platform
               </p>
-              <h1 className="fade-up fade-up-delay-1 text-4xl font-semibold leading-tight text-white sm:text-6xl">
+              <h1 className="fade-up fade-up-delay-1 text-4xl font-medium leading-tight text-white sm:text-6xl">
                 Premium outdoor media planning, with speed and control.
               </h1>
               <p className="fade-up fade-up-delay-2 mt-5 max-w-xl text-slate-200">
@@ -62,10 +62,10 @@ export default async function Page() {
                 brands.
               </p>
               <div className="fade-up fade-up-delay-3 mt-7 flex flex-wrap gap-3">
-                <Link href="/explore" className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:scale-[1.02] hover:bg-blue-500">
+                <Link href="/explore" className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:scale-[1.02] hover:bg-blue-500">
                   Explore Inventory
                 </Link>
-                <Link href="/contact-us" className="rounded-lg border border-slate-600 bg-slate-900/30 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:scale-[1.02] hover:border-slate-400">
+                <Link href="/contact-us" className="rounded-lg border border-slate-600 bg-slate-900/30 px-5 py-2.5 text-sm font-medium text-slate-100 transition hover:scale-[1.02] hover:border-slate-400">
                   Book a Demo
                 </Link>
               </div>
@@ -90,15 +90,15 @@ export default async function Page() {
               <div className="mt-4 space-y-3">
                 <div className="rounded-md border border-slate-700/80 bg-slate-950/70 p-3">
                   <p className="text-xs text-slate-400">Avg. campaign planning time</p>
-                  <p className="text-lg font-semibold text-white">From 5 days to 3 days</p>
+                  <p className="text-lg font-medium text-white">From 5 days to 3 days</p>
                 </div>
                 <div className="rounded-md border border-slate-700/80 bg-slate-950/70 p-3">
                   <p className="text-xs text-slate-400">Inventory coverage</p>
-                  <p className="text-lg font-semibold text-white">OOH + DOOH + Transit</p>
+                  <p className="text-lg font-medium text-white">OOH + DOOH + Transit</p>
                 </div>
                 <div className="rounded-md border border-slate-700/80 bg-slate-950/70 p-3">
                   <p className="text-xs text-slate-400">Access model</p>
-                  <p className="text-lg font-semibold text-white">Strict account ownership</p>
+                  <p className="text-lg font-medium text-white">Strict account ownership</p>
                 </div>
               </div>
             </div>
@@ -111,7 +111,7 @@ export default async function Page() {
               Trusted by growth-focused teams
             </p>
             <div className="marquee">
-              <div className="marquee-track gap-3 text-center text-sm font-medium text-slate-300">
+              <div className="marquee-track gap-3 text-center text-sm font-normal text-slate-300">
                 {[...logos, ...logos].map((logo, i) => (
                   <div key={`${logo}-${i}`} className="min-w-[190px] rounded-md border border-slate-800 bg-slate-900 px-4 py-2">
                     {logo}
@@ -127,7 +127,7 @@ export default async function Page() {
             <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
               <div>
                 <p className="mb-2 text-xs uppercase tracking-[0.2em] text-cyan-300">Platform Capabilities</p>
-                <h2 className="text-4xl font-semibold text-white sm:text-5xl">Built for serious campaign velocity</h2>
+                <h2 className="text-4xl font-medium text-white sm:text-5xl">Built for serious campaign velocity</h2>
               </div>
               <p className="max-w-md text-sm text-slate-300">
                 Design-first interface, enterprise controls, and data-rich planning in one workflow.

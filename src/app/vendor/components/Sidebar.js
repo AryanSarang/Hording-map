@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 import styles from './Sidebar.module.css';
+import { BarChart3, Target, Settings, LogOut } from 'lucide-react';
 
 export default function Sidebar() {
     const router = useRouter();
@@ -36,14 +37,14 @@ export default function Sidebar() {
                         href="/vendor/dashboard"
                         className={`${styles.navItem} ${isActive('/vendor/dashboard') ? styles.active : ''}`}
                     >
-                        <span className={styles.navIcon}>📊</span>
+                        <span className={styles.navIcon}><BarChart3 size={16} /></span>
                         <span>Dashboard</span>
                     </Link>
                     <Link
                         href="/vendor/media"
                         className={`${styles.navItem} ${isActive('/vendor/media') ? styles.active : ''}`}
                     >
-                        <span className={styles.navIcon}>🎯</span>
+                        <span className={styles.navIcon}><Target size={16} /></span>
                         <span>Media</span>
                     </Link>
                 </div>
@@ -54,7 +55,7 @@ export default function Sidebar() {
                         href="/vendor/metafields"
                         className={`${styles.navItem} ${isActive('/vendor/metafields') ? styles.active : ''}`}
                     >
-                        <span className={styles.navIcon}>⚙️</span>
+                        <span className={styles.navIcon}><Settings size={16} /></span>
                         <span>Metafields</span>
                     </Link>
                 </div>
@@ -62,7 +63,8 @@ export default function Sidebar() {
 
             <div className={styles.sidebarFooter}>
                 <button className={styles.logoutBtn} onClick={handleLogout}>
-                    🚪 Logout
+                    <LogOut size={16} style={{ marginRight: 8 }} />
+                    Logout
                 </button>
             </div>
         </aside>

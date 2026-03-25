@@ -27,7 +27,7 @@ export default function PublicHeader({ initialUser }) {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-800/70 bg-slate-950/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="text-lg font-semibold text-white">
+        <Link href="/" className="text-lg font-medium text-white">
           Hording Map
         </Link>
 
@@ -42,21 +42,21 @@ export default function PublicHeader({ initialUser }) {
         <div className="flex items-center gap-2">
           <Link
             href="/explore"
-            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-500"
+            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-normal text-slate-200 hover:border-slate-500"
           >
             Explore
           </Link>
           {user ? (
             <Link
               href="/vendor/dashboard"
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
             >
               Dashboard
             </Link>
           ) : (
             <Link
               href="/login"
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500"
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
             >
               Login
             </Link>

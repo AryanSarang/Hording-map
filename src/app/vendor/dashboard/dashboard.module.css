@@ -30,7 +30,7 @@
     color: white;
     border-radius: 6px;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 400;
     font-size: 0.9rem;
     transition: background 0.2s;
 }
@@ -88,7 +88,7 @@
 
 .sectionTitle {
     font-size: 1.1rem;
-    font-weight: 600;
+    font-weight: 500;
     margin: 0 0 1.5rem 0;
     color: #fff;
 }
@@ -128,7 +128,7 @@
 }
 
 .cardTitle {
-    font-weight: 600;
+    font-weight: 500;
     font-size: 1rem;
     color: #fff;
 }
@@ -144,7 +144,7 @@
     padding: 0.25rem 0.75rem;
     border-radius: 4px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     text-transform: uppercase;
 }
 
@@ -191,7 +191,7 @@
 
 .value {
     color: #fff;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .cardActions {
@@ -209,7 +209,7 @@
     border-radius: 4px;
     text-decoration: none;
     font-size: 0.85rem;
-    font-weight: 500;
+    font-weight: 400;
     transition: background 0.2s;
 }
 

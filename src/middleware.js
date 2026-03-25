@@ -91,7 +91,7 @@ export async function middleware(request) {
                     if (!profile.is_onboarded) {
                         // Rule: Allow Homepage, but block Login/Explore -> Force Onboarding
                         if (isPublicPage) {
-                            return response; // ✅ Allow Homepage
+                            return response; // Allow Homepage
                         }
                         // If they try to go to Login or Explore, send them to Onboarding
                         if (path !== '/onboarding') {
@@ -103,7 +103,7 @@ export async function middleware(request) {
                     else if (profile.status === 'pending') {
                         // Rule: Allow Homepage, but block Login/Explore -> Force Pending Page
                         if (isPublicPage) {
-                            return response; // ✅ Allow Homepage
+                            return response; // Allow Homepage
                         }
                         if (path !== '/pending') {
                             return NextResponse.redirect(new URL('/pending', request.url));

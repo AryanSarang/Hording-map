@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Bell, Lock, User } from 'lucide-react';
+import { Bell, Lock, User, MapPinned, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
@@ -115,14 +115,16 @@ export default function HomeHeader({ user }) {
                                         onClick={() => router.push('/explore')}
                                         className="w-full text-left px-4 py-2.5 text-xs text-gray-300 hover:bg-gray-800 rounded-lg flex items-center gap-2"
                                     >
-                                        🗺️ Explore Map
+                                        <MapPinned size={16} />
+                                        Explore Map
                                     </button>
                                     <div className="h-px bg-gray-800 my-1"></div>
                                     <button
                                         onClick={handleLogout}
                                         className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2"
                                     >
-                                        🚪 Log Out
+                                        <LogOut size={16} />
+                                        Log Out
                                     </button>
                                 </div>
                             </div>

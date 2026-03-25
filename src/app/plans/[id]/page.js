@@ -247,7 +247,7 @@ export default function PlanDetailsPage() {
             <div className="max-w-7xl mx-auto">
                 <div className="flex items-center justify-between mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold">{plan?.name || 'Plan'}</h1>
+                        <h1 className="text-2xl font-medium">{plan?.name || 'Plan'}</h1>
                         {plan && (
                             <p className="text-xs text-gray-400 mt-1">
                                 {(Array.isArray(plan.items) ? plan.items.length : 0)} media entries
@@ -274,28 +274,28 @@ export default function PlanDetailsPage() {
                                 <p className="text-[11px] uppercase tracking-wide text-gray-500">Media in Plan</p>
                                 <div className="mt-2 flex items-center gap-2">
                                     <Target size={16} className="text-green-400" />
-                                    <p className="text-xl font-semibold">{metrics.mediaCount}</p>
+                                    <p className="text-xl font-medium">{metrics.mediaCount}</p>
                                 </div>
                             </div>
                             <div className="rounded-xl border border-gray-800 bg-[#0f1115] p-4">
                                 <p className="text-[11px] uppercase tracking-wide text-gray-500">Selected Variants</p>
                                 <div className="mt-2 flex items-center gap-2">
                                     <Boxes size={16} className="text-blue-400" />
-                                    <p className="text-xl font-semibold">{metrics.selectedVariantCount}</p>
+                                    <p className="text-xl font-medium">{metrics.selectedVariantCount}</p>
                                 </div>
                             </div>
                             <div className="rounded-xl border border-gray-800 bg-[#0f1115] p-4">
                                 <p className="text-[11px] uppercase tracking-wide text-gray-500">Cities Covered</p>
                                 <div className="mt-2 flex items-center gap-2">
                                     <Building2 size={16} className="text-purple-400" />
-                                    <p className="text-xl font-semibold">{metrics.cityCount}</p>
+                                    <p className="text-xl font-medium">{metrics.cityCount}</p>
                                 </div>
                             </div>
                             <div className="rounded-xl border border-gray-800 bg-[#0f1115] p-4">
                                 <p className="text-[11px] uppercase tracking-wide text-gray-500">Est. Total Variant Cost</p>
                                 <div className="mt-2 flex items-center gap-2">
                                     <IndianRupee size={16} className="text-amber-400" />
-                                    <p className="text-xl font-semibold">₹{Math.round(metrics.estimatedCost).toLocaleString()}</p>
+                                    <p className="text-xl font-medium">₹{Math.round(metrics.estimatedCost).toLocaleString()}</p>
                                 </div>
                             </div>
                         </div>
@@ -309,7 +309,7 @@ export default function PlanDetailsPage() {
                                 <select
                                     value={filters.city}
                                     onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
-                                    className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
+                                    className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm font-normal"
                                 >
                                     <option value="">All Cities</option>
                                     {cityOptions.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -317,7 +317,7 @@ export default function PlanDetailsPage() {
                                 <select
                                     value={filters.mediaType}
                                     onChange={(e) => setFilters((f) => ({ ...f, mediaType: e.target.value }))}
-                                    className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
+                                    className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm font-normal"
                                 >
                                     <option value="">All Media Types</option>
                                     {mediaTypeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -326,12 +326,12 @@ export default function PlanDetailsPage() {
                                     value={filters.q}
                                     onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
                                     placeholder="Search by address/location"
-                                    className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
+                                    className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm font-normal"
                                 />
                                 <button
                                     type="button"
                                     onClick={exportCsv}
-                                    className="inline-flex items-center justify-center gap-2 bg-gray-900 border border-gray-700 hover:border-green-500 rounded px-3 py-2 text-sm"
+                                    className="inline-flex items-center justify-center gap-2 bg-gray-900 border border-gray-700 hover:border-green-500 rounded px-3 py-2 text-sm font-normal"
                                 >
                                     <Download size={14} />
                                     Export CSV
@@ -377,7 +377,7 @@ export default function PlanDetailsPage() {
                                         >
                                             <div className="flex items-start justify-between gap-3">
                                                 <div>
-                                                    <h3 className="text-lg font-semibold">{m?.address || m?.landmark || mediaId}</h3>
+                                                    <h3 className="text-lg font-medium">{m?.address || m?.landmark || mediaId}</h3>
                                                     <p className="text-xs text-gray-400 mt-1">
                                                         {[m?.city, m?.state, m?.media_type].filter(Boolean).join(' | ')}
                                                     </p>
@@ -485,7 +485,7 @@ export default function PlanDetailsPage() {
                                                     >
                                                         <Popup>
                                                             <div className="text-sm">
-                                                                <p className="font-semibold">{m.address || m.landmark || m.id}</p>
+                                                                <p className="font-medium">{m.address || m.landmark || m.id}</p>
                                                                 <p className="text-xs">{[m.city, m.state].filter(Boolean).join(', ')}</p>
                                                                 <p className="text-xs mt-1">Variants: {selectedVariantCount}</p>
                                                             </div>

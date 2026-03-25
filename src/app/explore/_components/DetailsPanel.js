@@ -80,14 +80,14 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                     <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">#{selectedHoarding.id}</div>
                                 </div>
                             )}
-                            <h1 className="text-sm font-bold text-white leading-snug mb-1">{selectedHoarding.address || selectedHoarding.landmark || selectedHoarding.zone || "Site #" + selectedHoarding.id}</h1>
+                            <h1 className="text-sm font-medium text-white leading-snug mb-1">{selectedHoarding.address || selectedHoarding.landmark || selectedHoarding.zone || "Site #" + selectedHoarding.id}</h1>
                             <div className="flex items-center gap-2 text-gray-400 text-[10px] mb-3">
                                 <MapPin size={12} />
                                 <span>{selectedHoarding.city}, {selectedHoarding.state}</span>
                             </div>
                             <div className="flex items-center justify-between p-2 bg-green-500/5 border border-green-500/20 rounded">
                                 <span className="text-[10px] text-green-300/70 uppercase">Monthly Rate</span>
-                                <div className="flex items-baseline gap-1"><span className="text-sm font-bold text-green-400">₹{(selectedVariant?.rate ?? selectedHoarding.rate)?.toLocaleString()}</span></div>
+                                <div className="flex items-baseline gap-1"><span className="text-sm font-medium text-green-400">₹{(selectedVariant?.rate ?? selectedHoarding.rate)?.toLocaleString()}</span></div>
                             </div>
                         </div>
 
@@ -176,10 +176,10 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                     {isMutating
                                         ? "Saving..."
                                         : isAdded
-                                            ? "In Plan (Update All Variants)"
+                                            ? "Update Plan (All Variants)"
                                             : (!isAuthenticated
-                                                ? "Login to Create Plan"
-                                                : (!currentPlan ? "Create a Plan First" : "Add All Variants to Plan"))}
+                                                ? "Sign in to Add"
+                                                : (!currentPlan ? "Create a Plan" : "Add All Variants to Plan"))}
                                 </button>
                                 <button
                                     onClick={() => onAddToPlan(selectedHoarding.id, selectedVariant?.id ? [selectedVariant.id] : [])}
@@ -203,7 +203,7 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                     {item.imageUrls?.[0] ? <img src={item.imageUrls[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-600">NO IMG</div>}
                                 </div>
                                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                    <h3 className="text-xs font-bold text-gray-200 truncate group-hover:text-green-400 transition-colors">{item.address || item.landmark || item.zone || "Site #" + item.id}</h3>
+                                    <h3 className="text-xs font-medium text-gray-200 truncate group-hover:text-green-400 transition-colors">{item.address || item.landmark || item.zone || "Site #" + item.id}</h3>
                                     <div className="flex items-center gap-2 mt-0.5"><p className="text-[10px] text-gray-500 truncate max-w-[100px]">{item.city} • {item.screenSize}</p><p className="text-[10px] font-medium text-green-500 ml-auto">₹{item.rate?.toLocaleString()}</p></div>
                                 </div>
                             </div>

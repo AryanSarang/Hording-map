@@ -118,7 +118,7 @@ export default function OnboardingPage() {
                             <input
                                 type="tel" // 'tel' brings up numeric keypad on mobile
                                 value={formData.phone_number}
-                                onChange={handlePhoneChange} // 👈 Uses our custom handler
+                                onChange={handlePhoneChange} // Uses our custom handler
                                 placeholder="9876543210"
                                 className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg pl-10 pr-4 py-2.5 text-sm focus:border-green-500 outline-none transition-colors tracking-widest placeholder-gray-600"
                                 required

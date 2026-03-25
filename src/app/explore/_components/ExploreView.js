@@ -109,11 +109,11 @@ export default function ExploreView({ hoardings, user }) {
 
     const handleAddToPlan = async (hoardingId, selectedVariantIds = []) => {
         if (!isAuthenticated) {
-            alert('Please log in to add sites to a plan.');
+            alert('Sign in to add sites to a plan.');
             return;
         }
         if (!currentPlan) {
-            alert('Create a plan first.');
+            alert('Create a plan to add sites.');
             return;
         }
         setPlanMutatingMediaIds((prev) => new Set(prev).add(hoardingId));

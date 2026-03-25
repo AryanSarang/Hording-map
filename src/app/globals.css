@@ -19,6 +19,36 @@ html {
     scroll-behavior: smooth;
 }
 
+/* Global minimal scrollbar theme (cross-browser) */
+* {
+    scrollbar-width: thin;
+    /* Firefox */
+    scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+    /* thumb, track */
+}
+
+/* Chrome / Edge / Safari */
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.18);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    /* creates "floating" thumb */
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.32);
+}
+
 .hero-three-canvas canvas {
     width: 100% !important;
     height: 100% !important;
