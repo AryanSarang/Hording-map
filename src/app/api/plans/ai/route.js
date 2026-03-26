@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
+import { applyCreditDelta } from '../../../../lib/creditsServer';
 
 const overpassCache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 30;
@@ -377,6 +378,24 @@ export async function POST(req) {
       .select('*')
       .single();
     if (planErr) throw planErr;
+
+    // Charge non-admin users for creating AI plans
+    const creditRes = await applyCreditDelta({
+      action: 'create_plan',
+      delta: -2,
+      metadata: { mode: 'ai', plan_id: createdPlan?.id },
+    });
+
+    if (creditRes?.success === false) {
+      // Rollback created plan if credits failed to apply
+      await supabaseAdmin
+        .from('plans')
+        .delete()
+        .eq('id', createdPlan?.id)
+        .eq('user_id', user.id);
+
+      throw new Error(creditRes?.error || 'Failed to charge plan credits');
+    }
 
     return NextResponse.json({
       success: true,

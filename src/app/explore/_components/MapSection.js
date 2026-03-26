@@ -4,9 +4,10 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 const icon = typeof window !== 'undefined' ? L.icon({
     iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
@@ -51,6 +52,8 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
     const [searchValue, setSearchValue] = useState('');
     const [searchTarget, setSearchTarget] = useState(null);
     const [searching, setSearching] = useState(false);
+    const [consumingCredits, setConsumingCredits] = useState(false);
+    const consumingCreditsRef = useRef(false);
     const [suggestions, setSuggestions] = useState([]);
     const [suggestionsOpen, setSuggestionsOpen] = useState(false);
     const [debounceMs] = useState(350);
@@ -141,10 +144,46 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchValue, hoardings]);
 
+    const consumeSearchCredits = async () => {
+        if (consumingCreditsRef.current || searching) return false;
+
+        setConsumingCredits(true);
+        consumingCreditsRef.current = true;
+        try {
+            const res = await fetch('/api/credits/consume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ action: 'search', source: 'explore' }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.success === false) {
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return false;
+                }
+                throw new Error(data?.error || 'Failed to consume credits');
+            }
+
+            return true;
+        } catch (err) {
+            toast.error('Could not run search', { description: err?.message || 'Try again' });
+            return false;
+        } finally {
+            setConsumingCredits(false);
+            consumingCreditsRef.current = false;
+        }
+    };
+
     async function searchLocation() {
         const q = String(searchValue || '').trim();
         if (!q) return;
         if (q.length < 3) return;
+
+        if (consumingCreditsRef.current || searching) return;
+        const canProceed = await consumeSearchCredits();
+        if (!canProceed) return;
 
         setSearching(true);
         try {
@@ -211,7 +250,7 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                             if (e.key === 'Enter') searchLocation();
                         }}
                         className="w-full pl-10 pr-4 py-2.5 rounded-full border border-gray-600 bg-black/80 text-white placeholder-gray-400 backdrop-blur-xl focus:bg-black focus:border-green-500 outline-none text-xs transition-all shadow-lg"
-                        disabled={searching}
+                        disabled={searching || consumingCredits}
                         onFocus={() => {
                             if ((searchValue || '').trim().length >= 3 && suggestions.length > 0) {
                                 setSuggestionsOpen(true);
@@ -237,8 +276,10 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                                         key={s.id}
                                         type="button"
                                         className="w-full text-left px-3 py-2 hover:bg-gray-900 transition-colors border-b border-gray-800 last:border-b-0"
-                                        onClick={() => {
+                                        onClick={async () => {
                                             setSuggestionsOpen(false);
+                                            const canProceed = await consumeSearchCredits();
+                                            if (!canProceed) return;
                                             setSearchTarget(s.latLng);
                                             onSelect?.(s.id);
                                         }}

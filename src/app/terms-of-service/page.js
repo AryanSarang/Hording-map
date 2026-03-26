@@ -25,7 +25,7 @@ export default async function TermsPage() {
           </section>
           <section>
             <h2 className="text-xl font-semibold text-white">Contact</h2>
-            <p>For legal questions, contact: legal@hordingmap.com</p>
+            <p>For legal questions, contact: legal@medvar.com</p>
           </section>
         </div>
       </main>

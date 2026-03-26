@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import Dropdown from './Dropdown';
 
-export default function FilterPanel({ hoardings, filters, setFilters }) {
+export default function FilterPanel({ hoardings, filters, setFilters, onApply, canApply, isApplying }) {
 
     // --- 1. DATA ANALYSIS ---
     const options = useMemo(() => {
@@ -225,6 +225,16 @@ export default function FilterPanel({ hoardings, filters, setFilters }) {
 
             {/* Footer */}
             <div className="mt-auto p-4 border-t border-gray-800">
+                <button
+                    type="button"
+                    onClick={() => onApply?.()}
+                    disabled={!canApply || isApplying}
+                    className="w-full py-2 text-xs text-black bg-green-500 hover:bg-green-400 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                    title="Apply filters"
+                >
+                    {isApplying ? 'Applying...' : 'Apply Filters (5 credits)'}
+                </button>
+                <div className="h-2" />
                 <button
                     onClick={() => setFilters({
                         state: '', city: '', minPrice: 0, maxPrice: options.maxRateData,

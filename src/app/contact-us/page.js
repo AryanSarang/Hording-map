@@ -13,11 +13,11 @@ export default async function ContactUsPage() {
           <section>
             <h1 className="text-4xl font-semibold text-white">Contact Us</h1>
             <p className="mt-4 text-slate-300">
-              Need enterprise onboarding, custom integrations, or pricing support?
-              Share your details and our team will reach out.
+              Need onboarding, custom integrations, or pricing support? Share your
+              details and the medvar team will reach out.
             </p>
             <div className="mt-8 space-y-3 text-sm text-slate-300">
-              <p><span className="font-semibold text-white">Email:</span> support@hordingmap.com</p>
+              <p><span className="font-semibold text-white">Email:</span> support@medvar.com</p>
               <p><span className="font-semibold text-white">Phone:</span> +91-00000-00000</p>
               <p><span className="font-semibold text-white">Office:</span> Mumbai, India</p>
             </div>

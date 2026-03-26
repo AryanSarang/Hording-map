@@ -15,7 +15,7 @@ export default async function PrivacyPolicyPage() {
         <div className="mt-8 space-y-6 text-sm leading-7 text-slate-300">
           <section>
             <h2 className="text-xl font-semibold text-white">Information We Collect</h2>
-            <p>We collect account, contact and usage data necessary to provide B2B media planning services.</p>
+            <p>We collect account, contact, and usage data necessary to deliver medvar services.</p>
           </section>
           <section>
             <h2 className="text-xl font-semibold text-white">How We Use Data</h2>
@@ -27,7 +27,7 @@ export default async function PrivacyPolicyPage() {
           </section>
           <section>
             <h2 className="text-xl font-semibold text-white">Contact</h2>
-            <p>For privacy requests, contact: privacy@hordingmap.com</p>
+            <p>For privacy requests, contact: privacy@medvar.com</p>
           </section>
         </div>
       </main>

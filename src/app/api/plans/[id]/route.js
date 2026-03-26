@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
+import { applyCreditDelta } from '../../../../lib/creditsServer';
 
 function normalizePlanItems(items) {
     if (!Array.isArray(items)) return [];
@@ -90,6 +91,8 @@ export async function PUT(req, { params }) {
         const { id } = resolved;
         const body = await req.json();
         const updates = {};
+        let creditCharge = null; // { cost, addedVariantCount }
+        let creditChargeRes = null;
 
         if (typeof body.name === 'string') {
             const name = body.name.trim();
@@ -100,25 +103,135 @@ export async function PUT(req, { params }) {
         }
 
         if (Array.isArray(body.items)) {
-            updates.items = normalizePlanItems(body.items);
+            const incomingItems = normalizePlanItems(body.items);
+
+            // Load existing plan items to compute newly added variants
+            const { data: existingPlanRow, error: existingErr } = await supabaseAdmin
+                .from('plans')
+                .select('items')
+                .eq('id', id)
+                .eq('user_id', user.id)
+                .single();
+
+            if (existingErr) throw existingErr;
+
+            const oldItems = normalizePlanItems(existingPlanRow?.items);
+
+            // Validate that incoming media belong to the user (prevents charging for invalid media ids)
+            const incomingMediaIds = incomingItems.map((it) => it.mediaId).filter(Boolean);
+            const { data: validMediaRows, error: validMediaErr } = await supabaseAdmin
+                .from('media')
+                .select('id')
+                .in('id', incomingMediaIds)
+                .eq('user_id', user.id);
+
+            if (validMediaErr) throw validMediaErr;
+
+            const validMediaIds = new Set((validMediaRows || []).map((r) => r.id));
+            const filteredIncomingItems = incomingItems.filter((it) => validMediaIds.has(it.mediaId));
+
+            updates.items = filteredIncomingItems;
+
+            const oldByMediaId = new Map(oldItems.map((it) => [it.mediaId, it]));
+            const incomingByMediaId = new Map(filteredIncomingItems.map((it) => [it.mediaId, it]));
+
+            const mediaIdsForVariants = new Set();
+            for (const k of oldByMediaId.keys()) mediaIdsForVariants.add(k);
+            for (const k of incomingByMediaId.keys()) mediaIdsForVariants.add(k);
+
+            const mediaIdsArray = Array.from(mediaIdsForVariants);
+
+            // Fetch all variant ids per media (needed for interpreting empty variantIds as "all variants")
+            let allVariantsByMediaId = {};
+            if (mediaIdsArray.length > 0) {
+                const { data: variantRows, error: variantErr } = await supabaseAdmin
+                    .from('media_variants')
+                    .select('id, media_id')
+                    .in('media_id', mediaIdsArray);
+                if (variantErr) throw variantErr;
+                allVariantsByMediaId = (variantRows || []).reduce((acc, v) => {
+                    if (!acc[v.media_id]) acc[v.media_id] = [];
+                    acc[v.media_id].push(v.id);
+                    return acc;
+                }, {});
+            }
+
+            const asSet = (arr) => new Set((arr || []).map((x) => String(x)));
+
+            const computeEffectiveVariantSet = (entry, mediaId) => {
+                if (!entry) return new Set(); // media not previously present -> nothing selected
+                const explicit = Array.isArray(entry.variantIds) ? entry.variantIds : [];
+                if (explicit.length > 0) return asSet(explicit);
+                // Empty variantIds means "all variants" for that media
+                return asSet(allVariantsByMediaId[mediaId] || []);
+            };
+
+            let addedVariantCount = 0;
+            for (const mediaId of mediaIdsArray) {
+                const oldEntry = oldByMediaId.get(mediaId);
+                const incomingEntry = incomingByMediaId.get(mediaId);
+
+                const oldSet = computeEffectiveVariantSet(oldEntry, mediaId);
+                const incomingSet = computeEffectiveVariantSet(incomingEntry, mediaId);
+
+                for (const vid of incomingSet) {
+                    if (!oldSet.has(vid)) addedVariantCount += 1;
+                }
+            }
+
+            if (addedVariantCount > 0) {
+                const cost = addedVariantCount * 3;
+                creditCharge = { cost, addedVariantCount };
+
+                // Charge credits BEFORE saving plan update
+                creditChargeRes = await applyCreditDelta({
+                    action: 'add_to_plan',
+                    delta: -cost,
+                    metadata: { plan_id: id, added_variant_count: addedVariantCount },
+                });
+
+                if (creditChargeRes?.success === false) {
+                    return NextResponse.json(
+                        { success: false, error: creditChargeRes?.error || 'Failed to charge credits' },
+                        { status: creditChargeRes?.status || 400 }
+                    );
+                }
+            }
         }
 
         if (Object.keys(updates).length === 0) {
             return NextResponse.json({ success: false, error: 'No updates provided' }, { status: 400 });
         }
 
-        const { data, error } = await supabaseAdmin
-            .from('plans')
-            .update({
-                ...updates,
-                updated_at: new Date().toISOString(),
-            })
-            .eq('id', id)
-            .eq('user_id', user.id)
-            .select('*')
-            .single();
-
-        if (error) throw error;
+        let data = null;
+        let updateError = null;
+        try {
+            const res = await supabaseAdmin
+                .from('plans')
+                .update({
+                    ...updates,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq('id', id)
+                .eq('user_id', user.id)
+                .select('*')
+                .single();
+            data = res?.data ?? null;
+            updateError = res?.error ?? null;
+            if (updateError) throw updateError;
+        } catch (updateErr) {
+            // Refund credits if we had charged and the user was not admin-exempt
+            if (creditCharge && creditChargeRes?.success && creditChargeRes?.applied) {
+                try {
+                    await applyCreditDelta({
+                        action: 'refund_add_to_plan',
+                        delta: creditCharge.cost,
+                        metadata: { plan_id: id, added_variant_count: creditCharge.addedVariantCount },
+                    });
+                } catch (_) { /* ignore refund failure */ }
+            }
+            throw updateErr;
+        }
 
         return NextResponse.json({ success: true, plan: { ...data, items: normalizePlanItems(data?.items) } });
     } catch (error) {

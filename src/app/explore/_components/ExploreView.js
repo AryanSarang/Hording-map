@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import DetailsPanel from './DetailsPanel';
 import FilterPanel from './FilterPanel';
 import ExploreHeader from './ExploreHeader';
+import { toast } from 'sonner';
 
 const MapSection = dynamic(() => import('./MapSection'), {
     ssr: false,
@@ -195,21 +196,69 @@ export default function ExploreView({ hoardings, user }) {
         return rates.length > 0 ? Math.max(...rates) : 100000;
     }, [hoardings]);
 
-    const [filters, setFilters] = useState({
-        state: '', city: '',
-        minPrice: 0, maxPrice: initialMaxPrice || 100000,
+    const initialFilters = useMemo(() => ({
+        state: '',
+        city: '',
+        minPrice: 0,
+        maxPrice: initialMaxPrice || 100000,
         mediaTypes: [...new Set(hoardings.map(h => h.mediaType).filter(Boolean))],
         vendorId: 'all',
-    });
+    }), [hoardings, initialMaxPrice]);
+
+    const [appliedFilters, setAppliedFilters] = useState(initialFilters);
+    const [draftFilters, setDraftFilters] = useState(initialFilters);
+    const [applyingFilters, setApplyingFilters] = useState(false);
+
+    useEffect(() => {
+        setAppliedFilters(initialFilters);
+        setDraftFilters(initialFilters);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialMaxPrice, hoardings]);
+
+    const filterHasChanges = useMemo(() => {
+        return JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
+    }, [draftFilters, appliedFilters]);
+
+    const handleApplyFilters = async () => {
+        if (!filterHasChanges || applyingFilters) return;
+
+        if (!isAuthenticated) {
+            toast.error('Please sign in to apply filters');
+            window.location.href = '/login';
+            return;
+        }
+
+        setApplyingFilters(true);
+        try {
+            const res = await fetch('/api/credits/consume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ action: 'filter', source: 'explore' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.success === false) {
+                throw new Error(data?.error || 'Failed to consume credits');
+            }
+
+            setAppliedFilters(draftFilters);
+            toast.success('Filters applied', { description: 'Charged 5 credits' });
+        } catch (err) {
+            toast.error('Could not apply filters', { description: err?.message || 'Try again' });
+        } finally {
+            setApplyingFilters(false);
+        }
+    };
 
     const filteredHoardings = hoardings.filter(h => {
-        if (h.rate !== null && h.rate !== undefined && (h.rate < filters.minPrice || h.rate > filters.maxPrice)) return false;
-        if (filters.state && h.state?.toLowerCase() !== filters.state.toLowerCase()) return false;
-        if (filters.city && h.city?.toLowerCase() !== filters.city.toLowerCase()) return false;
-        if (h.mediaType && !filters.mediaTypes.includes(h.mediaType)) return false;
-        if (filters.vendorId !== 'all') {
+        const f = appliedFilters;
+        if (h.rate !== null && h.rate !== undefined && (h.rate < f.minPrice || h.rate > f.maxPrice)) return false;
+        if (f.state && h.state?.toLowerCase() !== f.state.toLowerCase()) return false;
+        if (f.city && h.city?.toLowerCase() !== f.city.toLowerCase()) return false;
+        if (h.mediaType && !f.mediaTypes.includes(h.mediaType)) return false;
+        if (f.vendorId !== 'all') {
             const hVendorId = h.vendorId ? Number(h.vendorId) : null;
-            const fVendorId = Number(filters.vendorId);
+            const fVendorId = Number(f.vendorId);
             if (hVendorId !== fVendorId) return false;
         }
         return true;
@@ -270,8 +319,11 @@ export default function ExploreView({ hoardings, user }) {
                     <div className="w-1/2 h-full bg-[#111]">
                         <FilterPanel
                             hoardings={hoardings}
-                            filters={filters}
-                            setFilters={setFilters}
+                            filters={draftFilters}
+                            setFilters={setDraftFilters}
+                            onApply={handleApplyFilters}
+                            canApply={filterHasChanges}
+                            isApplying={applyingFilters}
                         />
                     </div>
 

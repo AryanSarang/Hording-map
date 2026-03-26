@@ -6,8 +6,8 @@ import { Toaster } from "sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Hording Map",
-  description: "B2B outdoor media planning and inventory intelligence platform.",
+  title: "medvar",
+  description: "AI-powered media planning platform for smarter location-first campaign decisions.",
 };
 
 export default function RootLayout({ children }) {

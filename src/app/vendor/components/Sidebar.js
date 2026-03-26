@@ -26,7 +26,7 @@ export default function Sidebar() {
         <aside className={styles.sidebar}>
             <div className={styles.sidebarHeader}>
                 <Link href="/" style={{ textDecoration: 'none' }}>
-                    <h2 className={styles.logo}>Hording Map</h2>
+                    <h2 className={styles.logo}>medvar</h2>
                 </Link>
             </div>
 

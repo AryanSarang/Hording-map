@@ -28,7 +28,7 @@ export default function PublicHeader({ initialUser }) {
     <header className="sticky top-0 z-50 border-b border-slate-800/70 bg-slate-950/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/" className="text-lg font-medium text-white">
-          Hording Map
+          medvar
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm text-slate-300 md:flex">

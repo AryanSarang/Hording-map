@@ -7,31 +7,31 @@ import { getCurrentUser } from "../lib/authServer";
 export default async function Page() {
   const user = await getCurrentUser();
   const logos = [
-    "GlobalReach Media",
-    "AdSphere Agency",
-    "UrbanScreens",
-    "MetroBrand Co.",
-    "ScaleBridge",
-    "Prime OOH Network",
+    "Northlane Brands",
+    "UrbanPeak Media",
+    "SignalAxis Agency",
+    "BrightRoute Commerce",
+    "Apex Retail Group",
+    "Velocity Growth Labs",
   ];
   const testimonials = [
     {
       quote:
-        "Hording Map helped our agency reduce media planning time by nearly 40% across multi-city campaigns.",
+        "medvar helped us cut campaign planning time by over 60% while improving location decisions.",
       name: "Raghav Sharma",
-      role: "Media Director, AdSphere Agency",
+      role: "Media Director, SignalAxis Agency",
     },
     {
       quote:
-        "The variant-level control and ownership model gave our enterprise team exactly the governance we needed.",
+        "Budget allocation became clearer and easier to justify in stakeholder reviews.",
       name: "Priya Menon",
-      role: "Head of Marketing Ops, MetroBrand Co.",
+      role: "Head of Marketing Ops, BrightRoute Commerce",
     },
     {
       quote:
-        "From discovery to activation, this is the cleanest workflow we have used for OOH inventory planning.",
+        "The AI recommendations gave our team a strong first draft we could refine quickly and launch faster.",
       name: "Arjun Khanna",
-      role: "Campaign Lead, GlobalReach Media",
+      role: "Campaign Lead, UrbanPeak Media",
     },
   ];
 
@@ -51,19 +51,18 @@ export default async function Page() {
           <div className="mx-auto grid max-w-7xl gap-10 px-4 py-24 sm:px-6 lg:grid-cols-2 lg:items-center lg:px-8">
             <div>
               <p className="fade-up mb-3 inline-flex rounded-full border border-cyan-400/40 bg-cyan-500/15 px-3 py-1 text-xs font-medium uppercase tracking-wide text-cyan-200">
-                B2B OOH Intelligence Platform
+                AI-Powered Media Planning Platform
               </p>
               <h1 className="fade-up fade-up-delay-1 text-4xl font-medium leading-tight text-white sm:text-6xl">
-                Premium outdoor media planning, with speed and control.
+                Plan smarter. Reach better.
               </h1>
               <p className="fade-up fade-up-delay-2 mt-5 max-w-xl text-slate-200">
-                Hording Map unifies inventory discovery, city-level intelligence,
-                variant pricing, and activation workflows for agencies and enterprise
-                brands.
+                medvar helps brands discover better locations, optimize budget
+                allocation, and launch high-performing campaigns with confidence.
               </p>
               <div className="fade-up fade-up-delay-3 mt-7 flex flex-wrap gap-3">
                 <Link href="/explore" className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:scale-[1.02] hover:bg-blue-500">
-                  Explore Inventory
+                  Start Planning
                 </Link>
                 <Link href="/contact-us" className="rounded-lg border border-slate-600 bg-slate-900/30 px-5 py-2.5 text-sm font-medium text-slate-100 transition hover:scale-[1.02] hover:border-slate-400">
                   Book a Demo
@@ -72,11 +71,11 @@ export default async function Page() {
               <div className="fade-up fade-up-delay-3 mt-8 grid grid-cols-3 gap-4 text-center">
                 <div className="rounded-lg border border-white/15 bg-slate-900/35 p-3 backdrop-blur">
                   <p className="text-xl font-bold text-white">7,500+</p>
-                  <p className="text-xs text-slate-300">Media Assets</p>
+                  <p className="text-xs text-slate-300">Placement Opportunities</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-slate-900/35 p-3 backdrop-blur">
                   <p className="text-xl font-bold text-white">120+</p>
-                  <p className="text-xs text-slate-300">Cities Covered</p>
+                  <p className="text-xs text-slate-300">Market Zones</p>
                 </div>
                 <div className="rounded-lg border border-white/15 bg-slate-900/35 p-3 backdrop-blur">
                   <p className="text-xl font-bold text-white">40%</p>
@@ -90,15 +89,15 @@ export default async function Page() {
               <div className="mt-4 space-y-3">
                 <div className="rounded-md border border-slate-700/80 bg-slate-950/70 p-3">
                   <p className="text-xs text-slate-400">Avg. campaign planning time</p>
-                  <p className="text-lg font-medium text-white">From 5 days to 3 days</p>
+                  <p className="text-lg font-medium text-white">From 5 days to under 2 days</p>
                 </div>
                 <div className="rounded-md border border-slate-700/80 bg-slate-950/70 p-3">
-                  <p className="text-xs text-slate-400">Inventory coverage</p>
-                  <p className="text-lg font-medium text-white">OOH + DOOH + Transit</p>
+                  <p className="text-xs text-slate-400">Recommendation engine</p>
+                  <p className="text-lg font-medium text-white">AI + location intelligence</p>
                 </div>
                 <div className="rounded-md border border-slate-700/80 bg-slate-950/70 p-3">
-                  <p className="text-xs text-slate-400">Access model</p>
-                  <p className="text-lg font-medium text-white">Strict account ownership</p>
+                  <p className="text-xs text-slate-400">Decision confidence</p>
+                  <p className="text-lg font-medium text-white">Transparent budget rationale</p>
                 </div>
               </div>
             </div>
@@ -108,7 +107,7 @@ export default async function Page() {
         <section className="border-y border-slate-800 bg-slate-900/30">
           <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             <p className="mb-4 text-center text-xs uppercase tracking-[0.2em] text-slate-400">
-              Trusted by growth-focused teams
+              Trusted by modern growth teams
             </p>
             <div className="marquee">
               <div className="marquee-track gap-3 text-center text-sm font-normal text-slate-300">
@@ -127,30 +126,30 @@ export default async function Page() {
             <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
               <div>
                 <p className="mb-2 text-xs uppercase tracking-[0.2em] text-cyan-300">Platform Capabilities</p>
-                <h2 className="text-4xl font-medium text-white sm:text-5xl">Built for serious campaign velocity</h2>
+                <h2 className="text-4xl font-medium text-white sm:text-5xl">Built for measurable campaign outcomes</h2>
               </div>
               <p className="max-w-md text-sm text-slate-300">
-                Design-first interface, enterprise controls, and data-rich planning in one workflow.
+                Clear workflows, intelligent recommendations, and execution-ready plans in one place.
               </p>
             </div>
 
             <div className="grid gap-5 lg:grid-cols-3">
               <article className="group rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-6 transition duration-300 hover:-translate-y-1 hover:border-cyan-500/60">
                 <p className="mb-4 text-xs uppercase tracking-wide text-cyan-300">01</p>
-                <h3 className="mb-2 text-xl font-semibold text-white">Inventory Intelligence</h3>
-                <p className="text-sm text-slate-300">Map discovery with structured attributes, standardized metadata, and clean variant relationships.</p>
+                <h3 className="mb-2 text-xl font-semibold text-white">AI Campaign Planner</h3>
+                <p className="text-sm text-slate-300">Generate campaign-ready recommendations from goals, audience, and location context.</p>
                 <div className="mt-5 h-1.5 w-20 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
               </article>
               <article className="group rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-6 transition duration-300 hover:-translate-y-1 hover:border-cyan-500/60">
                 <p className="mb-4 text-xs uppercase tracking-wide text-cyan-300">02</p>
-                <h3 className="mb-2 text-xl font-semibold text-white">Workflow Governance</h3>
-                <p className="text-sm text-slate-300">Ownership-driven access with clean controls so teams collaborate without data leakage.</p>
+                <h3 className="mb-2 text-xl font-semibold text-white">Location Intelligence</h3>
+                <p className="text-sm text-slate-300">Compare areas by relevant signals so your placements align with campaign intent.</p>
                 <div className="mt-5 h-1.5 w-20 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
               </article>
               <article className="group rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-6 transition duration-300 hover:-translate-y-1 hover:border-cyan-500/60">
                 <p className="mb-4 text-xs uppercase tracking-wide text-cyan-300">03</p>
-                <h3 className="mb-2 text-xl font-semibold text-white">Activation Speed</h3>
-                <p className="text-sm text-slate-300">Bulk import/export, quick rate updates, and fewer handoffs from planning to execution.</p>
+                <h3 className="mb-2 text-xl font-semibold text-white">Budget Optimizer</h3>
+                <p className="text-sm text-slate-300">Distribute spend with transparent logic, then refine quickly with your team.</p>
                 <div className="mt-5 h-1.5 w-20 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
               </article>
             </div>
@@ -162,19 +161,19 @@ export default async function Page() {
             <article className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-7 lg:col-span-5">
               <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-blue-500/20 blur-3xl" />
               <p className="text-xs uppercase tracking-[0.2em] text-blue-300">For agencies</p>
-              <h3 className="mt-3 text-2xl font-semibold text-white">Multi-brand planning at scale</h3>
-              <p className="mt-3 text-sm text-slate-300">Create faster city comparisons, align media mixes, and reduce planning noise across accounts.</p>
+              <h3 className="mt-3 text-2xl font-semibold text-white">Scale multi-brand planning</h3>
+              <p className="mt-3 text-sm text-slate-300">Create faster market comparisons and launch stronger campaign drafts with less manual effort.</p>
             </article>
             <article className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-7 lg:col-span-4">
               <div className="absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-cyan-500/20 blur-3xl" />
               <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">For brands</p>
               <h3 className="mt-3 text-2xl font-semibold text-white">Operational clarity</h3>
-              <p className="mt-3 text-sm text-slate-300">Standardize buying workflows and get visibility from regional planning to enterprise reporting.</p>
+              <p className="mt-3 text-sm text-slate-300">Standardize planning workflows and gain visibility from regional execution to leadership reporting.</p>
             </article>
             <article className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-7 lg:col-span-3">
               <p className="text-xs uppercase tracking-[0.2em] text-indigo-300">For owners</p>
-              <h3 className="mt-3 text-2xl font-semibold text-white">Inventory value unlock</h3>
-              <p className="mt-3 text-sm text-slate-300">Digitize and package inventory with stronger discoverability for qualified demand.</p>
+              <h3 className="mt-3 text-2xl font-semibold text-white">Revenue-ready inventory</h3>
+              <p className="mt-3 text-sm text-slate-300">Package inventory with better discoverability so qualified demand reaches you faster.</p>
             </article>
           </div>
         </section>
@@ -182,8 +181,8 @@ export default async function Page() {
         <section className="border-y border-slate-800 bg-[linear-gradient(to_bottom,rgba(15,23,42,0.45),rgba(2,6,23,0.75))]">
           <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
             <div className="mb-8 flex items-end justify-between gap-4">
-              <h2 className="text-4xl font-semibold text-white">What teams say</h2>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Client stories</p>
+              <h2 className="text-4xl font-semibold text-white">What clients say</h2>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Reviews</p>
             </div>
             <div className="grid gap-6 md:grid-cols-3">
               {testimonials.map((item) => (
@@ -206,36 +205,36 @@ export default async function Page() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-5 transition duration-300 hover:border-slate-600 hover:bg-slate-900">
-              <h3 className="font-semibold text-white">Can we onboard city-wise inventory in bulk?</h3>
-              <p className="mt-2 text-sm text-slate-300">Yes. CSV import supports large batch onboarding, with normalized fields and variant rows.</p>
+              <h3 className="font-semibold text-white">Can medvar help us plan campaigns faster?</h3>
+              <p className="mt-2 text-sm text-slate-300">Yes. Teams use medvar to move from manual planning to AI-assisted drafts in minutes.</p>
             </article>
             <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-5 transition duration-300 hover:border-slate-600 hover:bg-slate-900">
-              <h3 className="font-semibold text-white">Do you support enterprise access controls?</h3>
-              <p className="mt-2 text-sm text-slate-300">Yes. Ownership-based access is implemented so each account sees only authorized data.</p>
+              <h3 className="font-semibold text-white">How does medvar improve placement quality?</h3>
+              <p className="mt-2 text-sm text-slate-300">We combine location signals and campaign goals to recommend placements with stronger fit potential.</p>
             </article>
             <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-5 transition duration-300 hover:border-slate-600 hover:bg-slate-900">
-              <h3 className="font-semibold text-white">Is this useful for agency and brand teams together?</h3>
-              <p className="mt-2 text-sm text-slate-300">Absolutely. The workflow is designed for cross-functional planning and activation teams.</p>
+              <h3 className="font-semibold text-white">Do agency and brand teams collaborate in one workflow?</h3>
+              <p className="mt-2 text-sm text-slate-300">Absolutely. medvar is designed for shared planning, reviews, and execution handoff.</p>
             </article>
             <article className="rounded-xl border border-slate-800 bg-slate-900/70 p-5 transition duration-300 hover:border-slate-600 hover:bg-slate-900">
-              <h3 className="font-semibold text-white">Can we request a custom implementation?</h3>
-              <p className="mt-2 text-sm text-slate-300">Yes. Use the contact page for custom integrations and enterprise onboarding.</p>
+              <h3 className="font-semibold text-white">Can we request custom onboarding and integrations?</h3>
+              <p className="mt-2 text-sm text-slate-300">Yes. Contact us for tailored onboarding, workflows, and integration support.</p>
             </article>
           </div>
         </section>
 
         <section className="border-t border-slate-800 bg-gradient-to-r from-blue-950/40 via-slate-900 to-cyan-950/40">
           <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8">
-            <h2 className="text-3xl font-semibold text-white">Ready to upgrade your OOH planning stack?</h2>
+            <h2 className="text-3xl font-semibold text-white">Ready to plan your next campaign with confidence?</h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm text-slate-300">
-              Let us help your team launch faster workflows and better campaign outcomes.
+              Start with medvar and turn location decisions into measurable campaign performance.
             </p>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <Link href="/contact-us" className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500">
-                Book a Strategy Call
+                Get Started
               </Link>
               <Link href="/about-us" className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-200 hover:border-slate-500">
-                Learn About Us
+                Learn About medvar
               </Link>
             </div>
           </div>

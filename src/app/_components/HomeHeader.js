@@ -56,7 +56,7 @@ export default function HomeHeader({ user }) {
                 <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center border border-green-500/20">
                     <Lock className="text-green-500" size={16} />
                 </div>
-                <span className="text-lg font-bold text-white tracking-tight">Hording Explorer</span>
+                <span className="text-lg font-bold text-white tracking-tight">medvar</span>
             </div>
 
             {/* RIGHT: ACTIONS */}

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { Sparkles, FolderOpen, Settings, CreditCard, LogOut, LogIn, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 function getDisplayName(user) {
     if (!user) return 'Guest';
@@ -27,6 +28,47 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
     const [aiNotice, setAiNotice] = useState(null);
+    const [credits, setCredits] = useState(null);
+    const [creditsLoading, setCreditsLoading] = useState(false);
+    const [creditsExempt, setCreditsExempt] = useState(false);
+
+    const handleTopUpCredits = () => {
+        toast('Top up coming soon', {
+            description: 'Contact admin / Top up later (build phase).',
+        });
+    };
+
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+
+        let cancelled = false;
+        const loadCredits = async () => {
+            setCreditsLoading(true);
+            try {
+                const res = await fetch('/api/credits/balance', {
+                    method: 'GET',
+                    credentials: 'include',
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data?.success === false) return;
+
+                if (data?.exempt) {
+                    if (!cancelled) setCreditsExempt(true);
+                } else {
+                    if (!cancelled) setCredits(data?.credits ?? 0);
+                }
+            } catch {
+                // If credits endpoint fails, keep UI minimal (no badge).
+            } finally {
+                if (!cancelled) setCreditsLoading(false);
+            }
+        };
+
+        loadCredits();
+        return () => {
+            cancelled = true;
+        };
+    }, [isAuthenticated, user?.id]);
 
     const handleCreate = async (e) => {
         e.preventDefault();
@@ -232,10 +274,30 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                 </button>
 
                 {isProfileOpen && (
-                    <div className="absolute top-full right-0 mt-2 w-48 bg-[#111] border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute top-full right-0 mt-2 w-64 bg-[#111] border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-1">
                             {isAuthenticated ? (
                                 <>
+                                    {!creditsExempt && (
+                                        <div className="px-3 py-2">
+                                            <div className="flex items-center gap-2">
+                                                <CreditCard size={14} className="text-green-400" />
+                                                <p className="text-xs text-white font-medium leading-none whitespace-nowrap">
+                                                    {creditsLoading ? '...' : `${credits ?? 0} Credits`}
+                                                </p>
+                                            </div>
+                                            {!creditsLoading && typeof credits === 'number' && credits <= 10 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleTopUpCredits}
+                                                    className="mt-2 w-full px-2 py-1 rounded-lg border border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20 text-[10px] text-yellow-200 font-medium transition-colors"
+                                                >
+                                                    Top up
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    {!creditsExempt && <div className="h-px bg-gray-800 my-1" />}
                                     <button className="w-full text-left px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 rounded-lg flex items-center gap-2">
                                         <Settings size={14} /> Account Settings
                                     </button>

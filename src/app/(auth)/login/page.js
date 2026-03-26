@@ -56,7 +56,7 @@ export default function LoginPage() {
                 <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mx-auto mb-4 border border-green-500/20">
                     <Lock className="text-green-500" size={20} />
                 </div>
-                <h1 className="text-2xl  text-white tracking-tight">Hording Explorer</h1>
+                <h1 className="text-2xl  text-white tracking-tight">medvar</h1>
                 <p className="text-sm text-gray-500 mt-2">Sign in to access your dashboard</p>
             </div>
 

@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { getCurrentUser } from '../../../lib/authServer';
+import { applyCreditDelta } from '../../../lib/creditsServer';
 
 function normalizePlanItems(items) {
     if (!Array.isArray(items)) return [];
@@ -83,6 +84,24 @@ export async function POST(req) {
             .single();
 
         if (error) throw error;
+
+        // Charge non-admin users for creating plans
+        const creditRes = await applyCreditDelta({
+            action: 'create_plan',
+            delta: -2,
+            metadata: { mode: 'manual', plan_id: data?.id },
+        });
+
+        if (creditRes?.success === false) {
+            // Rollback plan creation if credits failed to apply
+            await supabaseAdmin
+                .from('plans')
+                .delete()
+                .eq('id', data?.id)
+                .eq('user_id', user.id);
+
+            throw new Error(creditRes?.error || 'Failed to charge plan credits');
+        }
 
         return NextResponse.json({ success: true, plan: data }, { status: 201 });
     } catch (error) {
