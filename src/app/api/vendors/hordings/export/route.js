@@ -1,33 +1,18 @@
 // app/api/vendors/hordings/export/route.js
-// Bulk-fetches data (no per-row queries) and streams CSV so large exports don't timeout.
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '../../../../../lib/supabase';
-import { isValidMediaId } from '../../../../../lib/genId10';
-import { getCurrentUser } from '../../../../../lib/authServer';
+// Shopify-style single CSV: same handle on each row; site/POC/metafields + pricing_rules_json only on first row per media.
+// Variant rows repeat handle with blank parent columns (like Shopify). All pricing rules live in pricing_rules_json on row 1 — no extra "pricing-only" rows.
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "../../../../../lib/supabase";
+import { isValidMediaId } from "../../../../../lib/genId10";
+import { getCurrentUser } from "../../../../../lib/authServer";
+import {
+    escapeCsv,
+    imagesToPipeString,
+    buildUnifiedShopifyStyleHeaders,
+    unifiedParentStaticHeaderNames,
+} from "../../../../../lib/hordingsExportBundle";
 
-const BATCH_SIZE = 100; // max ids per .in() query to avoid URL/query size limits
-
-function escapeCsv(val) {
-    if (val == null || val === '') return '';
-    const s = String(val);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-}
-
-function imagesToPipeString(media) {
-    if (Array.isArray(media)) return media.join('|');
-    if (typeof media === 'string') {
-        try {
-            const parsed = JSON.parse(media);
-            return Array.isArray(parsed) ? parsed.join('|') : media;
-        } catch {
-            return media;
-        }
-    }
-    return '';
-}
+const BATCH_SIZE = 100;
 
 function chunk(arr, size) {
     const out = [];
@@ -35,39 +20,75 @@ function chunk(arr, size) {
     return out;
 }
 
-// Shared export logic: mediaIds = [] means "all"
+/** Empty cells after handle: id..option3, pricing_rules_json, metafields — all blank. */
+function emptyContinuationParent(staticParentCount, metaCount) {
+    return Array(staticParentCount - 1 + metaCount).fill("");
+}
+
+function parentTailValues(h, vendorName, images, metas, allMetaKeys, pricingRulesJson) {
+    return [
+        h.id,
+        h.title ?? "",
+        h.vendor_id ?? "",
+        vendorName,
+        h.state ?? "",
+        h.city ?? "",
+        h.zone ?? "",
+        h.locality ?? "",
+        h.address ?? "",
+        h.pincode ?? "",
+        h.landmark ?? "",
+        h.latitude ?? "",
+        h.longitude ?? "",
+        h.poc_name ?? "",
+        h.poc_number ?? "",
+        h.poc_email ?? "",
+        h.monthly_rental ?? "",
+        h.vendor_rate ?? "",
+        h.minimum_booking_duration ?? "",
+        h.media_type ?? "",
+        images,
+        h.screen_size ?? "",
+        h.display_format ?? "",
+        h.display_hours ?? "",
+        h.status ?? "",
+        h.option1_name ?? "",
+        h.option2_name ?? "",
+        h.option3_name ?? "",
+        pricingRulesJson,
+        ...allMetaKeys.map((k) => metas[k] ?? ""),
+    ];
+}
+
 async function runExport(mediaIds, userId) {
-    // 1. Fetch media: explicit limit for "all" (Supabase default is often 1000)
-    let query = supabaseAdmin.from('media').select('*').eq('user_id', userId);
+    let query = supabaseAdmin.from("media").select("*").eq("user_id", userId);
     if (mediaIds.length > 0) {
-        query = query.in('id', mediaIds);
+        query = query.in("id", mediaIds);
     } else {
-        query = query.range(0, 99999); // fetch up to 100k when exporting "all" (avoids default 1000 limit)
+        query = query.range(0, 99999);
     }
-    const { data: list, error: mediaError } = await query.order('created_at', { ascending: false });
+    const { data: list, error: mediaError } = await query.order("created_at", { ascending: false });
 
     if (mediaError) throw mediaError;
     const rows = list || [];
 
-    // 2. Vendor names – one query
     const vendorIds = [...new Set(rows.map((h) => h.vendor_id).filter(Boolean))];
     let vendorMap = {};
     if (vendorIds.length > 0) {
-        const { data: vendors } = await supabaseAdmin.from('vendors').select('id, name').in('id', vendorIds);
-        vendorMap = Object.fromEntries((vendors || []).map((v) => [v.id, v.name || '']));
+        const { data: vendors } = await supabaseAdmin.from("vendors").select("id, name").in("id", vendorIds);
+        vendorMap = Object.fromEntries((vendors || []).map((v) => [v.id, v.name || ""]));
     }
 
     const ids = rows.map((r) => r.id);
 
-    // 3. Bulk fetch all metafields (batched)
     const metafieldsByMedia = {};
     if (ids.length > 0) {
         const idChunks = chunk(ids, BATCH_SIZE);
         for (const idList of idChunks) {
             const { data: metaRows } = await supabaseAdmin
-                .from('media_metafields')
-                .select('media_id, key, value')
-                .in('media_id', idList);
+                .from("media_metafields")
+                .select("media_id, key, value")
+                .in("media_id", idList);
             for (const m of metaRows || []) {
                 if (!metafieldsByMedia[m.media_id]) metafieldsByMedia[m.media_id] = {};
                 metafieldsByMedia[m.media_id][m.key] = m.value;
@@ -75,7 +96,6 @@ async function runExport(mediaIds, userId) {
         }
     }
 
-    // 4. Fetch variants
     const variantsByMedia = {};
     const pricingRulesByMedia = {};
     if (ids.length > 0) {
@@ -83,15 +103,15 @@ async function runExport(mediaIds, userId) {
         for (const idList of idChunks) {
             const [{ data: variantRows }, { data: pricingRuleRows }] = await Promise.all([
                 supabaseAdmin
-                    .from('media_variants')
-                    .select('*')
-                    .in('media_id', idList)
-                    .order('display_order', { ascending: true }),
+                    .from("media_variants")
+                    .select("*")
+                    .in("media_id", idList)
+                    .order("display_order", { ascending: true }),
                 supabaseAdmin
-                    .from('media_pricing_rules')
-                    .select('media_id, rule_name, option_label, multiplier, display_order')
-                    .in('media_id', idList)
-                    .order('display_order', { ascending: true }),
+                    .from("media_pricing_rules")
+                    .select("media_id, rule_name, option_label, multiplier, display_order")
+                    .in("media_id", idList)
+                    .order("display_order", { ascending: true }),
             ]);
             for (const v of variantRows || []) {
                 if (!variantsByMedia[v.media_id]) variantsByMedia[v.media_id] = [];
@@ -105,100 +125,98 @@ async function runExport(mediaIds, userId) {
     }
 
     const allMetaKeys = [
-        ...new Set(
-            Object.values(metafieldsByMedia).flatMap((m) => Object.keys(m))
-        ),
+        ...new Set(Object.values(metafieldsByMedia).flatMap((m) => Object.keys(m))),
     ].sort();
 
-    const baseHeaders = [
-        'id', 'vendor_id', 'vendor_name',
-        'state', 'city', 'zone', 'locality', 'address', 'pincode', 'landmark',
-        'latitude', 'longitude',
-        'poc_name', 'poc_number', 'poc_email',
-        'monthly_rental', 'vendor_rate', 'minimum_booking_duration',
-        'media_type',
-        'images',
-        'screen_size', 'display_format', 'display_hours',
-        'status',
-        'pricing_rules',
-        'variant_id', 'option1_name', 'option2_name', 'option3_name', 'option1_value', 'option2_value', 'option3_value', 'variant_title',
-        'audience_category', 'seating', 'cinema_format', 'size', 'variant_rate',
-    ];
-    const metaHeaders = allMetaKeys.map((k) => `metafield.${k}`);
-    const headers = [...baseHeaders, ...metaHeaders];
-    const headerLine = headers.map(escapeCsv).join(',') + '\n';
+    const variantCustomKeys = new Set();
+    for (const vid of Object.keys(variantsByMedia)) {
+        for (const v of variantsByMedia[vid]) {
+            const cf = v.custom_fields && typeof v.custom_fields === "object" ? v.custom_fields : {};
+            Object.keys(cf).forEach((k) => variantCustomKeys.add(k));
+        }
+    }
+    const sortedVariantCustomKeys = [...variantCustomKeys].sort();
 
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-        async start(controller) {
-            controller.enqueue(encoder.encode(headerLine));
-            for (const h of rows) {
-                const metas = metafieldsByMedia[h.id] || {};
-                const vendorName = vendorMap[h.vendor_id] ?? '';
-                const images = imagesToPipeString(h.media);
-                const pricingRules = pricingRulesByMedia[h.id] || [];
-                const pricingRulesStr = pricingRules.length > 0
-                    ? pricingRules.map((r) => `${r.rule_name}:${r.option_label}:${r.multiplier}`).join('|')
-                    : '';
-                const mediaVariants = variantsByMedia[h.id] || [];
-                const exportRows = mediaVariants.length > 0 ? mediaVariants : [null];
+    const headers = buildUnifiedShopifyStyleHeaders(allMetaKeys, sortedVariantCustomKeys);
+    const staticParentCount = unifiedParentStaticHeaderNames().length;
 
-                for (const v of exportRows) {
-                    const base = [
-                        h.id,
-                        h.vendor_id ?? '',
-                        vendorName,
-                        h.state ?? '',
-                        h.city ?? '',
-                        h.zone ?? '',
-                        h.locality ?? '',
-                        h.address ?? '',
-                        h.pincode ?? '',
-                        h.landmark ?? '',
-                        h.latitude ?? '',
-                        h.longitude ?? '',
-                        h.poc_name ?? '',
-                        h.poc_number ?? '',
-                        h.poc_email ?? '',
-                        h.monthly_rental ?? '',
-                        h.vendor_rate ?? '',
-                        h.minimum_booking_duration ?? '',
-                        h.media_type ?? '',
-                        images,
-                        h.screen_size ?? '',
-                        h.display_format ?? '',
-                        h.display_hours ?? '',
-                        h.status ?? '',
-                        pricingRulesStr,
-                        v?.id ?? '',
-                        h.option1_name ?? '',
-                        h.option2_name ?? '',
-                        h.option3_name ?? '',
-                        v?.option1_value ?? '',
-                        v?.option2_value ?? '',
-                        v?.option3_value ?? '',
-                        v?.variant_title ?? '',
-                        v?.audience_category ?? '',
-                        v?.seating ?? '',
-                        v?.cinema_format ?? '',
-                        v?.size ?? '',
-                        v?.rate ?? '',
-                    ];
-                    const metaVals = allMetaKeys.map((k) => metas[k] ?? '');
-                    const rowLine = [...base, ...metaVals].map(escapeCsv).join(',') + '\n';
-                    controller.enqueue(encoder.encode(rowLine));
+    const lines = [headers.map(escapeCsv).join(",")];
+
+    for (const h of rows) {
+        const metas = metafieldsByMedia[h.id] || {};
+        const vendorName = vendorMap[h.vendor_id] ?? "";
+        const images = imagesToPipeString(h.media);
+        const pricingRules = pricingRulesByMedia[h.id] || [];
+        const pricingRulesJson =
+            pricingRules.length > 0
+                ? JSON.stringify(
+                    pricingRules.map((r) => ({
+                        rule_name: r.rule_name,
+                        option_label: r.option_label,
+                        multiplier: Number(r.multiplier),
+                    }))
+                )
+                : "";
+
+        const vars = variantsByMedia[h.id] || [];
+        const handle = h.id;
+
+        function variantCells(v) {
+            const cf =
+                v.custom_fields && typeof v.custom_fields === "object" ? v.custom_fields : {};
+            return [
+                v.id ?? "",
+                v.display_order ?? "",
+                v.option1_value ?? "",
+                v.option2_value ?? "",
+                v.option3_value ?? "",
+                v.variant_title ?? "",
+                v.audience_category ?? "",
+                v.seating ?? "",
+                v.cinema_format ?? "",
+                v.size ?? "",
+                v.rate ?? "",
+                ...sortedVariantCustomKeys.map((k) => cf[k] ?? ""),
+            ];
+        }
+
+        const emptyContinuation = emptyContinuationParent(staticParentCount, allMetaKeys.length);
+
+        if (vars.length === 0) {
+            lines.push(
+                [handle, ...parentTailValues(h, vendorName, images, metas, allMetaKeys, pricingRulesJson), ...variantCells({})].map(
+                    escapeCsv
+                ).join(",")
+            );
+        } else {
+            vars.forEach((v, idx) => {
+                if (idx === 0) {
+                    lines.push(
+                        [
+                            handle,
+                            ...parentTailValues(h, vendorName, images, metas, allMetaKeys, pricingRulesJson),
+                            ...variantCells(v),
+                        ]
+                            .map(escapeCsv)
+                            .join(",")
+                    );
+                } else {
+                    lines.push([handle, ...emptyContinuation, ...variantCells(v)].map(escapeCsv).join(","));
                 }
-            }
-            controller.close();
-        },
-    });
+            });
+        }
+    }
 
-    return new Response(stream, {
+    const csv = lines.join("\n") + "\n";
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `media-export-${dateStr}.csv`;
+
+    return new Response(csv, {
         status: 200,
         headers: {
-            'Content-Type': 'text/csv; charset=utf-8',
-            'Content-Disposition': `attachment; filename="media-export-${new Date().toISOString().slice(0, 10)}.csv"`,
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${filename}"`,
+            "Cache-Control": "no-store, no-cache, must-revalidate",
         },
     });
 }
@@ -210,30 +228,28 @@ function exportError(message) {
 export async function GET(req) {
     try {
         const user = await getCurrentUser();
-        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        if (!user?.id) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
         const { searchParams } = new URL(req.url);
-        const idsParam = searchParams.get('ids');
+        const idsParam = searchParams.get("ids");
 
         let mediaIds = [];
         if (idsParam?.trim()) {
-            // GET with ?ids=... can hit URL length limit (~2–8KB) with many UUIDs
-            mediaIds = idsParam.split(',').map((id) => id.trim()).filter(isValidMediaId);
+            mediaIds = idsParam.split(",").map((id) => id.trim()).filter(isValidMediaId);
         }
 
         return await runExport(mediaIds, user.id);
     } catch (error) {
-        console.error('GET /api/vendors/hordings/export Error:', error);
-        const message = error?.message || error?.error_description || String(error) || 'Export failed';
+        console.error("GET /api/vendors/hordings/export Error:", error);
+        const message = error?.message || error?.error_description || String(error) || "Export failed";
         return exportError(message);
     }
 }
 
-// POST: send ids in body to avoid URL length limit when exporting many selected items
 export async function POST(req) {
     try {
         const user = await getCurrentUser();
-        if (!user?.id) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+        if (!user?.id) return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
 
         let mediaIds = [];
         try {
@@ -246,8 +262,8 @@ export async function POST(req) {
         }
         return await runExport(mediaIds, user.id);
     } catch (error) {
-        console.error('POST /api/vendors/hordings/export Error:', error);
-        const message = error?.message || error?.error_description || String(error) || 'Export failed';
+        console.error("POST /api/vendors/hordings/export Error:", error);
+        const message = error?.message || error?.error_description || String(error) || "Export failed";
         return exportError(message);
     }
 }

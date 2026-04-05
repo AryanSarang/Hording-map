@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
+import { fetchAllSupabasePages } from '../../../../lib/fetchAllSupabasePages';
 
 function normalizeVariant(input, index = 0) {
     const option1 = String(input.option1Value ?? input.screenCode ?? '').trim();
@@ -84,31 +85,40 @@ export async function GET(req) {
         const city = searchParams.get('city');
         const mediaType = searchParams.get('mediaType');
 
-        let query = supabaseAdmin
-            .from('media')
-            .select('*, vendor:vendors(id, name)')
-            .eq('user_id', user.id);
+        const buildQuery = () => {
+            let q = supabaseAdmin
+                .from('media')
+                .select('*, vendor:vendors(id, name)')
+                .eq('user_id', user.id);
+            if (vendorId) q = q.eq('vendor_id', vendorId);
+            if (status) q = q.eq('status', status);
+            if (city) q = q.ilike('city', `%${city}%`);
+            if (mediaType) q = q.eq('media_type', mediaType);
+            return q.order('id', { ascending: false });
+        };
 
-        if (vendorId) query = query.eq('vendor_id', vendorId);
-        if (status) query = query.eq('status', status);
-        if (city) query = query.ilike('city', `%${city}%`);
-        if (mediaType) query = query.eq('media_type', mediaType);
-
-        const { data: hordings, error } = await query.order('id', { ascending: false });
+        const { data: hordings, error } = await fetchAllSupabasePages((from, to) =>
+            buildQuery().range(from, to)
+        );
 
         if (error) throw error;
 
         const items = hordings || [];
         const mediaIds = items.map((m) => m.id);
         let variantCountByMedia = {};
+        const IN_CHUNK = 120;
         if (mediaIds.length > 0) {
-            const { data: variants } = await supabaseAdmin
-                .from('media_variants')
-                .select('id, media_id')
-                .in('media_id', mediaIds);
-            (variants || []).forEach((v) => {
-                variantCountByMedia[v.media_id] = (variantCountByMedia[v.media_id] || 0) + 1;
-            });
+            for (let i = 0; i < mediaIds.length; i += IN_CHUNK) {
+                const slice = mediaIds.slice(i, i + IN_CHUNK);
+                const { data: variants, error: vErr } = await supabaseAdmin
+                    .from('media_variants')
+                    .select('id, media_id')
+                    .in('media_id', slice);
+                if (vErr) throw vErr;
+                (variants || []).forEach((v) => {
+                    variantCountByMedia[v.media_id] = (variantCountByMedia[v.media_id] || 0) + 1;
+                });
+            }
         }
 
         return NextResponse.json({

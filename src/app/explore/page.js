@@ -2,20 +2,28 @@
 import ExploreView from './_components/ExploreView';
 import { supabase } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/authServer';
+import { fetchAllSupabasePages } from '../../lib/fetchAllSupabasePages';
 
 // Force the page to fetch fresh data on every visit
 export const revalidate = 0;
 
 export default async function ExplorePage() {
-    // 1. Fetch data using Supabase Client (public)
+    // 1. Fetch all rows (PostgREST default max ~1000 per request without pagination)
     const [{ data: hoardings, error }, { data: variants, error: variantsError }] = await Promise.all([
-        supabase
-            .from('media')
-            .select('*, vendor:vendors(name)'),
-        supabase
-            .from('media_variants')
-            .select('*')
-            .order('display_order', { ascending: true }),
+        fetchAllSupabasePages((from, to) =>
+            supabase
+                .from('media')
+                .select('*, vendor:vendors(name)')
+                .order('id', { ascending: true })
+                .range(from, to)
+        ),
+        fetchAllSupabasePages((from, to) =>
+            supabase
+                .from('media_variants')
+                .select('*')
+                .order('id', { ascending: true })
+                .range(from, to)
+        ),
     ]);
 
     // 2. Get current user (may be null; explore is public)
@@ -31,6 +39,11 @@ export default async function ExplorePage() {
         if (!variantsByMedia[v.media_id]) variantsByMedia[v.media_id] = [];
         variantsByMedia[v.media_id].push(v);
     });
+    for (const id of Object.keys(variantsByMedia)) {
+        variantsByMedia[id].sort(
+            (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+        );
+    }
 
     // 3. Format data (parse JSON strings, ensure numbers, map to camelCase used in explore components)
     const formattedHoardings = (hoardings || []).map(h => {

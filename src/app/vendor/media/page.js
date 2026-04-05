@@ -157,6 +157,9 @@ export default function MediaPage() {
     async function handleImport(e) {
         e.preventDefault();
         if (!importFile) { setImportResult({ success: false, error: 'Please select a CSV file' }); return; }
+        if (!(importFile.name || '').toLowerCase().endsWith('.csv')) {
+            setImportResult({ success: false, error: 'Import accepts .csv only' }); return;
+        }
         setImporting(true);
         setImportResult(null);
 
@@ -283,10 +286,17 @@ export default function MediaPage() {
                             <button type="button" className={styles.modalClose} onClick={() => setShowImport(false)}>×</button>
                         </div>
                         <div className={styles.modalBody}>
-                            <p className={styles.importHint}>Use the correct CSV format. Download the template to ensure your file matches.</p>
-                            <a href="/api/vendors/hordings/import-template" download className={styles.templateLink}>Download CSV template</a>
+                            <p className={styles.importHint}>
+                                Unified CSV: put location, POC, metafields, optional <code>title</code>, and <strong>all pricing rules</strong> in <code>pricing_rules_json</code> on the <strong>first</strong> row of each media. <code>handle</code> and <code>id</code> are optional on create — leave them blank and the importer groups variant rows in order and derives a handle from <code>title</code> (or address). You can still set the same <code>handle</code> on every row (Shopify-style). Variant rows leave parent cells <strong>blank</strong>. Legacy flat template repeats parent columns on every row.
+                            </p>
+                            <a href="/api/vendors/hordings/import-template" download className={styles.templateLink}>Download template (Shopify-style CSV)</a>
+                            {' · '}
+                            <a href="/api/vendors/hordings/import-template?format=legacy" download className={styles.templateLink}>Legacy flat CSV template</a>
                             <form onSubmit={handleImport} className={styles.importForm}>
-                                <div className={styles.formGroup}><label>CSV File</label><input type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files?.[0] || null)} /></div>
+                                <div className={styles.formGroup}>
+                                    <label>CSV file</label>
+                                    <input type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files?.[0] || null)} />
+                                </div>
                                 {importResult && (
                                     <div className={importResult.success ? styles.importSuccess : styles.error}>
                                         <p>{importResult.success ? importResult.message : importResult.error}</p>
