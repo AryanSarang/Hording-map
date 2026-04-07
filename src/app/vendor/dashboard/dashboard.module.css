@@ -8,40 +8,49 @@
 }
 
 .topbar {
-    background: #121829;
-    border-bottom: 1px solid #1f2937;
-    padding: 1.5rem 2rem;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(11, 18, 32, 0.98));
+    border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+    padding: 14px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    flex-wrap: wrap;
+    gap: 10px;
+    box-shadow: 0 1px 0 rgba(59, 130, 246, 0.06);
 }
 
 .title {
-    font-size: 1.75rem;
+    font-size: 1.125rem;
     font-weight: 700;
     margin: 0;
-    color: #fff;
+    color: #f1f5f9;
 }
 
 .createBtn {
-    padding: 0.625rem 1.25rem;
+    padding: 8px 14px;
     background: #3b82f6;
     color: white;
-    border-radius: 6px;
+    border-radius: 8px;
     text-decoration: none;
-    font-weight: 400;
-    font-size: 0.9rem;
-    transition: background 0.2s;
+    font-weight: 600;
+    font-size: 12px;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 12px rgba(59, 130, 246, 0.25);
 }
 
 .createBtn:hover {
     background: #2563eb;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
 }
 
 .content {
     flex: 1;
-    padding: 2rem;
+    min-height: 0;
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
     overflow-y: auto;
 }
 
@@ -53,15 +62,17 @@
 }
 
 .statCard {
-    background: #121829;
-    border: 1px solid #1f2937;
-    border-radius: 8px;
-    padding: 1.5rem;
-    transition: border-color 0.2s;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(51, 65, 85, 0.55);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    backdrop-filter: blur(6px);
 }
 
 .statCard:hover {
-    border-color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.45);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
 }
 
 .statLabel {
@@ -79,11 +90,12 @@
 }
 
 .section {
-    background: #121829;
-    border: 1px solid #1f2937;
-    border-radius: 8px;
-    padding: 2rem;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 14px;
+    padding: 1.5rem 1.75rem;
     margin-bottom: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .sectionTitle {
@@ -113,11 +125,11 @@
 }
 
 .mediaCard {
-    background: #1a1f37;
-    border: 1px solid #2a3544;
-    border-radius: 6px;
+    background: rgba(11, 18, 32, 0.85);
+    border: 1px solid rgba(51, 65, 85, 0.55);
+    border-radius: 12px;
     padding: 1.25rem;
-    transition: all 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
 .cardHeader {

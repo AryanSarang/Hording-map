@@ -197,17 +197,17 @@ export default function EditMediaPage() {
         } catch (err) { alert('Error deleting'); }
     }
 
-    if (loading) return <div className={styles.content}><div className={styles.loading}>Loading...</div></div>;
-    if (error && !formData) return <div className={styles.content}><div className={styles.error}>{error}</div></div>;
+    if (loading) return <div className={`${styles.content} ${styles.listContent}`}><div className={styles.loading}>Loading...</div></div>;
+    if (error && !formData) return <div className={`${styles.content} ${styles.listContent}`}><div className={styles.error}>{error}</div></div>;
 
     return (
         <>
-            <div className={styles.topbar}>
+            <div className={`${styles.topbar} ${styles.listTopbar}`}>
                 <h1 className={styles.title}>Edit Media #{params.id}</h1>
                 <Link href="/vendor/media" className={styles.cancelBtn}>Back to List</Link>
             </div>
-            <div className={styles.content}>
-                <div className={styles.section}>
+            <div className={`${styles.content} ${styles.listContent}`}>
+                <div className={styles.createMediaShell}>
                     {error && <div className={styles.error}>{error}</div>}
                     <form onSubmit={handleSubmit} className={styles.form}>
                         <div className={styles.formSection}>

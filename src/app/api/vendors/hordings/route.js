@@ -84,22 +84,60 @@ export async function GET(req) {
         const status = searchParams.get('status');
         const city = searchParams.get('city');
         const mediaType = searchParams.get('mediaType');
+        const idsOnly = searchParams.get('idsOnly') === '1' || searchParams.get('idsOnly') === 'true';
 
-        const buildQuery = () => {
-            let q = supabaseAdmin
-                .from('media')
-                .select('*, vendor:vendors(id, name)')
-                .eq('user_id', user.id);
-            if (vendorId) q = q.eq('vendor_id', vendorId);
-            if (status) q = q.eq('status', status);
-            if (city) q = q.ilike('city', `%${city}%`);
-            if (mediaType) q = q.eq('media_type', mediaType);
-            return q.order('id', { ascending: false });
-        };
+        if (idsOnly) {
+            const buildIdQuery = () => {
+                let q = supabaseAdmin.from('media').select('id').eq('user_id', user.id);
+                if (vendorId) q = q.eq('vendor_id', vendorId);
+                if (status) q = q.eq('status', status);
+                if (city) q = q.ilike('city', `%${city}%`);
+                if (mediaType) q = q.eq('media_type', mediaType);
+                return q.order('id', { ascending: false });
+            };
+            const { data: rows, error: idsErr } = await fetchAllSupabasePages((from, to) =>
+                buildIdQuery().range(from, to)
+            );
+            if (idsErr) throw idsErr;
+            const ids = (rows || []).map((r) => r.id).filter(Boolean);
+            return NextResponse.json({
+                success: true,
+                ids,
+                total: ids.length,
+            }, { status: 200 });
+        }
 
-        const { data: hordings, error } = await fetchAllSupabasePages((from, to) =>
-            buildQuery().range(from, to)
-        );
+        const page = Math.max(1, parseInt(String(searchParams.get('page') || '1'), 10) || 1);
+        const rawPageSize = parseInt(String(searchParams.get('pageSize') || '50'), 10);
+        const pageSize = Math.min(100, Math.max(1, Number.isFinite(rawPageSize) ? rawPageSize : 50));
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
+        let countQuery = supabaseAdmin
+            .from('media')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+        if (vendorId) countQuery = countQuery.eq('vendor_id', vendorId);
+        if (status) countQuery = countQuery.eq('status', status);
+        if (city) countQuery = countQuery.ilike('city', `%${city}%`);
+        if (mediaType) countQuery = countQuery.eq('media_type', mediaType);
+
+        const { count: totalCount, error: countError } = await countQuery;
+        if (countError) throw countError;
+        const total = totalCount ?? 0;
+
+        let dataQuery = supabaseAdmin
+            .from('media')
+            .select('*, vendor:vendors(id, name)')
+            .eq('user_id', user.id);
+        if (vendorId) dataQuery = dataQuery.eq('vendor_id', vendorId);
+        if (status) dataQuery = dataQuery.eq('status', status);
+        if (city) dataQuery = dataQuery.ilike('city', `%${city}%`);
+        if (mediaType) dataQuery = dataQuery.eq('media_type', mediaType);
+
+        const { data: hordings, error } = await dataQuery
+            .order('id', { ascending: false })
+            .range(from, to);
 
         if (error) throw error;
 
@@ -121,13 +159,19 @@ export async function GET(req) {
             }
         }
 
+        const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
         return NextResponse.json({
             success: true,
             data: items.map((m) => ({
                 ...m,
                 variant_count: variantCountByMedia[m.id] || 0,
             })),
-            count: items.length
+            count: items.length,
+            total,
+            page,
+            pageSize,
+            totalPages,
         }, { status: 200 });
 
     } catch (error) {
@@ -176,9 +220,23 @@ export async function POST(req) {
             'pocName', 'pocNumber', 'minimumBookingDuration', 'mediaType'
         ];
 
+        const vendorIdRaw = (body.vendorId && String(body.vendorId).trim()) || null;
+        if (vendorIdRaw) {
+            const { data: ownedVendor, error: vCheckErr } = await supabaseAdmin
+                .from('vendors')
+                .select('id')
+                .eq('id', vendorIdRaw)
+                .eq('user_id', user.id)
+                .maybeSingle();
+            if (vCheckErr) throw vCheckErr;
+            if (!ownedVendor) {
+                return NextResponse.json({ success: false, error: 'Vendor does not belong to your account' }, { status: 400 });
+            }
+        }
+
         // Map frontend camelCase to DB snake_case. Let DB generate id.
         const dbPayload = {
-            vendor_id: (body.vendorId && String(body.vendorId).trim()) || null,
+            vendor_id: vendorIdRaw,
 
             city: body.city,
             state: body.state,

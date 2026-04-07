@@ -118,7 +118,6 @@ def media_title_for_site(first: dict) -> str:
 
 HEADERS = [
     "title",
-    "vendor_id",
     "vendor_name",
     "state",
     "city",
@@ -167,7 +166,6 @@ def parent_row(
 ) -> list[str]:
     return [
         title,
-        "",
         (first.get("Media Owner") or "").strip(),
         (first.get("State") or "").strip(),
         (first.get("City") or "").strip(),

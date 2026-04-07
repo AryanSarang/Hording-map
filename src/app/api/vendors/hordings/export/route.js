@@ -29,7 +29,6 @@ function parentTailValues(h, vendorName, images, metas, allMetaKeys, pricingRule
     return [
         h.id,
         h.title ?? "",
-        h.vendor_id ?? "",
         vendorName,
         h.state ?? "",
         h.city ?? "",
@@ -75,7 +74,11 @@ async function runExport(mediaIds, userId) {
     const vendorIds = [...new Set(rows.map((h) => h.vendor_id).filter(Boolean))];
     let vendorMap = {};
     if (vendorIds.length > 0) {
-        const { data: vendors } = await supabaseAdmin.from("vendors").select("id, name").in("id", vendorIds);
+        const { data: vendors } = await supabaseAdmin
+            .from("vendors")
+            .select("id, name")
+            .eq("user_id", userId)
+            .in("id", vendorIds);
         vendorMap = Object.fromEntries((vendors || []).map((v) => [v.id, v.name || ""]));
     }
 

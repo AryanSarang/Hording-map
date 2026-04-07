@@ -1,16 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Inbox } from 'lucide-react';
 import styles from './media.module.css';
 
 const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const STATUS_OPTIONS = ['active', 'inactive', 'maintenance'];
+const PAGE_SIZE = 50;
 
 export default function MediaPage() {
+    const router = useRouter();
+    const headerCheckboxRef = useRef(null);
     const [items, setItems] = useState([]);
     const [owners, setOwners] = useState([]);
+    const [page, setPage] = useState(1);
+    const [pagination, setPagination] = useState({ total: 0, totalPages: 1 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selected, setSelected] = useState(new Set());
@@ -21,13 +27,33 @@ export default function MediaPage() {
     const [importResult, setImportResult] = useState(null);
     const [exporting, setExporting] = useState(false);
     const [deletingBulk, setDeletingBulk] = useState(false);
+    const [selectingAllFilter, setSelectingAllFilter] = useState(false);
 
     useEffect(() => { fetchOwners(); }, []);
-    useEffect(() => { fetchItems(); }, [filters]);
+    useEffect(() => {
+        setPage(1);
+    }, [filters.city]);
+    useEffect(() => {
+        setSelected(new Set());
+    }, [filters.status, filters.city, filters.mediaType, filters.vendorId]);
+    useEffect(() => { fetchItems(); }, [filters.status, filters.city, filters.mediaType, filters.vendorId, page]);
+
+    const allOnPageSelected = items.length > 0 && items.every((h) => selected.has(h.id));
+    const someOnPageSelected = items.some((h) => selected.has(h.id));
+
+    useEffect(() => {
+        const el = headerCheckboxRef.current;
+        if (el) el.indeterminate = someOnPageSelected && !allOnPageSelected;
+    }, [someOnPageSelected, allOnPageSelected, items]);
+
+    function patchFilters(patch) {
+        setFilters((f) => ({ ...f, ...patch }));
+        setPage(1);
+    }
 
     async function fetchOwners() {
         try {
-            const res = await fetch('/api/owners');
+            const res = await fetch('/api/owners', { credentials: 'include' });
             const data = await res.json();
             if (data.success) setOwners(data.data || []);
         } catch (e) { console.error(e); }
@@ -41,11 +67,16 @@ export default function MediaPage() {
             if (filters.city) params.set('city', filters.city);
             if (filters.mediaType) params.set('mediaType', filters.mediaType);
             if (filters.vendorId) params.set('vendorId', filters.vendorId);
-            const res = await fetch(`/api/vendors/hordings?${params}`);
+            params.set('page', String(page));
+            params.set('pageSize', String(PAGE_SIZE));
+            const res = await fetch(`/api/vendors/hordings?${params}`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
                 setItems(data.data || []);
-                setSelected(new Set());
+                setPagination({
+                    total: typeof data.total === 'number' ? data.total : (data.data || []).length,
+                    totalPages: typeof data.totalPages === 'number' ? data.totalPages : 1,
+                });
             } else setError(data.error || 'Failed to fetch media');
         } catch (err) {
             setError('Error fetching media');
@@ -63,19 +94,55 @@ export default function MediaPage() {
     }
 
     function toggleSelectAll() {
-        if (selected.size === items.length) setSelected(new Set());
-        else setSelected(new Set(items.map((h) => h.id)));
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (allOnPageSelected) {
+                items.forEach((h) => next.delete(h.id));
+            } else {
+                items.forEach((h) => next.add(h.id));
+            }
+            return next;
+        });
     }
 
-    async function deleteItem(id) {
-        if (!confirm('Are you sure you want to delete this media?')) return;
+    function buildFilterSearchParams() {
+        const params = new URLSearchParams();
+        if (filters.status) params.set('status', filters.status);
+        if (filters.city) params.set('city', filters.city);
+        if (filters.mediaType) params.set('mediaType', filters.mediaType);
+        if (filters.vendorId) params.set('vendorId', filters.vendorId);
+        return params;
+    }
+
+    async function selectAllMatchingFilters() {
+        if (selectingAllFilter) return;
+        setSelectingAllFilter(true);
         try {
-            const res = await fetch(`/api/vendors/hordings/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                setItems(items.filter((h) => h.id !== id));
-                setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
-            } else alert('Failed to delete');
-        } catch (err) { alert('Error deleting'); }
+            const params = buildFilterSearchParams();
+            params.set('idsOnly', '1');
+            const res = await fetch(`/api/vendors/hordings?${params}`, { credentials: 'include' });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                alert(data.error || 'Could not load matching media');
+                return;
+            }
+            setSelected(new Set(data.ids || []));
+        } catch (e) {
+            alert('Could not load matching media');
+        } finally {
+            setSelectingAllFilter(false);
+        }
+    }
+
+    function openRow(id) {
+        router.push(`/vendor/media/${id}`);
+    }
+
+    function onRowKeyDown(e, id) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openRow(id);
+        }
     }
 
     async function bulkDelete() {
@@ -188,7 +255,7 @@ export default function MediaPage() {
 
     return (
         <>
-            <div className={styles.topbar}>
+            <div className={`${styles.topbar} ${styles.listTopbar}`}>
                 <h1 className={styles.title}>Media</h1>
                 <div className={styles.topbarActions}>
                     <button type="button" className={styles.importBtn} onClick={() => { setShowImport(true); setImportResult(null); setImportFile(null); }}>Import</button>
@@ -197,41 +264,64 @@ export default function MediaPage() {
                 </div>
             </div>
 
-            <div className={styles.content}>
+            <div className={`${styles.content} ${styles.listContent}`}>
                 {error && <div className={styles.error}>{error}</div>}
-                <div className={styles.filtersBar}>
+                <div className={`${styles.filtersBar} ${styles.listFiltersBar}`}>
                     <div className={styles.filterGroup}><label>Status</label>
-                        <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+                        <select value={filters.status} onChange={(e) => patchFilters({ status: e.target.value })}>
                             <option value="">All</option>
                             {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                         </select>
                     </div>
                     <div className={styles.filterGroup}><label>City</label>
-                        <input type="text" placeholder="Filter by city" value={filters.city} onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))} />
+                        <input
+                            type="text"
+                            placeholder="Filter by city"
+                            value={filters.city}
+                            onChange={(e) => setFilters((f) => ({ ...f, city: e.target.value }))}
+                        />
                     </div>
                     <div className={styles.filterGroup}><label>Media Type</label>
-                        <select value={filters.mediaType} onChange={(e) => setFilters((f) => ({ ...f, mediaType: e.target.value }))}>
+                        <select value={filters.mediaType} onChange={(e) => patchFilters({ mediaType: e.target.value })}>
                             <option value="">All</option>
                             {MEDIA_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
                     <div className={styles.filterGroup}><label>Owner (Vendor)</label>
-                        <select value={filters.vendorId} onChange={(e) => setFilters((f) => ({ ...f, vendorId: e.target.value }))}>
+                        <select value={filters.vendorId} onChange={(e) => patchFilters({ vendorId: e.target.value })}>
                             <option value="">All</option>
                             {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
                         </select>
                     </div>
-                    {(filters.status || filters.city || filters.mediaType || filters.vendorId) && (
-                        <button type="button" className={styles.clearFiltersBtn} onClick={() => setFilters({ status: '', city: '', mediaType: '', vendorId: '' })}>Clear filters</button>
-                    )}
+                    <button
+                        type="button"
+                        className={styles.clearFiltersBtn}
+                        disabled={!(filters.status || filters.city || filters.mediaType || filters.vendorId)}
+                        onClick={() => {
+                            setFilters({ status: '', city: '', mediaType: '', vendorId: '' });
+                            setPage(1);
+                        }}
+                    >
+                        Clear filters
+                    </button>
                 </div>
 
                 {selected.size > 0 && (
-                    <div className={styles.bulkBar}>
-                        <span>{selected.size} selected</span>
-                        <button type="button" className={styles.bulkExportBtn} onClick={exportSelected} disabled={exporting}>{exporting ? 'Exporting...' : 'Export'}</button>
-                        <button type="button" className={styles.bulkDeleteBtn} onClick={bulkDelete} disabled={deletingBulk}>{deletingBulk ? 'Deleting...' : 'Delete'}</button>
-                        <button type="button" className={styles.bulkDeselectBtn} onClick={() => setSelected(new Set())} disabled={deletingBulk}>Deselect all</button>
+                    <div className={`${styles.bulkBar} ${styles.listBulkBar}`}>
+                        <span className={styles.bulkCount}>{selected.size} selected</span>
+                        <div className={styles.bulkActions}>
+                            <button type="button" className={styles.bulkExportBtn} onClick={exportSelected} disabled={exporting}>{exporting ? 'Exporting...' : 'Export'}</button>
+                            <button type="button" className={styles.bulkDeleteBtn} onClick={bulkDelete} disabled={deletingBulk}>{deletingBulk ? 'Deleting...' : 'Delete'}</button>
+                            <button type="button" className={styles.bulkDeselectBtn} onClick={() => setSelected(new Set())} disabled={deletingBulk}>Deselect all</button>
+                            <button
+                                type="button"
+                                className={styles.selectAllFilterLink}
+                                onClick={selectAllMatchingFilters}
+                                disabled={selectingAllFilter || deletingBulk}
+                            >
+                                {selectingAllFilter ? 'Loading…' : 'Select all that matches filter'}
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -244,19 +334,61 @@ export default function MediaPage() {
                         <Link href="/vendor/media/new" className={styles.createLink}>Create your first media</Link>
                     </div>
                 ) : (
-                    <div className={styles.section}>
-                        <div className={styles.tableWrapper}>
-                            <table className={styles.table}>
+                    <div className={`${styles.section} ${styles.listSection}`}>
+                        <div className={`${styles.tableWrapper} ${styles.listTableWrapper}`}>
+                            <table className={`${styles.table} ${styles.listTable}`}>
+                                <colgroup>
+                                    <col className={styles.colCheck} />
+                                    <col className={styles.colName} />
+                                    <col className={styles.colCity} />
+                                    <col className={styles.colType} />
+                                    <col className={styles.colNum} />
+                                    <col className={styles.colOptions} />
+                                    <col className={styles.colOwner} />
+                                    <col className={styles.colRate} />
+                                    <col className={styles.colStatus} />
+                                </colgroup>
                                 <thead>
                                     <tr>
-                                        <th className={styles.checkTh}><input type="checkbox" checked={items.length > 0 && selected.size === items.length} onChange={toggleSelectAll} aria-label="Select all" /></th>
-                                        <th>Name</th><th>City</th><th>Type</th><th>Variants</th><th>Options</th><th>Owner</th><th>Rate</th><th>Status</th><th>Actions</th>
+                                        <th className={styles.checkTh} scope="col">
+                                            <label className={styles.checkboxWrap}>
+                                                <input
+                                                    ref={headerCheckboxRef}
+                                                    type="checkbox"
+                                                    className={styles.checkboxInput}
+                                                    checked={allOnPageSelected}
+                                                    onChange={toggleSelectAll}
+                                                    aria-label="Select all on this page"
+                                                />
+                                            </label>
+                                        </th>
+                                        <th>Name</th><th>City</th><th>Type</th><th>Variants</th><th>Options</th><th>Owner</th><th>Rate</th><th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {items.map((row) => (
-                                        <tr key={row.id}>
-                                            <td className={styles.checkTd}><input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)} aria-label={`Select ${row.id}`} /></td>
+                                        <tr
+                                            key={row.id}
+                                            className={styles.dataRow}
+                                            tabIndex={0}
+                                            onClick={() => openRow(row.id)}
+                                            onKeyDown={(e) => onRowKeyDown(e, row.id)}
+                                        >
+                                            <td
+                                                className={styles.checkTd}
+                                                onClick={(e) => e.stopPropagation()}
+                                                onKeyDown={(e) => e.stopPropagation()}
+                                            >
+                                                <label className={styles.checkboxWrap}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className={styles.checkboxInput}
+                                                        checked={selected.has(row.id)}
+                                                        onChange={() => toggleSelect(row.id)}
+                                                        aria-label={`Select ${row.landmark || row.address || row.id}`}
+                                                    />
+                                                </label>
+                                            </td>
                                             <td className={styles.nameTd}>{row.landmark || row.address || `Media #${row.id}`}</td>
                                             <td>{row.city || 'N/A'}</td>
                                             <td>{row.media_type || 'N/A'}</td>
@@ -265,15 +397,55 @@ export default function MediaPage() {
                                             <td>{row.vendor?.name || '—'}</td>
                                             <td>₹{row.monthly_rental?.toLocaleString() || '0'}</td>
                                             <td><span className={`${styles.badge} ${styles[`badge-${row.status}`] || styles.badgeActive}`}>{row.status}</span></td>
-                                            <td className={styles.actions}>
-                                                <Link href={`/vendor/media/${row.id}`} className={styles.actionBtn}>Edit</Link>
-                                                <button type="button" className={`${styles.actionBtn} ${styles.danger}`} onClick={() => deleteItem(row.id)}>Delete</button>
-                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
+                        {pagination.totalPages > 1 && (
+                            <div className={`${styles.paginationBar} ${styles.listPaginationBar}`}>
+                                <span className={styles.paginationInfo}>
+                                    Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, pagination.total)} of {pagination.total}
+                                </span>
+                                <div className={styles.paginationControls}>
+                                    <button
+                                        type="button"
+                                        className={styles.paginationBtn}
+                                        disabled={page <= 1 || loading}
+                                        onClick={() => setPage(1)}
+                                    >
+                                        First
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={styles.paginationBtn}
+                                        disabled={page <= 1 || loading}
+                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    >
+                                        Previous
+                                    </button>
+                                    <span className={styles.paginationPage}>
+                                        Page {page} / {pagination.totalPages}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className={styles.paginationBtn}
+                                        disabled={page >= pagination.totalPages || loading}
+                                        onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                                    >
+                                        Next
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={styles.paginationBtn}
+                                        disabled={page >= pagination.totalPages || loading}
+                                        onClick={() => setPage(pagination.totalPages)}
+                                    >
+                                        Last
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -287,7 +459,7 @@ export default function MediaPage() {
                         </div>
                         <div className={styles.modalBody}>
                             <p className={styles.importHint}>
-                                Unified CSV: put location, POC, metafields, optional <code>title</code>, and <strong>all pricing rules</strong> in <code>pricing_rules_json</code> on the <strong>first</strong> row of each media. <code>handle</code> and <code>id</code> are optional on create — leave them blank and the importer groups variant rows in order and derives a handle from <code>title</code> (or address). You can still set the same <code>handle</code> on every row (Shopify-style). Variant rows leave parent cells <strong>blank</strong>. Legacy flat template repeats parent columns on every row.
+                                Unified CSV: put location, POC, metafields, optional <code>title</code>, <code>vendor_name</code> (no <code>vendor_id</code> needed — matching name reuses your vendor; new names create a vendor for your account), and <strong>all pricing rules</strong> in <code>pricing_rules_json</code> on the <strong>first</strong> row of each media. <code>handle</code> and <code>id</code> are optional on create. Variant rows leave parent cells <strong>blank</strong>. Legacy flat template repeats parent columns on every row.
                             </p>
                             <a href="/api/vendors/hordings/import-template" download className={styles.templateLink}>Download template (Shopify-style CSV)</a>
                             {' · '}

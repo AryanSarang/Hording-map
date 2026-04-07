@@ -180,11 +180,11 @@ export default function NewMediaPage() {
 
     return (
         <>
-            <div className={`${styles.topbar} ${styles.createMediaPage}`}>
+            <div className={`${styles.topbar} ${styles.listTopbar} ${styles.createMediaPage}`}>
                 <h1 className={styles.title}>Create Media</h1>
                 <Link href="/vendor/media" className={styles.cancelBtn}>Back to List</Link>
             </div>
-            <div className={`${styles.content} ${styles.createMediaPage} ${styles.createMediaContent}`}>
+            <div className={`${styles.content} ${styles.listContent} ${styles.createMediaPage} ${styles.createMediaContent}`}>
                 <div className={`${styles.section} ${styles.createMediaShell}`}>
                     {error && <div className={styles.error}>{error}</div>}
                     <form onSubmit={handleSubmit} className={`${styles.form} ${styles.createMediaForm}`}>

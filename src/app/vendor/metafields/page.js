@@ -82,7 +82,7 @@ export default function MetafieldsPage() {
                         </Link>
                     </div>
                 ) : (
-                    <div className={styles.section}>
+                    <div className={`${styles.section} ${styles.sectionFlush}`}>
                         <div className={styles.tableWrapper}>
                             <table className={styles.table}>
                                 <thead>

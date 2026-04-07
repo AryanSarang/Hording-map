@@ -123,9 +123,14 @@
     cursor: pointer;
 }
 
-.clearFiltersBtn:hover {
+.clearFiltersBtn:hover:not(:disabled) {
     background: #475569;
     color: #f1f5f9;
+}
+
+.clearFiltersBtn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 .bulkBar {
@@ -801,4 +806,356 @@
         flex: 1 1 100%;
         max-width: none;
     }
+}
+
+/* Pagination (vendor media list) */
+.paginationBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #0f1419;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+}
+
+.paginationInfo {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.paginationControls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.paginationBtn {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #e2e8f0;
+    cursor: pointer;
+}
+
+.paginationBtn:hover:not(:disabled) {
+    background: #334155;
+}
+
+.paginationBtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.paginationPage {
+    font-size: 12px;
+    color: #cbd5e1;
+    min-width: 120px;
+    text-align: center;
+}
+
+/* —— Vendor media list: modern layout + checkboxes —— */
+.listTopbar {
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(11, 18, 32, 0.98));
+    border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+    padding: 14px 20px;
+    box-shadow: 0 1px 0 rgba(59, 130, 246, 0.06);
+}
+
+.listContent {
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+    flex: 1;
+    min-height: 0;
+}
+
+.listFiltersBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 16px;
+    align-items: flex-end;
+    min-height: 88px;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(51, 65, 85, 0.55);
+    border-radius: 12px;
+    padding: 16px 18px;
+    backdrop-filter: blur(8px);
+}
+
+.listFiltersBar .filterGroup {
+    flex: 1 1 140px;
+    max-width: 220px;
+    min-width: 0;
+}
+
+.listFiltersBar .clearFiltersBtn {
+    flex: 0 0 auto;
+    align-self: flex-end;
+    margin-left: auto;
+}
+
+@media (max-width: 640px) {
+    .listFiltersBar .clearFiltersBtn {
+        margin-left: 0;
+        width: 100%;
+    }
+}
+
+.listFiltersBar .filterGroup input,
+.listFiltersBar .filterGroup select {
+    border-radius: 8px;
+    border-color: rgba(51, 65, 85, 0.9);
+    background: rgba(11, 18, 32, 0.85);
+    min-height: 38px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.listFiltersBar .filterGroup input:focus,
+.listFiltersBar .filterGroup select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.bulkActions .selectAllFilterLink {
+    margin-left: auto;
+}
+
+.selectAllFilterLink {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: #60a5fa;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    white-space: nowrap;
+}
+
+.selectAllFilterLink:hover:not(:disabled) {
+    color: #93c5fd;
+}
+
+.selectAllFilterLink:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+.listBulkBar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 18px;
+    background: linear-gradient(90deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95));
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+}
+
+.bulkCount {
+    font-weight: 600;
+    color: #e2e8f0;
+    font-size: 13px;
+}
+
+.bulkActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.listBulkBar .bulkExportBtn,
+.listBulkBar .bulkDeleteBtn,
+.listBulkBar .bulkDeselectBtn {
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: 500;
+}
+
+.listSection {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 14px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.listTableWrapper {
+    overflow-x: auto;
+}
+
+.listTable {
+    font-size: 13px;
+    table-layout: fixed;
+}
+
+.colCheck {
+    width: 3.25rem;
+}
+
+.colName {
+    width: 26%;
+}
+
+.colCity {
+    width: 9%;
+}
+
+.colType {
+    width: 12%;
+}
+
+.colNum {
+    width: 5.5rem;
+}
+
+.colOptions {
+    width: 14%;
+}
+
+.colOwner {
+    width: 11%;
+}
+
+.colRate {
+    width: 6.5rem;
+}
+
+.colStatus {
+    width: 7.5rem;
+}
+
+.listTable thead {
+    background: rgba(11, 18, 32, 0.95);
+    border-bottom: 1px solid rgba(51, 65, 85, 0.7);
+}
+
+.listTable th {
+    padding: 14px 16px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+}
+
+.listTable tbody tr.dataRow {
+    cursor: pointer;
+    transition: background 0.12s ease, box-shadow 0.12s ease;
+    border-bottom: 1px solid rgba(30, 41, 59, 0.85);
+}
+
+.listTable tbody tr.dataRow:hover {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.listTable tbody tr.dataRow:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+}
+
+.listTable td {
+    padding: 14px 16px;
+    vertical-align: middle;
+}
+
+.listTable .nameTd {
+    font-weight: 500;
+    color: #f1f5f9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.checkboxWrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.checkboxInput {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin: 0;
+    border: 2px solid #475569;
+    border-radius: 6px;
+    background: rgba(11, 18, 32, 0.9);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    flex-shrink: 0;
+}
+
+.checkboxInput:hover {
+    border-color: #64748b;
+}
+
+.checkboxInput:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+    border-color: #3b82f6;
+}
+
+.checkboxInput:checked {
+    background: linear-gradient(145deg, #3b82f6, #2563eb);
+    border-color: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+    background-size: 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.listTable .checkTh,
+.listTable .checkTd {
+    width: 48px;
+    text-align: center;
+}
+
+.listTable .checkTd {
+    cursor: default;
+}
+
+.listTable .checkTd .checkboxWrap {
+    cursor: pointer;
+}
+
+.listPaginationBar {
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    border-top: 1px solid rgba(51, 65, 85, 0.6);
+    background: rgba(11, 18, 32, 0.6);
+}
+
+.listTopbar .importBtn,
+.listTopbar .exportBtn {
+    border-radius: 8px;
+    font-weight: 500;
+    color: #cbd5e1;
+}
+
+.listTopbar .createBtn {
+    border-radius: 8px;
+    font-weight: 600;
+    box-shadow: 0 2px 12px rgba(59, 130, 246, 0.25);
+}
+
+.listTopbar .createBtn:hover {
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
 }

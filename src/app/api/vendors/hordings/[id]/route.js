@@ -187,7 +187,22 @@ export async function PUT(req, { params }) {
         // Map Frontend camelCase -> DB snake_case
         const dbPayload = {};
 
-        if (body.vendorId !== undefined) dbPayload.vendor_id = (body.vendorId && String(body.vendorId).trim()) || null;
+        if (body.vendorId !== undefined) {
+            const vid = (body.vendorId && String(body.vendorId).trim()) || null;
+            dbPayload.vendor_id = vid;
+            if (vid) {
+                const { data: owned, error: vErr } = await supabaseAdmin
+                    .from('vendors')
+                    .select('id')
+                    .eq('id', vid)
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+                if (vErr) throw vErr;
+                if (!owned) {
+                    return NextResponse.json({ success: false, error: 'Vendor does not belong to your account' }, { status: 400 });
+                }
+            }
+        }
         if (body.city !== undefined) dbPayload.city = body.city;
         if (body.state !== undefined) dbPayload.state = body.state;
         if (body.address !== undefined) dbPayload.address = body.address;

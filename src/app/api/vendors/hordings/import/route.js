@@ -6,6 +6,7 @@ import { getCurrentUser } from '../../../../../lib/authServer';
 import { isValidMediaId } from '../../../../../lib/genId10';
 import { parsePricingRulesFromRow, dedupePricingRules } from '../../../../../lib/csvPricingRules';
 import { fetchAllSupabasePages } from '../../../../../lib/fetchAllSupabasePages';
+import { loadVendorNameCache, resolveVendorForImport } from '../../../../../lib/resolveVendorForImport';
 
 const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const REQUIRED_HEADERS = ['city', 'state', 'address', 'latitude', 'longitude', 'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type'];
@@ -334,6 +335,7 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
             if (vendorId && !isValidMediaId(vendorId)) {
                 errs.push('vendor_id must be a valid UUID or 10-character hex id when provided');
             }
+            const csvVendorName = (get('vendor_name') || get('vendor_name_') || '').trim();
 
             const statusVal = get('status') || 'active';
             if (!['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
@@ -381,6 +383,7 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
                     longitude: lng,
                 }),
                 csvTitle: (get('title') || get('media_title') || '').trim(),
+                csvVendorName,
                 vendor_id: vendorId,
                 city,
                 state,
@@ -610,12 +613,49 @@ async function commitPreparedImport(user, replaceExisting, preparedRows, rowErro
         }, { status: 409 });
     }
 
+    let vendorNameCache;
+    try {
+        vendorNameCache = await loadVendorNameCache(supabaseAdmin, user.id);
+    } catch (e) {
+        return NextResponse.json({
+            success: false,
+            error: e.message || 'Failed to load vendors',
+            rowErrors: [],
+        }, { status: 500 });
+    }
+
     const rowErrorsOut = [...rowErrors];
     let imported = 0;
     let replaced = 0;
     for (const [, groupRows] of grouped) {
         const base = groupRows[0];
-        const { metafields: m, variants: _, key, rowNum, pricingRulesParsed, csvTitle, ...hPayload } = base;
+        const {
+            metafields: m,
+            variants: _,
+            key,
+            rowNum,
+            pricingRulesParsed,
+            csvTitle,
+            csvVendorName,
+            vendor_id: csvVendorId,
+            ...hPayload
+        } = base;
+
+        let resolvedVendorId;
+        try {
+            resolvedVendorId = await resolveVendorForImport(supabaseAdmin, user.id, {
+                vendorIdCsv: csvVendorId,
+                vendorNameCsv: csvVendorName,
+                cache: vendorNameCache,
+            });
+        } catch (e) {
+            rowErrorsOut.push({
+                row: rowNum,
+                errors: [e.message || 'Failed to resolve vendor'],
+                preview: base.address || base.city,
+            });
+            continue;
+        }
         const dedupe = new Set();
         const variantsToInsert = [];
         groupRows.forEach((row, idx) => {
@@ -666,6 +706,7 @@ async function commitPreparedImport(user, replaceExisting, preparedRows, rowErro
             .from('media')
             .insert([{
                 ...hPayload,
+                vendor_id: resolvedVendorId,
                 user_id: user.id,
                 title: (csvTitle && String(csvTitle).trim()) || base.address,
                 has_variants: variantsToInsert.length > 0,
@@ -860,6 +901,7 @@ export async function POST(req) {
                 if (vendorId && !isValidMediaId(vendorId)) {
                     errs.push('vendor_id must be a valid UUID or 10-character hex id when provided');
                 }
+                const csvVendorName = (get('vendor_name') || get('vendor_name_') || '').trim();
 
                 const statusVal = get('status') || 'active';
                 if (!['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
@@ -910,6 +952,7 @@ export async function POST(req) {
                         latitude: lat,
                         longitude: lng,
                     }),
+                    csvVendorName,
                     vendor_id: vendorId,
                     city,
                     state,

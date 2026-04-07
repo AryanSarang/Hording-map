@@ -1,20 +1,15 @@
 // app/vendor/layout.js
 import Sidebar from './components/Sidebar';
+import shell from './vendorShell.module.css';
 
 export default function VendorLayout({ children }) {
     return (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: '280px 1fr',
-            minHeight: '100vh',
-            background: '#0a0e27',
-            color: '#e0e6ed',
-        }}>
+        <div className={shell.layoutRoot}>
             <aside style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
                 <Sidebar />
             </aside>
 
-            <main style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <main className={shell.main}>
                 {children}
             </main>
         </div>

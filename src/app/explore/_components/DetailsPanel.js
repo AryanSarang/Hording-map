@@ -1,6 +1,7 @@
 // app/explore/_components/DetailsPanel.js
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { MapPin, X, ListPlus, PlusCircle } from 'lucide-react';
 
 export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToPlan, currentPlan, isAuthenticated, planMutatingMediaIds }) {
@@ -29,6 +30,14 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
         () => variants.find((v) => v.id === selectedVariantId) || variants[0] || null,
         [variants, selectedVariantId]
     );
+
+    const listScrollParentRef = useRef(null);
+    const listVirtualizer = useVirtualizer({
+        count: hoardings.length,
+        getScrollElement: () => listScrollParentRef.current,
+        estimateSize: () => 76,
+        overscan: 12,
+    });
 
     // ... (Formatting Helpers formatMediaType, formatHoardingType, DisplayValue remain the same) ...
     const formatMediaType = (type) => {
@@ -65,11 +74,11 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                 )}
             </div>
 
-            <div className="p-4 space-y-5 overflow-y-auto no-scrollbar flex-1">
+            <div className={`flex-1 min-h-0 flex flex-col ${selectedHoarding ? 'overflow-y-auto' : 'overflow-hidden'}`}>
                 <style jsx>{` .no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } `}</style>
 
                 {selectedHoarding ? (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-5">
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-5 p-4 no-scrollbar overflow-y-auto flex-1">
                         {/* ... (Hero Section, Pills, Specs, Visibility, Playback remain the same) ... */}
 
                         {/* HERO SECTION */}
@@ -194,20 +203,62 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
 
                     </div>
                 ) : (
-                    <div className="space-y-3">
-                        {/* Empty State List (Same as before) */}
-                        <div className="flex justify-between items-baseline mb-1"><p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">{hoardings.length} Sites Available</p></div>
-                        {hoardings.map((item) => (
-                            <div key={item.id} onClick={() => onSelect(item.id)} className="group cursor-pointer bg-[#111] border border-gray-800 hover:border-green-500/50 hover:bg-[#151515] p-2 rounded-lg transition-all duration-200 flex gap-3">
-                                <div className="w-10 h-10 bg-gray-800 rounded flex-shrink-0 overflow-hidden border border-gray-700 relative">
-                                    {item.imageUrls?.[0] ? <img src={item.imageUrls[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-600">NO IMG</div>}
-                                </div>
-                                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                    <h3 className="text-xs font-medium text-gray-200 truncate group-hover:text-green-400 transition-colors">{item.address || item.landmark || item.zone || "Site #" + item.id}</h3>
-                                    <div className="flex items-center gap-2 mt-0.5"><p className="text-[10px] text-gray-500 truncate max-w-[100px]">{item.city} • {item.screenSize}</p><p className="text-[10px] font-medium text-green-500 ml-auto">₹{item.rate?.toLocaleString()}</p></div>
-                                </div>
-                            </div>
-                        ))}
+                    <div
+                        ref={listScrollParentRef}
+                        className="flex flex-col flex-1 min-h-0 overflow-y-auto no-scrollbar p-4 pt-3"
+                    >
+                        <div className="flex justify-between items-baseline mb-2 px-1 shrink-0">
+                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide">{hoardings.length} Sites Available</p>
+                        </div>
+                        <div
+                            className="relative w-full"
+                            style={{ height: `${listVirtualizer.getTotalSize()}px` }}
+                        >
+                            {listVirtualizer.getVirtualItems().map((vi) => {
+                                const item = hoardings[vi.index];
+                                return (
+                                    <div
+                                        key={item.id}
+                                        data-index={vi.index}
+                                        ref={listVirtualizer.measureElement}
+                                        className="absolute top-0 left-0 w-full px-1 pb-2"
+                                        style={{ transform: `translateY(${vi.start}px)` }}
+                                    >
+                                        <div
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => onSelect(item.id)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    onSelect(item.id);
+                                                }
+                                            }}
+                                            className="group cursor-pointer bg-[#111] border border-gray-800 hover:border-green-500/50 hover:bg-[#151515] p-2 rounded-lg transition-all duration-200 flex gap-3"
+                                        >
+                                            <div className="w-10 h-10 bg-gray-800 rounded flex-shrink-0 overflow-hidden border border-gray-700 relative">
+                                                {item.imageUrls?.[0] ? (
+                                                    <img src={item.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-600">NO IMG</div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                <h3 className="text-xs font-medium text-gray-200 truncate group-hover:text-green-400 transition-colors">
+                                                    {item.address || item.landmark || item.zone || `Site #${item.id}`}
+                                                </h3>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <p className="text-[10px] text-gray-500 truncate max-w-[100px]">
+                                                        {item.city} • {item.screenSize}
+                                                    </p>
+                                                    <p className="text-[10px] font-medium text-green-500 ml-auto">₹{item.rate?.toLocaleString()}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
             </div>

@@ -250,19 +250,21 @@ export default function ExploreView({ hoardings, user }) {
         }
     };
 
-    const filteredHoardings = hoardings.filter(h => {
-        const f = appliedFilters;
-        if (h.rate !== null && h.rate !== undefined && (h.rate < f.minPrice || h.rate > f.maxPrice)) return false;
-        if (f.state && h.state?.toLowerCase() !== f.state.toLowerCase()) return false;
-        if (f.city && h.city?.toLowerCase() !== f.city.toLowerCase()) return false;
-        if (h.mediaType && !f.mediaTypes.includes(h.mediaType)) return false;
-        if (f.vendorId !== 'all') {
-            const hVendorId = h.vendorId ? Number(h.vendorId) : null;
-            const fVendorId = Number(f.vendorId);
-            if (hVendorId !== fVendorId) return false;
-        }
-        return true;
-    });
+    const filteredHoardings = useMemo(() => {
+        return hoardings.filter((h) => {
+            const f = appliedFilters;
+            if (h.rate !== null && h.rate !== undefined && (h.rate < f.minPrice || h.rate > f.maxPrice)) return false;
+            if (f.state && h.state?.toLowerCase() !== f.state.toLowerCase()) return false;
+            if (f.city && h.city?.toLowerCase() !== f.city.toLowerCase()) return false;
+            if (h.mediaType && !f.mediaTypes.includes(h.mediaType)) return false;
+            if (f.vendorId !== 'all') {
+                const hVendorId = h.vendorId ? Number(h.vendorId) : null;
+                const fVendorId = Number(f.vendorId);
+                if (hVendorId !== fVendorId) return false;
+            }
+            return true;
+        });
+    }, [hoardings, appliedFilters]);
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-black text-white">

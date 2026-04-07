@@ -39,7 +39,6 @@ export function unifiedParentStaticHeaderNames() {
         "handle",
         "id",
         "title",
-        "vendor_id",
         "vendor_name",
         "state",
         "city",
@@ -106,7 +105,6 @@ export function buildMediaCsvHeaders(allMetaKeys) {
     const base = [
         "import_ref",
         "id",
-        "vendor_id",
         "vendor_name",
         "state",
         "city",

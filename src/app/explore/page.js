@@ -7,20 +7,27 @@ import { fetchAllSupabasePages } from '../../lib/fetchAllSupabasePages';
 // Force the page to fetch fresh data on every visit
 export const revalidate = 0;
 
+/** Narrow columns to shrink payload vs select('*') — keep in sync with `media` table + explore components. */
+const MEDIA_COLUMNS =
+    'id,vendor_id,latitude,longitude,address,locality,landmark,city,zone,state,pincode,media_type,monthly_rental,media,screen_size,display_format,display_hours,title,option1_name,option2_name,option3_name,vendor:vendors(name)';
+
+const VARIANT_COLUMNS =
+    'id,media_id,rate,display_order,option1_value,option2_value,option3_value,variant_title,size,cinema_format,audience_category,seating';
+
 export default async function ExplorePage() {
-    // 1. Fetch all rows (PostgREST default max ~1000 per request without pagination)
+    // 1. Fetch all rows in pages (PostgREST max ~1000 per request); explicit columns reduce JSON size
     const [{ data: hoardings, error }, { data: variants, error: variantsError }] = await Promise.all([
         fetchAllSupabasePages((from, to) =>
             supabase
                 .from('media')
-                .select('*, vendor:vendors(name)')
+                .select(MEDIA_COLUMNS)
                 .order('id', { ascending: true })
                 .range(from, to)
         ),
         fetchAllSupabasePages((from, to) =>
             supabase
                 .from('media_variants')
-                .select('*')
+                .select(VARIANT_COLUMNS)
                 .order('id', { ascending: true })
                 .range(from, to)
         ),

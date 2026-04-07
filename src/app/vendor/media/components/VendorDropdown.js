@@ -12,7 +12,7 @@ export default function VendorDropdown({ value, onChange, placeholder = 'Select 
     const [createError, setCreateError] = useState(null);
 
     useEffect(() => {
-        fetch('/api/owners')
+        fetch('/api/owners', { credentials: 'include' })
             .then(r => r.json())
             .then(d => {
                 if (d.success) setOwners(d.data || []);
@@ -32,6 +32,7 @@ export default function VendorDropdown({ value, onChange, placeholder = 'Select 
             const res = await fetch('/api/owners', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({
                     name: createName.trim(),
                     contactEmail: createEmail.trim() || null,
@@ -61,7 +62,7 @@ export default function VendorDropdown({ value, onChange, placeholder = 'Select 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <select
                     value={value ?? ''}
-                    onChange={(e) => onChange(e.target.value ? parseInt(e.target.value) : null)}
+                    onChange={(e) => onChange(e.target.value ? e.target.value : null)}
                     style={{
                         padding: '10px 12px',
                         border: '1px solid #1e293b',
