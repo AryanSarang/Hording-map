@@ -1,25 +1,41 @@
 // app/explore/_components/MapSection.js
 "use client";
 
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useRef, useState } from 'react';
+import './explore-map.css';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 
-const icon = typeof window !== 'undefined' ? L.icon({
-    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-}) : null;
+const TILE_OSM = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+/** Teardrop pin SVG — green accent, dark inner dot (matches explore panels). */
+function createExplorePinIcon(selected) {
+    const fill = selected ? '#4ade80' : '#22c55e';
+    const filter = selected
+        ? 'drop-shadow(0 0 8px rgba(74, 222, 128, 0.55))'
+        : 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55))';
+    return L.divIcon({
+        className: 'explore-map-pin',
+        html: `
+<svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="filter:${filter}">
+  <path d="M16 2C8.8 2 3 7.6 3 14.5c0 8.5 12.2 21.3 12.6 21.7.2.2.5.3.8.3s.6-.1.8-.3C17.6 35.8 29 23 29 14.5 29 7.6 23.2 2 16 2z" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>
+  <circle cx="16" cy="14.5" r="4.5" fill="#0a0a0a" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+</svg>`,
+        iconSize: [32, 40],
+        iconAnchor: [16, 40],
+        popupAnchor: [0, -36],
+    });
+}
 
 const DEFAULT_CENTER = [19.0760, 72.8777];
 
-function MapController({ selectedId, hoardings, searchTarget }) {
+function MapController({ selectedId, hoardings, searchTarget, filterFocus }) {
     const map = useMap();
 
     const getLatLng = (h) => {
@@ -45,10 +61,30 @@ function MapController({ selectedId, hoardings, searchTarget }) {
         if (!searchTarget) return;
         map.flyTo(searchTarget, 13, { duration: 1.3 });
     }, [searchTarget, map]);
+
+    useEffect(() => {
+        if (!filterFocus?.key || filterFocus.pointCount === 0) return;
+        if (filterFocus.pointCount === 1 && filterFocus.center) {
+            map.flyTo(filterFocus.center, filterFocus.zoom ?? 12, { duration: 1.2 });
+            return;
+        }
+        if (filterFocus.bounds) {
+            const b = L.latLngBounds(filterFocus.bounds[0], filterFocus.bounds[1]);
+            map.fitBounds(b, { padding: [48, 48], maxZoom: 13, animate: true });
+        }
+    }, [filterFocus?.key, map]);
     return null;
 }
 
-export default function MapSection({ hoardings, selectedId, onSelect }) {
+export default function MapSection({ hoardings, selectedId, onSelect, filterFocus }) {
+    const pinIcons = useMemo(() => {
+        if (typeof window === 'undefined') return { default: null, selected: null };
+        return {
+            default: createExplorePinIcon(false),
+            selected: createExplorePinIcon(true),
+        };
+    }, []);
+
     const [searchValue, setSearchValue] = useState('');
     const [searchTarget, setSearchTarget] = useState(null);
     const [searching, setSearching] = useState(false);
@@ -69,6 +105,8 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
 
     const matchesMediaDetails = (h, qLower, tokens) => {
         const haystack = [
+            h?.title,
+            h?.displayTitle,
             h?.address,
             h?.locality,
             h?.landmark,
@@ -107,6 +145,8 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                 if (!ok) return null;
 
                 const label =
+                    h.displayTitle ||
+                    h.title ||
                     h.address ||
                     h.landmark ||
                     h.zone ||
@@ -232,7 +272,7 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
     }
 
     return (
-        <div className="w-full h-full relative isolate bg-gray-900">
+        <div className="explore-map-root w-full h-full relative isolate bg-[#dcdfe2]">
             <style jsx>{`
                 .no-scrollbar::-webkit-scrollbar { display: none; }
                 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -304,15 +344,18 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                 center={DEFAULT_CENTER}
                 zoom={11}
                 scrollWheelZoom={true}
+                zoomControl={false}
                 className="w-full h-full z-0"
                 style={{ height: "100%", width: "100%" }}
             >
                 <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution={TILE_ATTRIBUTION}
+                    url={TILE_OSM}
                 />
 
-                <MapController selectedId={selectedId} hoardings={hoardings} searchTarget={searchTarget} />
+                <ZoomControl position="bottomright" />
+
+                <MapController selectedId={selectedId} hoardings={hoardings} searchTarget={searchTarget} filterFocus={filterFocus} />
 
                 <MarkerClusterGroup chunkedLoading spiderfyOnMaxZoom={true}>
                     {hoardings.map((h) => (
@@ -320,14 +363,14 @@ export default function MapSection({ hoardings, selectedId, onSelect }) {
                             <Marker
                                 key={h.id}
                                 position={getLatLng(h)}
-                                icon={icon}
+                                icon={selectedId === h.id ? pinIcons.selected : pinIcons.default}
                                 eventHandlers={{
                                     click: () => onSelect(h.id),
                                 }}
                             >
-                                <Popup className="custom-popup">
-                                    <div className="text-black text-xs font-bold">
-                                        {h.address || h.landmark || h.zone || `Site #${h.id}`}
+                                <Popup className="explore-map-popup">
+                                    <div className="explore-map-popup-title">
+                                        {h.displayTitle || h.title || h.address || h.landmark || h.zone || `Site #${h.id}`}
                                     </div>
                                 </Popup>
                             </Marker>

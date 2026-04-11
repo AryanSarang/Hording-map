@@ -1,0 +1,164 @@
+/* Leaflet map chrome aligned with explore design language (dark shell, green accent). */
+
+.explore-map-root .leaflet-container {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #dcdfe2;
+}
+
+/* --- Zoom: dark “panel” controls (matches DetailsPanel), green hover --- */
+.explore-map-root .leaflet-control-zoom {
+  border: none !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(34, 197, 94, 0.2) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  margin-bottom: 12px !important;
+  margin-right: 12px !important;
+}
+
+.explore-map-root .leaflet-bar {
+  border: none !important;
+}
+
+.explore-map-root .leaflet-control-zoom a {
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 34px !important;
+  background: #0a0a0a !important;
+  color: #d1d5db !important;
+  border: none !important;
+  font-size: 20px !important;
+  font-weight: 500 !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.explore-map-root .leaflet-control-zoom a:hover {
+  background: #111827 !important;
+  color: #4ade80 !important;
+}
+
+.explore-map-root .leaflet-control-zoom-in {
+  border-bottom: 1px solid #1f2937 !important;
+  border-radius: 0 !important;
+}
+
+.explore-map-root .leaflet-control-zoom-out {
+  border-radius: 0 !important;
+}
+
+/* --- Attribution: compact dark chip, green links --- */
+.explore-map-root .leaflet-control-attribution {
+  background: rgba(10, 10, 10, 0.88) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #9ca3af !important;
+  padding: 5px 12px 6px !important;
+  font-size: 10px !important;
+  line-height: 1.35 !important;
+  border-radius: 10px 0 0 0 !important;
+  border-top: 1px solid rgba(34, 197, 94, 0.22) !important;
+  border-right: 1px solid rgba(34, 197, 94, 0.15) !important;
+  max-width: min(100%, 420px);
+}
+
+.explore-map-root .leaflet-control-attribution a {
+  color: #4ade80 !important;
+  text-decoration: none !important;
+}
+
+.explore-map-root .leaflet-control-attribution a:hover {
+  text-decoration: underline !important;
+  color: #86efac !important;
+}
+
+/* Custom div marker: no default leaflet box */
+.explore-map-root .explore-map-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.explore-map-root .explore-map-pin svg {
+  display: block;
+}
+
+/* Popup: dark panel, green border, rounded — matches DetailsPanel / search */
+.explore-map-root .leaflet-popup-content-wrapper {
+  background: #0a0a0a !important;
+  color: #e5e7eb !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(34, 197, 94, 0.35) !important;
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.explore-map-root .leaflet-popup-content {
+  margin: 12px 32px 12px 14px !important;
+  min-height: auto !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0.02em;
+  color: #f3f4f6 !important;
+}
+
+.explore-map-root .explore-map-popup-title {
+  color: #f3f4f6;
+  font-weight: 600;
+  max-width: 220px;
+}
+
+.explore-map-root .leaflet-popup-tip-container {
+  margin-top: -1px;
+}
+
+.explore-map-root .leaflet-popup-tip {
+  background: #0a0a0a !important;
+  border: 1px solid rgba(34, 197, 94, 0.35) !important;
+  box-shadow: none !important;
+}
+
+.explore-map-root .leaflet-popup-close-button {
+  width: 28px !important;
+  height: 28px !important;
+  top: 6px !important;
+  right: 6px !important;
+  padding: 0 !important;
+  font-size: 18px !important;
+  line-height: 26px !important;
+  color: #9ca3af !important;
+  font-weight: 300 !important;
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.explore-map-root .leaflet-popup-close-button:hover {
+  color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+
+/* Cluster circles: green family */
+.explore-map-root .marker-cluster-small,
+.explore-map-root .marker-cluster-medium,
+.explore-map-root .marker-cluster-large {
+  background-color: rgba(34, 197, 94, 0.22) !important;
+}
+
+.explore-map-root .marker-cluster-small div,
+.explore-map-root .marker-cluster-medium div,
+.explore-map-root .marker-cluster-large div {
+  background-color: #16a34a !important;
+  color: #0a0a0a !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.02em;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.explore-map-root .marker-cluster {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+}

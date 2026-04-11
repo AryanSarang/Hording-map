@@ -18,6 +18,7 @@ const STATUS_OPTIONS = ['active', 'inactive', 'maintenance'];
 
 const initialForm = {
     vendorId: null,
+    title: '',
     state: '', city: '', zone: '', locality: '', address: '', pincode: '', landmark: '',
     latitude: '', longitude: '',
     pocName: '', pocNumber: '', pocEmail: '',
@@ -208,6 +209,13 @@ export default function NewMediaPage() {
                         {/* MEDIA DETAILS - ON TOP */}
                         <div className={`${styles.formSection} ${styles.cardSection}`}>
                             <h3 className={styles.sectionHead}>Media Details</h3>
+                            <p className={styles.sectionHint}>Title is stored on the media record (not a metafield) and is used in lists and CSV export when set.</p>
+                            <div className={styles.formRow}>
+                                <div className={`${styles.formGroup} ${styles.wide}`}>
+                                    <label>Title</label>
+                                    <input type="text" name="title" value={formData.title} onChange={handleChange} placeholder="e.g. PVR SRMT Mall — main screen" />
+                                </div>
+                            </div>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}>
                                     <label className={styles.required}>Media Type</label>

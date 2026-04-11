@@ -2,29 +2,56 @@
 "use client";
 
 import { useMemo } from 'react';
-import Dropdown from './Dropdown';
+import MultiSelectDropdown from './MultiSelectDropdown';
 
-export default function FilterPanel({ hoardings, filters, setFilters, onApply, canApply, isApplying }) {
+export default function FilterPanel({
+    hoardings,
+    filters,
+    setFilters,
+    onApply,
+    canApply,
+    isApplying,
+    applyCreditCost = 5,
+    defaultFiltersForReset,
+}) {
+
+    const selectedStates = filters.states || [];
 
     // --- 1. DATA ANALYSIS ---
     const options = useMemo(() => {
         const getUnique = (key) => [...new Set(hoardings.map(h => h[key]).filter(Boolean))];
 
-        const states = getUnique('state');
+        const states = getUnique('state').sort((a, b) => String(a).localeCompare(String(b)));
         const cities = [...new Set(hoardings
-            .filter(h => h.state === filters.state)
+            .filter((h) => {
+                if (!selectedStates.length) return true;
+                const hs = String(h.state || '').toLowerCase();
+                return selectedStates.some((s) => String(s).toLowerCase() === hs);
+            })
             .map(h => h.city)
-            .filter(Boolean)
-        )];
+            .filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
 
         const mediaTypes = getUnique('mediaType');
-        const vendors = getUnique('vendorId');
+
+        const vendorMap = new Map();
+        for (const h of hoardings) {
+            const vid = h.vendorId;
+            if (vid == null || vid === '') continue;
+            const id = String(vid);
+            if (vendorMap.has(id)) continue;
+            const nm = h.vendorName;
+            const label = nm && String(nm).trim() ? String(nm).trim() : `Vendor #${id}`;
+            vendorMap.set(id, label);
+        }
+        const vendorOptions = Array.from(vendorMap.entries())
+            .map(([value, label]) => ({ value, label }))
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 
         const rates = hoardings.map(h => h.rate).filter(r => r > 0);
         const maxRateData = rates.length > 0 ? Math.max(...rates) : 100000;
 
-        return { states, cities, mediaTypes, vendors, maxRateData };
-    }, [hoardings, filters.state]);
+        return { states, cities, mediaTypes, vendorOptions, maxRateData };
+    }, [hoardings, selectedStates]);
 
     // --- 2. HANDLERS ---
     const toggleArrayItem = (field, value) => {
@@ -154,31 +181,50 @@ export default function FilterPanel({ hoardings, filters, setFilters, onApply, c
                     </div>
                 )}
 
-                {/* --- LOCATION --- */}
+                {/* --- LOCATION (multi-select) --- */}
                 {(options.states.length > 1 || options.cities.length > 1) && (
                     <div className="space-y-4">
                         <h3 className="text-xs font-bold text-gray-500 uppercase">Location</h3>
                         {options.states.length > 1 && (
-                            <Dropdown
-                                value={filters.state}
-                                onChange={(next) => setFilters({ ...filters, state: String(next || ''), city: '' })}
-                                placeholder="All States"
-                                options={[
-                                    { value: '', label: 'All States' },
-                                    ...options.states.map((s) => ({ value: s, label: s }))
-                                ]}
-                            />
+                            <div>
+                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">States</p>
+                                <MultiSelectDropdown
+                                    values={filters.states || []}
+                                    allLabel="ALL"
+                                    onChange={(next) => {
+                                        const citySet = new Set(
+                                            hoardings
+                                                .filter((h) => {
+                                                    if (!next.length) return true;
+                                                    const hs = String(h.state || '').toLowerCase();
+                                                    return next.some((s) => String(s).toLowerCase() === hs);
+                                                })
+                                                .map((h) => h.city)
+                                                .filter(Boolean)
+                                        );
+                                        const nextCities = (filters.cities || []).filter((c) => citySet.has(c));
+                                        setFilters({ ...filters, states: next, cities: nextCities });
+                                    }}
+                                    placeholder="All states"
+                                    options={options.states.map((s) => ({ value: s, label: s }))}
+                                    allowSearch
+                                    searchPlaceholder="Search states..."
+                                />
+                            </div>
                         )}
                         {options.cities.length > 0 && (
-                            <Dropdown
-                                value={filters.city}
-                                onChange={(next) => setFilters({ ...filters, city: String(next || '') })}
-                                placeholder="All Cities"
-                                options={[
-                                    { value: '', label: 'All Cities' },
-                                    ...options.cities.map((c) => ({ value: c, label: c }))
-                                ]}
-                            />
+                            <div>
+                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">Cities</p>
+                                <MultiSelectDropdown
+                                    values={filters.cities || []}
+                                    allLabel="ALL"
+                                    onChange={(next) => setFilters({ ...filters, cities: next })}
+                                    placeholder="All cities"
+                                    options={options.cities.map((c) => ({ value: c, label: c }))}
+                                    allowSearch
+                                    searchPlaceholder="Search cities..."
+                                />
+                            </div>
                         )}
                     </div>
                 )}
@@ -205,18 +251,17 @@ export default function FilterPanel({ hoardings, filters, setFilters, onApply, c
                 )}
 
                 {/* --- VENDOR --- */}
-                {options.vendors.length > 1 && (
+                {options.vendorOptions.length > 1 && (
                     <div>
                         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Vendor</h3>
-                        <Dropdown
-                            value={filters.vendorId || 'all'}
-                            onChange={(next) => setFilters({ ...filters, vendorId: String(next || 'all') })}
-                            placeholder="All Vendors"
-                            options={[
-                                { value: 'all', label: 'All Vendors' },
-                                ...options.vendors.map((vId) => ({ value: String(vId), label: `Vendor #${vId}` }))
-                            ]}
-                            allowSearch={false}
+                        <MultiSelectDropdown
+                            values={filters.vendorIds || []}
+                            allLabel="ALL"
+                            onChange={(next) => setFilters({ ...filters, vendorIds: next.map(String) })}
+                            placeholder="All vendors"
+                            options={options.vendorOptions}
+                            allowSearch
+                            searchPlaceholder="Search vendors..."
                         />
                     </div>
                 )}
@@ -229,17 +274,28 @@ export default function FilterPanel({ hoardings, filters, setFilters, onApply, c
                     type="button"
                     onClick={() => onApply?.()}
                     disabled={!canApply || isApplying}
-                    className="w-full py-2 text-xs text-black bg-green-500 hover:bg-green-400 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full py-2 text-xs text-black bg-green-500 hover:bg-green-400 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed font-bold uppercase tracking-widest"
                     title="Apply filters"
                 >
-                    {isApplying ? 'Applying...' : 'Apply Filters (5 credits)'}
+                    {isApplying ? 'Applying...' : `Apply filters (${applyCreditCost} credits)`}
                 </button>
+                <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
+                    More states, cities, or vendors adds +2 credits each beyond the first in that group. Narrowing media type or price range adds +2.
+                </p>
                 <div className="h-2" />
                 <button
-                    onClick={() => setFilters({
-                        state: '', city: '', minPrice: 0, maxPrice: options.maxRateData,
-                        mediaTypes: options.mediaTypes, vendorId: 'all'
-                    })}
+                    type="button"
+                    onClick={() => {
+                        const base = defaultFiltersForReset ?? {
+                            states: [],
+                            cities: [],
+                            vendorIds: [],
+                            minPrice: 0,
+                            maxPrice: options.maxRateData,
+                            mediaTypes: options.mediaTypes,
+                        };
+                        setFilters(structuredClone(base));
+                    }}
                     className="w-full py-2 text-xs text-gray-500 hover:text-white underline"
                 >
                     Reset Filters

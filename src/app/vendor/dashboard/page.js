@@ -100,7 +100,7 @@ export default function DashboardPage() {
                                                 <div className={styles.cardHeader}>
                                                     <div>
                                                         <h3 className={styles.cardTitle}>
-                                                            {hording.landmark || hording.address || `Media #${hording.id}`}
+                                                            {hording.title || hording.landmark || hording.address || `Media #${hording.id}`}
                                                         </h3>
                                                         <p className={styles.cardMeta}>{hording.city}, {hording.state || 'N/A'}</p>
                                                     </div>

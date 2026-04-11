@@ -1,6 +1,6 @@
 // app/explore/page.js
 import ExploreView from './_components/ExploreView';
-import { supabase } from '../../lib/supabase';
+import { supabaseAdmin } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/authServer';
 import { fetchAllSupabasePages } from '../../lib/fetchAllSupabasePages';
 
@@ -14,24 +14,37 @@ const MEDIA_COLUMNS =
 const VARIANT_COLUMNS =
     'id,media_id,rate,display_order,option1_value,option2_value,option3_value,variant_title,size,cinema_format,audience_category,seating';
 
+const VARIANT_IN_CHUNK = 120;
+
 export default async function ExplorePage() {
-    // 1. Fetch all rows in pages (PostgREST max ~1000 per request); explicit columns reduce JSON size
-    const [{ data: hoardings, error }, { data: variants, error: variantsError }] = await Promise.all([
-        fetchAllSupabasePages((from, to) =>
-            supabase
-                .from('media')
-                .select(MEDIA_COLUMNS)
-                .order('id', { ascending: true })
-                .range(from, to)
-        ),
-        fetchAllSupabasePages((from, to) =>
-            supabase
+    // 1. Catalog rows: server-only service role (see RLS migration); active or legacy null status.
+    const { data: hoardings, error } = await fetchAllSupabasePages((from, to) =>
+        supabaseAdmin
+            .from('media')
+            .select(MEDIA_COLUMNS)
+            .or('status.eq.active,status.is.null')
+            .order('id', { ascending: true })
+            .range(from, to)
+    );
+
+    const variants = [];
+    let variantsError = null;
+    if (!error && Array.isArray(hoardings) && hoardings.length > 0) {
+        const mediaIds = hoardings.map((h) => h.id);
+        for (let i = 0; i < mediaIds.length; i += VARIANT_IN_CHUNK) {
+            const chunk = mediaIds.slice(i, i + VARIANT_IN_CHUNK);
+            const { data: rows, error: ve } = await supabaseAdmin
                 .from('media_variants')
                 .select(VARIANT_COLUMNS)
-                .order('id', { ascending: true })
-                .range(from, to)
-        ),
-    ]);
+                .in('media_id', chunk)
+                .order('display_order', { ascending: true });
+            if (ve) {
+                variantsError = ve;
+                break;
+            }
+            variants.push(...(rows || []));
+        }
+    }
 
     // 2. Get current user (may be null; explore is public)
     const user = await getCurrentUser();
@@ -84,6 +97,8 @@ export default async function ExplorePage() {
 
             // Flatten vendor name if needed
             vendorName: h.vendor?.name,
+            title: h.title,
+            displayTitle: [h.title, h.landmark, h.address, h.zone].find((x) => x && String(x).trim()) || `Site #${h.id}`,
             variants: mediaVariants,
             selectedVariantId: firstVariant?.id || null,
         };

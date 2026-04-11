@@ -227,6 +227,13 @@ export default function EditMediaPage() {
 
                         <div className={styles.formSection}>
                             <h3 className={styles.sectionHead}>Media Details</h3>
+                            <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px' }}>Title is stored on the media record (not a metafield) and appears in the media list when set.</p>
+                            <div className={styles.formRow}>
+                                <div className={`${styles.formGroup} ${styles.wide}`}>
+                                    <label>Title</label>
+                                    <input type="text" name="title" value={formData?.title ?? ''} onChange={handleChange} placeholder="Short display name" />
+                                </div>
+                            </div>
                             <div className={styles.formRow}>
                                 <div className={styles.formGroup}><label className={styles.required}>Media Type</label>
                                     <select name="mediaType" value={formData?.mediaType || ''} onChange={handleChange} required>

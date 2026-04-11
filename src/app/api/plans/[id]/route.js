@@ -56,12 +56,11 @@ export async function GET(req, { params }) {
             const [{ data: mediaRows }, { data: variantRows }] = await Promise.all([
                 supabaseAdmin
                     .from('media')
-                    .select('id, city, state, address, landmark, media_type, monthly_rental, media, screen_size, display_format, latitude, longitude')
-                    .in('id', mediaIds)
-                    .eq('user_id', user.id),
+                    .select('id, city, state, address, landmark, title, media_type, monthly_rental, media, screen_size, display_format, latitude, longitude')
+                    .in('id', mediaIds),
                 supabaseAdmin
                     .from('media_variants')
-                    .select('id, media_id, variant_title, option1_value, option2_value, option3_value, rate')
+                    .select('id, media_id, variant_title, option1_value, option2_value, option3_value, rate, display_order')
                     .in('media_id', mediaIds)
                     .order('display_order', { ascending: true }),
             ]);
@@ -122,8 +121,7 @@ export async function PUT(req, { params }) {
             const { data: validMediaRows, error: validMediaErr } = await supabaseAdmin
                 .from('media')
                 .select('id')
-                .in('id', incomingMediaIds)
-                .eq('user_id', user.id);
+                .in('id', incomingMediaIds);
 
             if (validMediaErr) throw validMediaErr;
 

@@ -2,9 +2,19 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { MapPin, X, ListPlus, PlusCircle } from 'lucide-react';
+import { MapPin, X, ListPlus, ListMinus, PlusCircle, Trash2 } from 'lucide-react';
 
-export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToPlan, currentPlan, isAuthenticated, planMutatingMediaIds }) {
+export default function DetailsPanel({
+    hoardings,
+    selectedId,
+    onSelect,
+    onAddToPlan,
+    onRemoveMediaFromPlan,
+    onRemoveVariantFromPlan,
+    currentPlan,
+    isAuthenticated,
+    planMutatingMediaIds,
+}) {
     const selectedHoarding = selectedId
         ? hoardings.find(h => h.id === selectedId)
         : null;
@@ -13,9 +23,12 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
         ? currentPlan.items.map((it) => typeof it === 'string' ? { mediaId: it, variantIds: [] } : it)
         : [];
     const currentPlanItem = selectedHoarding
-        ? normalizedPlanItems.find((it) => it.mediaId === selectedHoarding.id)
+        ? normalizedPlanItems.find((it) => String(it.mediaId) === String(selectedHoarding.id))
         : null;
     const isAdded = !!currentPlanItem;
+    const planVariantIdSet = currentPlanItem
+        ? new Set((currentPlanItem.variantIds || []).map(String).filter(Boolean))
+        : new Set();
     const [selectedVariantId, setSelectedVariantId] = useState(null);
     const variants = selectedHoarding?.variants || [];
 
@@ -25,11 +38,22 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
 
     const isMutating = selectedHoarding ? planMutatingMediaIds?.has(selectedHoarding.id) : false;
 
-
     const selectedVariant = useMemo(
         () => variants.find((v) => v.id === selectedVariantId) || variants[0] || null,
         [variants, selectedVariantId]
     );
+
+    const isThisVariantAdded =
+        !!currentPlanItem &&
+        !!selectedVariant?.id &&
+        (planVariantIdSet.size === 0 || planVariantIdSet.has(String(selectedVariant.id)));
+
+    /** Whole media is fully in plan: no variant rows, or "all variants" (empty ids), or every variant id listed. */
+    const isAllVariantsInPlan =
+        !!currentPlanItem &&
+        (variants.length === 0 ||
+            (planVariantIdSet.size === 0 ||
+                variants.every((v) => planVariantIdSet.has(String(v.id)))));
 
     const listScrollParentRef = useRef(null);
     const listVirtualizer = useVirtualizer({
@@ -89,7 +113,7 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                     <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">#{selectedHoarding.id}</div>
                                 </div>
                             )}
-                            <h1 className="text-sm font-medium text-white leading-snug mb-1">{selectedHoarding.address || selectedHoarding.landmark || selectedHoarding.zone || "Site #" + selectedHoarding.id}</h1>
+                            <h1 className="text-sm font-medium text-white leading-snug mb-1">{selectedHoarding.displayTitle || selectedHoarding.title || selectedHoarding.address || selectedHoarding.landmark || selectedHoarding.zone || "Site #" + selectedHoarding.id}</h1>
                             <div className="flex items-center gap-2 text-gray-400 text-[10px] mb-3">
                                 <MapPin size={12} />
                                 <span>{selectedHoarding.city}, {selectedHoarding.state}</span>
@@ -168,35 +192,65 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                             </section>
                         )}
 
-                        {/* CTA: ADD TO PLAN */}
+                        {/* CTA: ADD / REMOVE PLAN — "all variants" only when there is more than one */}
                         <div className="sticky bottom-0 pt-4 bg-[#0a0a0a] border-t border-gray-800 mt-2">
                             <div className="grid grid-cols-1 gap-2">
+                                {variants.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            isAllVariantsInPlan
+                                                ? onRemoveMediaFromPlan?.(selectedHoarding.id)
+                                                : onAddToPlan(selectedHoarding.id, variants.map((v) => v.id))
+                                        }
+                                        disabled={
+                                            !isAuthenticated ||
+                                            !currentPlan ||
+                                            isMutating ||
+                                            (!isAllVariantsInPlan && variants.length === 0)
+                                        }
+                                        className={`w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 border disabled:opacity-60 disabled:cursor-not-allowed ${isAllVariantsInPlan
+                                            ? 'bg-red-950/50 text-red-400 border-red-500/45 hover:bg-red-950/70 hover:border-red-400/60'
+                                            : isAdded
+                                                ? 'bg-green-600 text-black hover:bg-green-500 border-transparent'
+                                                : (!isAuthenticated || !currentPlan
+                                                    ? 'bg-gray-700 text-gray-300 cursor-not-allowed border-transparent'
+                                                    : 'bg-white hover:bg-gray-200 text-black border-transparent')
+                                            }`}
+                                    >
+                                        {isAllVariantsInPlan ? <ListMinus size={14} /> : <ListPlus size={14} />}
+                                        {isMutating
+                                            ? 'Saving...'
+                                            : isAllVariantsInPlan
+                                                ? 'Remove All from Plan'
+                                                : isAdded
+                                                    ? 'Update Plan (All Variants)'
+                                                    : !isAuthenticated
+                                                        ? 'Sign in to Add'
+                                                        : !currentPlan
+                                                            ? 'Create a Plan'
+                                                            : 'Add All Variants to Plan'}
+                                    </button>
+                                )}
                                 <button
-                                    onClick={() => onAddToPlan(selectedHoarding.id, variants.map((v) => v.id))}
-                                    disabled={!isAuthenticated || !currentPlan || isMutating}
-                                    className={`w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 ${isAdded
-                                        ? 'bg-green-600 text-black hover:bg-green-500'
-                                        : (!isAuthenticated || !currentPlan
-                                            ? 'bg-gray-700 text-gray-300 cursor-not-allowed'
-                                            : 'bg-white hover:bg-gray-200 text-black')
+                                    type="button"
+                                    onClick={() =>
+                                        isThisVariantAdded
+                                            ? onRemoveVariantFromPlan?.(selectedHoarding.id, selectedVariant.id)
+                                            : onAddToPlan(selectedHoarding.id, selectedVariant?.id ? [selectedVariant.id] : [])
+                                    }
+                                    disabled={!isAuthenticated || !currentPlan || isMutating || !selectedVariant?.id}
+                                    className={`w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 border disabled:opacity-60 disabled:cursor-not-allowed ${isThisVariantAdded
+                                        ? 'bg-red-950/50 text-red-400 border-red-500/45 hover:bg-red-950/70 hover:border-red-400/60'
+                                        : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-700'
                                         }`}
                                 >
-                                    <ListPlus size={14} />
+                                    {isThisVariantAdded ? <Trash2 size={14} /> : <PlusCircle size={14} />}
                                     {isMutating
-                                        ? "Saving..."
-                                        : isAdded
-                                            ? "Update Plan (All Variants)"
-                                            : (!isAuthenticated
-                                                ? "Sign in to Add"
-                                                : (!currentPlan ? "Create a Plan" : "Add All Variants to Plan"))}
-                                </button>
-                                <button
-                                    onClick={() => onAddToPlan(selectedHoarding.id, selectedVariant?.id ? [selectedVariant.id] : [])}
-                                    disabled={!isAuthenticated || !currentPlan || isMutating || !selectedVariant?.id}
-                                    className="w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white border border-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                    <PlusCircle size={14} />
-                                    Add This Variant to Plan
+                                        ? 'Saving...'
+                                        : isThisVariantAdded
+                                            ? 'Remove from Plan'
+                                            : 'Add This Variant to Plan'}
                                 </button>
                             </div>
                         </div>
@@ -245,7 +299,7 @@ export default function DetailsPanel({ hoardings, selectedId, onSelect, onAddToP
                                             </div>
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                                                 <h3 className="text-xs font-medium text-gray-200 truncate group-hover:text-green-400 transition-colors">
-                                                    {item.address || item.landmark || item.zone || `Site #${item.id}`}
+                                                    {item.displayTitle || item.title || item.address || item.landmark || item.zone || `Site #${item.id}`}
                                                 </h3>
                                                 <div className="flex items-center gap-2 mt-0.5">
                                                     <p className="text-[10px] text-gray-500 truncate max-w-[100px]">

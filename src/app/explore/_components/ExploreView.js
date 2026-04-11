@@ -1,12 +1,17 @@
 // app/explore/_components/ExploreView.js
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import DetailsPanel from './DetailsPanel';
 import FilterPanel from './FilterPanel';
 import ExploreHeader from './ExploreHeader';
 import { toast } from 'sonner';
+import {
+    computeExploreFilterCreditCost,
+    normalizeExploreFiltersForCompare,
+} from './exploreFilterCredits';
+import { buildDefaultExploreLandingFilters } from './exploreFilterDefaults';
 
 const MapSection = dynamic(() => import('./MapSection'), {
     ssr: false,
@@ -148,11 +153,99 @@ export default function ExploreView({ hoardings, user }) {
                 throw new Error(data.error || 'Failed to update plan');
             }
             const updatedPlan = data.plan;
-            setPlans((prev) => prev.map(p => (p.id === updatedPlan.id ? updatedPlan : p)));
-            setCurrentPlan(updatedPlan);
+            const normalized = { ...updatedPlan, items: normalizePlanItems(updatedPlan.items) };
+            setPlans((prev) => prev.map((p) => (p.id === normalized.id ? normalized : p)));
+            setCurrentPlan(normalized);
         } catch (err) {
             console.error('Add to plan error:', err);
             alert(err?.message || 'Failed to add to plan');
+            setCurrentPlan(previousPlan);
+            setPlans(previousPlans);
+        } finally {
+            setPlanMutatingMediaIds((prev) => {
+                const next = new Set(prev);
+                next.delete(hoardingId);
+                return next;
+            });
+        }
+    };
+
+    const handleRemoveMediaFromPlan = async (hoardingId) => {
+        if (!isAuthenticated || !currentPlan) return;
+        setPlanMutatingMediaIds((prev) => new Set(prev).add(hoardingId));
+        const currentItems = normalizePlanItems(currentPlan.items);
+        const updatedItems = currentItems.filter((it) => String(it.mediaId) !== String(hoardingId));
+        const optimisticPlan = { ...currentPlan, items: updatedItems };
+        const previousPlan = currentPlan;
+        const previousPlans = plans;
+        setCurrentPlan(optimisticPlan);
+        setPlans(plans.map((p) => (p.id === optimisticPlan.id ? optimisticPlan : p)));
+        try {
+            const res = await fetch(`/api/plans/${encodeURIComponent(currentPlan.id)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ items: updatedItems }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update plan');
+            const updatedPlan = data.plan;
+            setPlans((prev) => prev.map((p) => (p.id === updatedPlan.id ? { ...updatedPlan, items: normalizePlanItems(updatedPlan.items) } : p)));
+            setCurrentPlan({ ...updatedPlan, items: normalizePlanItems(updatedPlan.items) });
+        } catch (err) {
+            console.error('Remove from plan error:', err);
+            toast.error(err?.message || 'Failed to remove from plan');
+            setCurrentPlan(previousPlan);
+            setPlans(previousPlans);
+        } finally {
+            setPlanMutatingMediaIds((prev) => {
+                const next = new Set(prev);
+                next.delete(hoardingId);
+                return next;
+            });
+        }
+    };
+
+    const handleRemoveVariantFromPlan = async (hoardingId, variantId) => {
+        if (!isAuthenticated || !currentPlan || !variantId) return;
+        const h = hoardings.find((x) => String(x.id) === String(hoardingId));
+        const mediaVariants = Array.isArray(h?.variants) ? h.variants : [];
+        setPlanMutatingMediaIds((prev) => new Set(prev).add(hoardingId));
+        const currentItems = normalizePlanItems(currentPlan.items);
+        const nextItems = currentItems
+            .map((it) => {
+                if (String(it.mediaId) !== String(hoardingId)) return it;
+                const currentIds = Array.isArray(it.variantIds) ? it.variantIds : [];
+                const explicitIds = currentIds.length > 0
+                    ? currentIds.map(String)
+                    : mediaVariants.map((v) => String(v.id));
+                const nextVariantIds = explicitIds.filter((id) => id !== String(variantId));
+                return { ...it, variantIds: nextVariantIds };
+            })
+            .filter((it) => {
+                if (String(it.mediaId) !== String(hoardingId)) return true;
+                return Array.isArray(it.variantIds) && it.variantIds.length > 0;
+            });
+        const optimisticPlan = { ...currentPlan, items: nextItems };
+        const previousPlan = currentPlan;
+        const previousPlans = plans;
+        setCurrentPlan(optimisticPlan);
+        setPlans(plans.map((p) => (p.id === optimisticPlan.id ? optimisticPlan : p)));
+        try {
+            const res = await fetch(`/api/plans/${encodeURIComponent(currentPlan.id)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ items: nextItems }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update plan');
+            const updatedPlan = data.plan;
+            setPlans((prev) => prev.map((p) => (p.id === updatedPlan.id ? { ...updatedPlan, items: normalizePlanItems(updatedPlan.items) } : p)));
+            setCurrentPlan({ ...updatedPlan, items: normalizePlanItems(updatedPlan.items) });
+        } catch (err) {
+            console.error('Remove variant from plan error:', err);
+            toast.error(err?.message || 'Failed to remove variant');
             setCurrentPlan(previousPlan);
             setPlans(previousPlans);
         } finally {
@@ -196,28 +289,36 @@ export default function ExploreView({ hoardings, user }) {
         return rates.length > 0 ? Math.max(...rates) : 100000;
     }, [hoardings]);
 
-    const initialFilters = useMemo(() => ({
-        state: '',
-        city: '',
-        minPrice: 0,
-        maxPrice: initialMaxPrice || 100000,
-        mediaTypes: [...new Set(hoardings.map(h => h.mediaType).filter(Boolean))],
-        vendorId: 'all',
-    }), [hoardings, initialMaxPrice]);
+    const landingFilters = useMemo(
+        () => buildDefaultExploreLandingFilters(hoardings, initialMaxPrice || 100000),
+        [hoardings, initialMaxPrice]
+    );
 
-    const [appliedFilters, setAppliedFilters] = useState(initialFilters);
-    const [draftFilters, setDraftFilters] = useState(initialFilters);
+    const landingFiltersKey = useMemo(
+        () => normalizeExploreFiltersForCompare(landingFilters),
+        [landingFilters]
+    );
+
+    const [appliedFilters, setAppliedFilters] = useState(landingFilters);
+    const [draftFilters, setDraftFilters] = useState(landingFilters);
     const [applyingFilters, setApplyingFilters] = useState(false);
 
+    const prevLandingKeyRef = useRef(null);
     useEffect(() => {
-        setAppliedFilters(initialFilters);
-        setDraftFilters(initialFilters);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialMaxPrice, hoardings]);
+        if (prevLandingKeyRef.current === landingFiltersKey) return;
+        prevLandingKeyRef.current = landingFiltersKey;
+        setAppliedFilters(landingFilters);
+        setDraftFilters(landingFilters);
+    }, [landingFiltersKey, landingFilters]);
 
     const filterHasChanges = useMemo(() => {
-        return JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
+        return normalizeExploreFiltersForCompare(draftFilters) !== normalizeExploreFiltersForCompare(appliedFilters);
     }, [draftFilters, appliedFilters]);
+
+    const filterApplyCreditCost = useMemo(
+        () => computeExploreFilterCreditCost(draftFilters, hoardings, initialMaxPrice || 100000),
+        [draftFilters, hoardings, initialMaxPrice]
+    );
 
     const handleApplyFilters = async () => {
         if (!filterHasChanges || applyingFilters) return;
@@ -230,11 +331,22 @@ export default function ExploreView({ hoardings, user }) {
 
         setApplyingFilters(true);
         try {
+            const cost = computeExploreFilterCreditCost(draftFilters, hoardings, initialMaxPrice || 100000);
             const res = await fetch('/api/credits/consume', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ action: 'filter', source: 'explore' }),
+                body: JSON.stringify({
+                    action: 'filter',
+                    source: 'explore',
+                    cost,
+                    metadata: {
+                        filter_cost: cost,
+                        states: draftFilters.states?.length ?? 0,
+                        cities: draftFilters.cities?.length ?? 0,
+                        vendor_ids: draftFilters.vendorIds?.length ?? 0,
+                    },
+                }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data?.success === false) {
@@ -242,7 +354,8 @@ export default function ExploreView({ hoardings, user }) {
             }
 
             setAppliedFilters(draftFilters);
-            toast.success('Filters applied', { description: 'Charged 5 credits' });
+            const charged = typeof data?.cost === 'number' ? data.cost : cost;
+            toast.success('Filters applied', { description: `Charged ${charged} credits` });
         } catch (err) {
             toast.error('Could not apply filters', { description: err?.message || 'Try again' });
         } finally {
@@ -254,17 +367,75 @@ export default function ExploreView({ hoardings, user }) {
         return hoardings.filter((h) => {
             const f = appliedFilters;
             if (h.rate !== null && h.rate !== undefined && (h.rate < f.minPrice || h.rate > f.maxPrice)) return false;
-            if (f.state && h.state?.toLowerCase() !== f.state.toLowerCase()) return false;
-            if (f.city && h.city?.toLowerCase() !== f.city.toLowerCase()) return false;
+            const states = Array.isArray(f.states) ? f.states : [];
+            if (states.length > 0) {
+                const hs = String(h.state || '').toLowerCase();
+                if (!states.some((s) => String(s).toLowerCase() === hs)) return false;
+            }
+            const cities = Array.isArray(f.cities) ? f.cities : [];
+            if (cities.length > 0) {
+                const hc = String(h.city || '').toLowerCase();
+                if (!cities.some((c) => String(c).toLowerCase() === hc)) return false;
+            }
             if (h.mediaType && !f.mediaTypes.includes(h.mediaType)) return false;
-            if (f.vendorId !== 'all') {
-                const hVendorId = h.vendorId ? Number(h.vendorId) : null;
-                const fVendorId = Number(f.vendorId);
-                if (hVendorId !== fVendorId) return false;
+            const vendorIds = Array.isArray(f.vendorIds) ? f.vendorIds.map(String) : [];
+            if (vendorIds.length > 0) {
+                const hid = h.vendorId != null && h.vendorId !== '' ? String(h.vendorId) : '';
+                if (!hid || !vendorIds.includes(hid)) return false;
             }
             return true;
         });
     }, [hoardings, appliedFilters]);
+
+    /** After applying a state/city filter, fit the map to remaining markers (industry-standard map UX). */
+    const filterMapFocus = useMemo(() => {
+        const f = appliedFilters;
+        const st = Array.isArray(f.states) ? f.states : [];
+        const ct = Array.isArray(f.cities) ? f.cities : [];
+        if (st.length === 0 && ct.length === 0) return null;
+        const locKey = JSON.stringify({ s: [...st].sort(), c: [...ct].sort() });
+        const coords = [];
+        for (const h of filteredHoardings) {
+            const lat = h.latitude != null ? Number(h.latitude) : NaN;
+            const lng = h.longitude != null ? Number(h.longitude) : NaN;
+            if (Number.isFinite(lat) && Number.isFinite(lng)) coords.push([lat, lng]);
+        }
+        if (coords.length === 0) {
+            return { key: `${locKey}|0`, pointCount: 0 };
+        }
+        if (coords.length === 1) {
+            return {
+                key: `${locKey}|1`,
+                center: coords[0],
+                zoom: 12,
+                pointCount: 1,
+            };
+        }
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLng = Infinity;
+        let maxLng = -Infinity;
+        for (const [lat, lng] of coords) {
+            minLat = Math.min(minLat, lat);
+            maxLat = Math.max(maxLat, lat);
+            minLng = Math.min(minLng, lng);
+            maxLng = Math.max(maxLng, lng);
+        }
+        const pad = 0.05;
+        if (maxLat - minLat < pad) {
+            minLat -= pad / 2;
+            maxLat += pad / 2;
+        }
+        if (maxLng - minLng < pad) {
+            minLng -= pad / 2;
+            maxLng += pad / 2;
+        }
+        return {
+            key: `${locKey}|${coords.length}`,
+            bounds: [[minLat, minLng], [maxLat, maxLng]],
+            pointCount: coords.length,
+        };
+    }, [appliedFilters.states, appliedFilters.cities, filteredHoardings]);
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-black text-white">
@@ -276,6 +447,7 @@ export default function ExploreView({ hoardings, user }) {
                     hoardings={filteredHoardings}
                     selectedId={selectedId}
                     onSelect={setSelectedId}
+                    filterFocus={filterMapFocus}
                 />
                 {filteredHoardings.length === 0 && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 p-4 rounded text-center z-[2000] pointer-events-none">
@@ -311,6 +483,8 @@ export default function ExploreView({ hoardings, user }) {
                             selectedId={selectedId}
                             onSelect={setSelectedId}
                             onAddToPlan={handleAddToPlan}
+                            onRemoveMediaFromPlan={handleRemoveMediaFromPlan}
+                            onRemoveVariantFromPlan={handleRemoveVariantFromPlan}
                             currentPlan={currentPlan}
                             isAuthenticated={isAuthenticated}
                             planMutatingMediaIds={planMutatingMediaIds}
@@ -326,6 +500,8 @@ export default function ExploreView({ hoardings, user }) {
                             onApply={handleApplyFilters}
                             canApply={filterHasChanges}
                             isApplying={applyingFilters}
+                            applyCreditCost={filterApplyCreditCost}
+                            defaultFiltersForReset={landingFilters}
                         />
                     </div>
 

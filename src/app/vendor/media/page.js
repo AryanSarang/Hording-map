@@ -385,11 +385,11 @@ export default function MediaPage() {
                                                         className={styles.checkboxInput}
                                                         checked={selected.has(row.id)}
                                                         onChange={() => toggleSelect(row.id)}
-                                                        aria-label={`Select ${row.landmark || row.address || row.id}`}
+                                                        aria-label={`Select ${row.title || row.landmark || row.address || row.id}`}
                                                     />
                                                 </label>
                                             </td>
-                                            <td className={styles.nameTd}>{row.landmark || row.address || `Media #${row.id}`}</td>
+                                            <td className={styles.nameTd}>{row.title || row.landmark || row.address || `Media #${row.id}`}</td>
                                             <td>{row.city || 'N/A'}</td>
                                             <td>{row.media_type || 'N/A'}</td>
                                             <td>{row.variant_count || 0}</td>
@@ -459,7 +459,7 @@ export default function MediaPage() {
                         </div>
                         <div className={styles.modalBody}>
                             <p className={styles.importHint}>
-                                Unified CSV: put location, POC, metafields, optional <code>title</code>, <code>vendor_name</code> (no <code>vendor_id</code> needed — matching name reuses your vendor; new names create a vendor for your account), and <strong>all pricing rules</strong> in <code>pricing_rules_json</code> on the <strong>first</strong> row of each media. <code>handle</code> and <code>id</code> are optional on create. Variant rows leave parent cells <strong>blank</strong>. Legacy flat template repeats parent columns on every row.
+                                <strong>Required columns</strong> in the header: <code>title</code> (or <code>media_title</code>), <code>city</code>, <code>state</code>, <code>address</code>, <code>latitude</code>, <code>longitude</code>, <code>poc_name</code>, <code>poc_number</code>, <code>minimum_booking_duration</code>, <code>media_type</code>, <code>status</code>, and <code>vendor_name</code> or <code>vendor_id</code>. On each <strong>parent</strong> row these must be non-empty (no default for status or min. booking). <code>title</code> is stored as the media display title (not inferred from address). Unified: add metafields, <code>pricing_rules_json</code> on the first row per media; variant rows leave parent cells blank. <code>handle</code> and <code>id</code> optional on create. Rows that fail validation are skipped with row-level errors; the rest import.
                             </p>
                             <a href="/api/vendors/hordings/import-template" download className={styles.templateLink}>Download template (Shopify-style CSV)</a>
                             {' · '}

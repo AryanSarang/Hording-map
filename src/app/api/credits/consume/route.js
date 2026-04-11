@@ -6,6 +6,9 @@ const COSTS = {
   filter: 5,
 };
 
+const FILTER_COST_MIN = 5;
+const FILTER_COST_MAX = 150;
+
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -18,7 +21,12 @@ export async function POST(req) {
       );
     }
 
-    const cost = COSTS[action];
+    let cost = COSTS[action];
+    if (action === 'filter' && typeof body?.cost === 'number' && Number.isFinite(body.cost)) {
+      const rounded = Math.round(body.cost);
+      cost = Math.min(FILTER_COST_MAX, Math.max(FILTER_COST_MIN, rounded));
+    }
+
     const delta = -cost;
 
     const meta = {

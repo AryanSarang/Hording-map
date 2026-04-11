@@ -9,7 +9,37 @@ import { fetchAllSupabasePages } from '../../../../../lib/fetchAllSupabasePages'
 import { loadVendorNameCache, resolveVendorForImport } from '../../../../../lib/resolveVendorForImport';
 
 const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
-const REQUIRED_HEADERS = ['city', 'state', 'address', 'latitude', 'longitude', 'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type'];
+
+/** Every import must include these header names (normalized). Aliases listed per key. */
+const REQUIRED_HEADER_RULES = [
+    { name: 'city', aliases: ['city'] },
+    { name: 'state', aliases: ['state'] },
+    { name: 'address', aliases: ['address'] },
+    { name: 'latitude', aliases: ['latitude'] },
+    { name: 'longitude', aliases: ['longitude'] },
+    { name: 'poc_name', aliases: ['poc_name', 'poc_name_'] },
+    { name: 'poc_number', aliases: ['poc_number', 'poc_number_'] },
+    { name: 'minimum_booking_duration', aliases: ['minimum_booking_duration'] },
+    { name: 'media_type', aliases: ['media_type', 'media_type_'] },
+    { name: 'status', aliases: ['status'] },
+    { name: 'title', aliases: ['title', 'media_title'] },
+    { name: 'vendor', aliases: ['vendor_name', 'vendor_name_', 'vendor_id'] },
+];
+
+function assertImportCsvHeaders(headerIndex) {
+    for (const rule of REQUIRED_HEADER_RULES) {
+        const ok = rule.aliases.some((a) => headerIndex[a] != null);
+        if (!ok) {
+            const hint = rule.name === 'title'
+                ? 'title (or media_title)'
+                : rule.name === 'vendor'
+                    ? 'vendor_name (or vendor_id)'
+                    : rule.name;
+            return `CSV is missing required column: ${hint}`;
+        }
+    }
+    return null;
+}
 
 /** URL-ish slug for grouping rows when handle is omitted (not stored on media). */
 function slugifyForHandle(raw) {
@@ -128,7 +158,11 @@ function buildKeyFromExistingMedia(row) {
 }
 
 function rowHasParentSitePayload(get) {
-    const keys = ['city', 'state', 'address', 'latitude', 'longitude', 'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type'];
+    const keys = [
+        'city', 'state', 'address', 'latitude', 'longitude',
+        'poc_name', 'poc_number', 'minimum_booking_duration', 'media_type',
+        'title', 'media_title', 'status', 'vendor_name', 'vendor_id',
+    ];
     return keys.some((k) => String(get(k) || '').trim() !== '');
 }
 
@@ -186,10 +220,9 @@ function collectVariantCustomFields(headerIndex, cells) {
 function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
     const rowErrors = [];
 
-    for (const rh of REQUIRED_HEADERS) {
-        if (headerIndex[rh] == null) {
-            return { preparedRows: [], rowErrors: [], fatalError: `CSV is missing required column: ${rh}` };
-        }
+    const headerFatal = assertImportCsvHeaders(headerIndex);
+    if (headerFatal) {
+        return { preparedRows: [], rowErrors: [], fatalError: headerFatal };
     }
 
     const hasTripletHeaders =
@@ -311,24 +344,27 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
             const pocName = get('poc_name') || get('poc_name_');
             const pocNumber = get('poc_number') || get('poc_number_');
             const pocEmail = get('poc_email') || get('poc_email_');
-            const minBooking = get('minimum_booking_duration') || '1 month';
+            const minBooking = get('minimum_booking_duration');
+
+            const titleVal = (get('title') || get('media_title') || '').trim();
 
             const option1Name = get('option1_name') || 'Option 1';
             const option2Name = get('option2_name') || null;
             const option3Name = get('option3_name') || '';
 
-            if (!city) errs.push('city is required on the first row for each handle');
-            if (!state) errs.push('state is required on the first row for each handle');
-            if (!address) errs.push('address is required on the first row for each handle');
+            if (!city?.trim()) errs.push('city is required on the first row for each handle');
+            if (!state?.trim()) errs.push('state is required on the first row for each handle');
+            if (!address?.trim()) errs.push('address is required on the first row for each handle');
             const lat = parseFloat(latStr);
             const lng = parseFloat(lngStr);
             if (!latStr || isNaN(lat) || lat < -90 || lat > 90) errs.push('latitude must be a number between -90 and 90');
             if (!lngStr || isNaN(lng) || lng < -180 || lng > 180) errs.push('longitude must be a number between -180 and 180');
-            if (!pocName) errs.push('poc_name is required on the first row for each handle');
-            if (!pocNumber) errs.push('poc_number is required on the first row for each handle');
-            if (!minBooking) errs.push('minimum_booking_duration is required');
-            if (!mediaType) errs.push('media_type is required');
+            if (!pocName?.trim()) errs.push('poc_name is required on the first row for each handle');
+            if (!pocNumber?.trim()) errs.push('poc_number is required on the first row for each handle');
+            if (!String(minBooking || '').trim()) errs.push('minimum_booking_duration is required on the first row for each handle (no default)');
+            if (!mediaType?.trim()) errs.push('media_type is required');
             else if (!MEDIA_TYPES.includes(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
+            if (!titleVal) errs.push('title is required on the first row for each handle (non-empty title or media_title)');
 
             const vendorIdStr = get('vendor_id');
             const vendorId = vendorIdStr ? String(vendorIdStr).trim() || null : null;
@@ -336,9 +372,12 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
                 errs.push('vendor_id must be a valid UUID or 10-character hex id when provided');
             }
             const csvVendorName = (get('vendor_name') || get('vendor_name_') || '').trim();
+            if (!vendorId && !csvVendorName) errs.push('vendor_name is required on the first row for each handle when vendor_id is empty');
 
-            const statusVal = get('status') || 'active';
-            if (!['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
+            const statusRaw = get('status');
+            if (!String(statusRaw || '').trim()) errs.push('status is required on the first row for each handle (e.g. active)');
+            const statusVal = String(statusRaw || '').trim();
+            if (statusVal && !['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
 
             const imagesStr = get('images');
             const media = imagesStr ? imagesStr.split('|').map((s) => s.trim()).filter(Boolean) : [];
@@ -382,7 +421,7 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
                     latitude: lat,
                     longitude: lng,
                 }),
-                csvTitle: (get('title') || get('media_title') || '').trim(),
+                csvTitle: titleVal,
                 csvVendorName,
                 vendor_id: vendorId,
                 city,
@@ -708,7 +747,7 @@ async function commitPreparedImport(user, replaceExisting, preparedRows, rowErro
                 ...hPayload,
                 vendor_id: resolvedVendorId,
                 user_id: user.id,
-                title: (csvTitle && String(csvTitle).trim()) || base.address,
+                title: String(csvTitle || '').trim() || null,
                 has_variants: variantsToInsert.length > 0,
                 option1_name: variantsToInsert.length > 0 ? (base.option1_name || 'Option 1') : null,
                 option2_name: variantsToInsert.length > 0 ? (base.option2_name || null) : null,
@@ -828,17 +867,16 @@ export async function POST(req) {
             preparedRows = unified.preparedRows;
             rowErrors = unified.rowErrors;
         } else {
-            for (const rh of REQUIRED_HEADERS) {
-                if (headerIndex[rh] == null) {
-                    return NextResponse.json(
-                        {
-                            success: false,
-                            error: `CSV is missing required column: ${rh}`,
-                            rowErrors: [],
-                        },
-                        { status: 400 }
-                    );
-                }
+            const legacyHeaderErr = assertImportCsvHeaders(headerIndex);
+            if (legacyHeaderErr) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: legacyHeaderErr,
+                        rowErrors: [],
+                    },
+                    { status: 400 }
+                );
             }
 
             rowErrors = [];
@@ -865,7 +903,8 @@ export async function POST(req) {
                 const pocName = get('poc_name') || get('poc_name_');
                 const pocNumber = get('poc_number') || get('poc_number_');
                 const pocEmail = get('poc_email') || get('poc_email_');
-                const minBooking = get('minimum_booking_duration') || '1 month';
+                const minBooking = get('minimum_booking_duration');
+                const titleVal = (get('title') || get('media_title') || '').trim();
 
                 const cinemaName = get('cinema_name');
                 const screenCode = get('screen_code');
@@ -883,18 +922,19 @@ export async function POST(req) {
                 const size = get('size');
                 const variantRate = get('rate') || get('variant_rate');
 
-                if (!city) errs.push('city is required');
-                if (!state) errs.push('state is required');
-                if (!address) errs.push('address is required');
+                if (!city?.trim()) errs.push('city is required');
+                if (!state?.trim()) errs.push('state is required');
+                if (!address?.trim()) errs.push('address is required');
                 const lat = parseFloat(latStr);
                 const lng = parseFloat(lngStr);
                 if (!latStr || isNaN(lat) || lat < -90 || lat > 90) errs.push('latitude must be a number between -90 and 90');
                 if (!lngStr || isNaN(lng) || lng < -180 || lng > 180) errs.push('longitude must be a number between -180 and 180');
-                if (!pocName) errs.push('poc_name is required');
-                if (!pocNumber) errs.push('poc_number is required');
-                if (!minBooking) errs.push('minimum_booking_duration is required');
-                if (!mediaType) errs.push('media_type is required');
+                if (!pocName?.trim()) errs.push('poc_name is required');
+                if (!pocNumber?.trim()) errs.push('poc_number is required');
+                if (!String(minBooking || '').trim()) errs.push('minimum_booking_duration is required (no default)');
+                if (!mediaType?.trim()) errs.push('media_type is required');
                 else if (!MEDIA_TYPES.includes(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
+                if (!titleVal) errs.push('title is required (non-empty title or media_title)');
 
                 const vendorIdStr = get('vendor_id');
                 const vendorId = vendorIdStr ? String(vendorIdStr).trim() || null : null;
@@ -902,9 +942,12 @@ export async function POST(req) {
                     errs.push('vendor_id must be a valid UUID or 10-character hex id when provided');
                 }
                 const csvVendorName = (get('vendor_name') || get('vendor_name_') || '').trim();
+                if (!vendorId && !csvVendorName) errs.push('vendor_name is required when vendor_id is empty');
 
-                const statusVal = get('status') || 'active';
-                if (!['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
+                const statusRaw = get('status');
+                if (!String(statusRaw || '').trim()) errs.push('status is required (e.g. active)');
+                const statusVal = String(statusRaw || '').trim();
+                if (statusVal && !['active', 'inactive', 'maintenance'].includes(statusVal)) errs.push('status must be active, inactive, or maintenance');
 
                 const imagesStr = get('images');
                 const media = imagesStr ? imagesStr.split('|').map((s) => s.trim()).filter(Boolean) : [];
@@ -952,6 +995,7 @@ export async function POST(req) {
                         latitude: lat,
                         longitude: lng,
                     }),
+                    csvTitle: titleVal,
                     csvVendorName,
                     vendor_id: vendorId,
                     city,
