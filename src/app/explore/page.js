@@ -2,10 +2,13 @@
 import ExploreView from './_components/ExploreView';
 import { supabaseAdmin } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/authServer';
-import { fetchAllSupabasePages } from '../../lib/fetchAllSupabasePages';
+import { fetchAllSupabasePagesParallel } from '../../lib/fetchAllSupabasePages';
 
 // Force the page to fetch fresh data on every visit
 export const revalidate = 0;
+
+/** Vercel Pro+: raises serverless limit past 10s if the catalog is large. Hobby stays capped at 10s — keep fetches fast (parallel variants). */
+export const maxDuration = 60;
 
 /** Narrow columns to shrink payload vs select('*') — keep in sync with `media` table + explore components. */
 const MEDIA_COLUMNS =
@@ -14,30 +17,53 @@ const MEDIA_COLUMNS =
 const VARIANT_COLUMNS =
     'id,media_id,rate,display_order,option1_value,option2_value,option3_value,variant_title,size,cinema_format,audience_category,seating';
 
-const VARIANT_IN_CHUNK = 120;
+/** Larger chunks = fewer HTTP round trips (PostgREST URL limits ~8k; UUID × ~200 is safe). */
+const VARIANT_IN_CHUNK = 200;
+
+/**
+ * Server scope for /explore: small payload + fast Vercel function (national catalog was timing out).
+ * Matches Maharashtra + “Mumbai” cities + cinema-style media (see exploreFilterDefaults).
+ * Explore filters only see this slice until you add a separate “full catalog” fetch/API.
+ */
+function exploreMediaQuery() {
+    return supabaseAdmin
+        .from('media')
+        .select(MEDIA_COLUMNS)
+        .or('status.eq.active,status.is.null')
+        .ilike('state', '%maharashtra%')
+        .ilike('city', '%mumbai%')
+        .ilike('media_type', '%cinema%')
+        .order('id', { ascending: true });
+}
 
 export default async function ExplorePage() {
-    // 1. Catalog rows: server-only service role (see RLS migration); active or legacy null status.
-    const { data: hoardings, error } = await fetchAllSupabasePages((from, to) =>
-        supabaseAdmin
-            .from('media')
-            .select(MEDIA_COLUMNS)
-            .or('status.eq.active,status.is.null')
-            .order('id', { ascending: true })
-            .range(from, to)
+    const userPromise = getCurrentUser();
+
+    // 1. Catalog: parallel windows; query is scoped to Mumbai cinema only.
+    const { data: hoardings, error } = await fetchAllSupabasePagesParallel(
+        (from, to) => exploreMediaQuery().range(from, to),
+        1000,
+        4
     );
 
     const variants = [];
     let variantsError = null;
     if (!error && Array.isArray(hoardings) && hoardings.length > 0) {
         const mediaIds = hoardings.map((h) => h.id);
+        const chunks = [];
         for (let i = 0; i < mediaIds.length; i += VARIANT_IN_CHUNK) {
-            const chunk = mediaIds.slice(i, i + VARIANT_IN_CHUNK);
-            const { data: rows, error: ve } = await supabaseAdmin
-                .from('media_variants')
-                .select(VARIANT_COLUMNS)
-                .in('media_id', chunk)
-                .order('display_order', { ascending: true });
+            chunks.push(mediaIds.slice(i, i + VARIANT_IN_CHUNK));
+        }
+        const settled = await Promise.all(
+            chunks.map((chunk) =>
+                supabaseAdmin
+                    .from('media_variants')
+                    .select(VARIANT_COLUMNS)
+                    .in('media_id', chunk)
+                    .order('display_order', { ascending: true })
+            )
+        );
+        for (const { data: rows, error: ve } of settled) {
             if (ve) {
                 variantsError = ve;
                 break;
@@ -46,8 +72,7 @@ export default async function ExplorePage() {
         }
     }
 
-    // 2. Get current user (may be null; explore is public)
-    const user = await getCurrentUser();
+    const user = await userPromise;
 
     if (error || variantsError) {
         console.error("Supabase Error:", error || variantsError);
