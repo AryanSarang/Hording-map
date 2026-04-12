@@ -18,7 +18,8 @@ const MapSection = dynamic(() => import('./MapSection'), {
     loading: () => <div className="w-full h-full bg-black flex items-center justify-center text-gray-500">Loading Map...</div>
 });
 
-export default function ExploreView({ hoardings, user }) {
+export default function ExploreView({ initialCatalog, user }) {
+    const [hoardings, setHoardings] = useState(initialCatalog);
     const normalizePlanItems = (items) => {
         if (!Array.isArray(items)) return [];
         const merged = new Map();
@@ -284,15 +285,24 @@ export default function ExploreView({ hoardings, user }) {
     };
     // -----------------------------
 
-    const initialMaxPrice = useMemo(() => {
-        const rates = hoardings.map(h => h.rate).filter(r => r > 0);
+    const initialMaxPriceFromSSR = useMemo(() => {
+        const rates = initialCatalog.map((h) => h.rate).filter((r) => r > 0);
         return rates.length > 0 ? Math.max(...rates) : 100000;
-    }, [hoardings]);
+    }, [initialCatalog]);
 
     const landingFilters = useMemo(
-        () => buildDefaultExploreLandingFilters(hoardings, initialMaxPrice || 100000),
-        [hoardings, initialMaxPrice]
+        () =>
+            buildDefaultExploreLandingFilters(
+                initialCatalog,
+                initialMaxPriceFromSSR || 100000
+            ),
+        [initialCatalog, initialMaxPriceFromSSR]
     );
+
+    const dataMaxPrice = useMemo(() => {
+        const rates = hoardings.map((h) => h.rate).filter((r) => r > 0);
+        return rates.length > 0 ? Math.max(...rates) : 100000;
+    }, [hoardings]);
 
     const landingFiltersKey = useMemo(
         () => normalizeExploreFiltersForCompare(landingFilters),
@@ -316,8 +326,8 @@ export default function ExploreView({ hoardings, user }) {
     }, [draftFilters, appliedFilters]);
 
     const filterApplyCreditCost = useMemo(
-        () => computeExploreFilterCreditCost(draftFilters, hoardings, initialMaxPrice || 100000),
-        [draftFilters, hoardings, initialMaxPrice]
+        () => computeExploreFilterCreditCost(draftFilters, hoardings, dataMaxPrice || 100000),
+        [draftFilters, hoardings, dataMaxPrice]
     );
 
     const handleApplyFilters = async () => {
@@ -331,31 +341,32 @@ export default function ExploreView({ hoardings, user }) {
 
         setApplyingFilters(true);
         try {
-            const cost = computeExploreFilterCreditCost(draftFilters, hoardings, initialMaxPrice || 100000);
-            const res = await fetch('/api/credits/consume', {
+            const res = await fetch('/api/explore/apply-filters', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({
-                    action: 'filter',
-                    source: 'explore',
-                    cost,
-                    metadata: {
-                        filter_cost: cost,
-                        states: draftFilters.states?.length ?? 0,
-                        cities: draftFilters.cities?.length ?? 0,
-                        vendor_ids: draftFilters.vendorIds?.length ?? 0,
-                    },
+                    states: draftFilters.states ?? [],
+                    cities: draftFilters.cities ?? [],
+                    vendorIds: draftFilters.vendorIds ?? [],
+                    mediaTypes: draftFilters.mediaTypes ?? [],
+                    minPrice: draftFilters.minPrice ?? 0,
+                    maxPrice: draftFilters.maxPrice,
                 }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data?.success === false) {
-                throw new Error(data?.error || 'Failed to consume credits');
+                throw new Error(data?.error || 'Failed to apply filters');
             }
 
+            setHoardings(Array.isArray(data.hoardings) ? data.hoardings : []);
             setAppliedFilters(draftFilters);
-            const charged = typeof data?.cost === 'number' ? data.cost : cost;
-            toast.success('Filters applied', { description: `Charged ${charged} credits` });
+            const charged = typeof data?.cost === 'number' ? data.cost : 0;
+            toast.success('Filters applied', {
+                description: data?.exempt
+                    ? 'Admin — no credits charged'
+                    : `Charged ${charged} credits`,
+            });
         } catch (err) {
             toast.error('Could not apply filters', { description: err?.message || 'Try again' });
         } finally {
@@ -377,7 +388,10 @@ export default function ExploreView({ hoardings, user }) {
                 const hc = String(h.city || '').toLowerCase();
                 if (!cities.some((c) => String(c).toLowerCase() === hc)) return false;
             }
-            if (h.mediaType && !f.mediaTypes.includes(h.mediaType)) return false;
+            const mediaTypes = Array.isArray(f.mediaTypes) ? f.mediaTypes : [];
+            if (mediaTypes.length > 0 && h.mediaType && !mediaTypes.includes(h.mediaType)) {
+                return false;
+            }
             const vendorIds = Array.isArray(f.vendorIds) ? f.vendorIds.map(String) : [];
             if (vendorIds.length > 0) {
                 const hid = h.vendorId != null && h.vendorId !== '' ? String(h.vendorId) : '';
@@ -492,7 +506,7 @@ export default function ExploreView({ hoardings, user }) {
                     </div>
 
                     {/* Filters (Right half of right column = 20% of total) */}
-                    <div className="w-1/2 h-full bg-[#111]">
+                    <div className="w-1/2 h-full min-w-0 max-w-full bg-[#111] overflow-hidden">
                         <FilterPanel
                             hoardings={hoardings}
                             filters={draftFilters}
@@ -502,6 +516,11 @@ export default function ExploreView({ hoardings, user }) {
                             isApplying={applyingFilters}
                             applyCreditCost={filterApplyCreditCost}
                             defaultFiltersForReset={landingFilters}
+                            onResetToLanding={(next) => {
+                                setDraftFilters(next);
+                                setAppliedFilters(next);
+                                setHoardings(initialCatalog);
+                            }}
                         />
                     </div>
 

@@ -348,9 +348,14 @@ export default function MapSection({ hoardings, selectedId, onSelect, filterFocu
                 className="w-full h-full z-0"
                 style={{ height: "100%", width: "100%" }}
             >
+                {/* OSM: parent-zoom tiles scale up until z-level tiles arrive; updateWhenIdle=false requests sooner. */}
                 <TileLayer
                     attribution={TILE_ATTRIBUTION}
                     url={TILE_OSM}
+                    maxZoom={19}
+                    maxNativeZoom={19}
+                    updateWhenIdle={false}
+                    keepBuffer={4}
                 />
 
                 <ZoomControl position="bottomright" />

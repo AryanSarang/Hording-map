@@ -3,6 +3,13 @@
 
 import { useMemo } from 'react';
 import MultiSelectDropdown from './MultiSelectDropdown';
+import {
+    getCityNamesForIndianStates,
+    mergeStateOptionsForExplore,
+} from '../../../lib/indiaGeoOptions';
+
+/** Avoid loading 10k+ city names when user selects many states (e.g. multi-select many). */
+const MAX_STATES_FOR_SYNTHETIC_CITY_LIST = 6;
 
 export default function FilterPanel({
     hoardings,
@@ -13,6 +20,8 @@ export default function FilterPanel({
     isApplying,
     applyCreditCost = 5,
     defaultFiltersForReset,
+    /** When set, Reset restores draft + applied + in-memory catalog (SSR slice) without a new Apply. */
+    onResetToLanding,
 }) {
 
     const selectedStates = filters.states || [];
@@ -21,15 +30,49 @@ export default function FilterPanel({
     const options = useMemo(() => {
         const getUnique = (key) => [...new Set(hoardings.map(h => h[key]).filter(Boolean))];
 
-        const states = getUnique('state').sort((a, b) => String(a).localeCompare(String(b)));
-        const cities = [...new Set(hoardings
+        const catalogStateLabels = (() => {
+            const byKey = new Map();
+            for (const h of hoardings) {
+                const raw = h.state;
+                if (raw == null || raw === '') continue;
+                const label = String(raw).trim();
+                const key = label.toLowerCase();
+                if (!byKey.has(key)) byKey.set(key, label);
+            }
+            return [...byKey.values()];
+        })();
+
+        const states = mergeStateOptionsForExplore(catalogStateLabels);
+
+        const catalogCities = hoardings
             .filter((h) => {
                 if (!selectedStates.length) return true;
                 const hs = String(h.state || '').toLowerCase();
                 return selectedStates.some((s) => String(s).toLowerCase() === hs);
             })
-            .map(h => h.city)
-            .filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
+            .map((h) => h.city)
+            .filter(Boolean);
+
+        const syntheticCities =
+            selectedStates.length > 0 &&
+                selectedStates.length <= MAX_STATES_FOR_SYNTHETIC_CITY_LIST
+                ? getCityNamesForIndianStates(selectedStates)
+                : [];
+
+        const cities = (() => {
+            const byKey = new Map();
+            for (const c of syntheticCities) {
+                const label = String(c).trim();
+                if (label) byKey.set(label.toLowerCase(), label);
+            }
+            for (const c of catalogCities) {
+                const label = String(c).trim();
+                if (label) byKey.set(label.toLowerCase(), label);
+            }
+            return [...byKey.values()].sort((a, b) =>
+                a.localeCompare(b, undefined, { sensitivity: 'base' })
+            );
+        })();
 
         const mediaTypes = getUnique('mediaType');
 
@@ -81,131 +124,133 @@ export default function FilterPanel({
         setFilters({ ...filters, maxPrice: value });
     };
 
-    const minPos = ((minPrice) / rangeMax) * 100;
-    const maxPos = ((maxPrice) / rangeMax) * 100;
-
     return (
         <div className="flex flex-col h-full bg-[#111] text-white border-l border-gray-800 font-sans">
             <div className="p-4 border-b border-gray-800 bg-[#111] sticky top-0 z-10">
                 <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wide">Filters</h2>
             </div>
 
-            <div className="p-6 space-y-8 overflow-y-auto">
+            <div className="min-w-0 p-6 space-y-8 overflow-y-auto overflow-x-hidden">
 
                 {/* --- DUAL PRICE SLIDER --- */}
                 {options.maxRateData > 0 && (
-                    <div className="w-full">
+                    <div className="w-full min-w-0 max-w-full">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xs font-bold text-gray-500 uppercase">Price Range</h3>
                         </div>
 
-                        {/* SLIDER CONTAINER */}
-                        <div className="relative w-full h-8 flex items-center justify-center">
-
-                            {/* 1. Gray Track */}
-                            <div className="absolute w-full h-0.5 bg-gray-700 rounded z-0"></div>
-
-                            {/* 2. Green Active Bar */}
-                            <div
-                                className="absolute h-0.5 bg-green-500 rounded z-10"
-                                style={{ left: `${minPos}%`, width: `${maxPos - minPos}%` }}
-                            ></div>
-
-                            {/* 3. Inputs (Visible Thumbs, Transparent Tracks) */}
-                            <input
-                                type="range"
-                                min="0" max={rangeMax} step={100}
-                                value={minPrice}
-                                onChange={handleMinChange}
-                                className="thumb-input z-20"
-                            />
-                            <input
-                                type="range"
-                                min="0" max={rangeMax} step={100}
-                                value={maxPrice}
-                                onChange={handleMaxChange}
-                                className="thumb-input z-30"
-                            />
-
-                            {/* 4. CSS for the Thumbs */}
-                            <style jsx>{`
-                    .thumb-input {
-                        position: absolute;
-                        pointer-events: none; /* Allow clicking through the track */
-                        -webkit-appearance: none; 
-                        z-index: 20;
-                        height: 5px;
-                        width: 100%;
-                        opacity: 1; /* Make sure it's visible */
-                        background: transparent; /* Make track invisible */
-                    }
-                    
-                    /* CHROME / SAFARI THUMB */
-                    .thumb-input::-webkit-slider-thumb {
-                        pointer-events: auto; /* Re-enable clicking on the dot */
-                        -webkit-appearance: none;
-                        height: 10px;
-                        width: 10px;
-                        border-radius: 50%;
-                        background: #22c55e;
-                        {/* border: 1px solid #22c55e; */}
-                        cursor: pointer;
-                        margin-top: -1px; /* Center vertical */
-                        box-shadow: 0 0 4px rgba(0,0,0,0.5);
-                    }
-
-                    /* FIREFOX THUMB */
-                    .thumb-input::-moz-range-thumb {
-                        pointer-events: auto;
-                        height: 10px;
-                        width: 10px;
-                        border: none;
-                        border-radius: 50%;
-                        background: #22c55e;
-                        {/* border: 2px solid #22c55e; */}
-                        cursor: pointer;
-                        box-shadow: 0 0 4px rgba(0,0,0,0.5);
-                    }
-                `}</style>
+                        <div className="w-full min-w-0 max-w-full px-2 box-border">
+                            <div className="relative h-9 w-full max-w-full">
+                                <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-0 h-0.5 -translate-y-1/2 rounded bg-gray-700" />
+                                <div
+                                    className="pointer-events-none absolute top-1/2 z-[1] h-0.5 -translate-y-1/2 rounded bg-green-500"
+                                    style={{
+                                        left: `${(minPrice / rangeMax) * 100}%`,
+                                        width: `${Math.max(0, ((maxPrice - minPrice) / rangeMax) * 100)}%`,
+                                    }}
+                                />
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max={rangeMax}
+                                    step={100}
+                                    value={minPrice}
+                                    onChange={handleMinChange}
+                                    className="thumb-input absolute z-20"
+                                />
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max={rangeMax}
+                                    step={100}
+                                    value={maxPrice}
+                                    onChange={handleMaxChange}
+                                    className="thumb-input absolute z-30"
+                                />
+                            </div>
                         </div>
 
-                        {/* Values Display */}
-                        <div className="flex justify-between items-center mt-2">
-                            <div className="text-xs font-bold bg-gray-800 text-green-400 px-3 py-1 rounded border border-gray-700">
+                        <style jsx>{`
+                            .thumb-input {
+                                position: absolute;
+                                pointer-events: none;
+                                -webkit-appearance: none;
+                                top: 50%;
+                                transform: translateY(-50%);
+                                left: 0;
+                                right: 0;
+                                width: 100%;
+                                max-width: 100%;
+                                height: 8px;
+                                margin: 0;
+                                padding: 0;
+                                background: transparent;
+                            }
+                            .thumb-input::-webkit-slider-thumb {
+                                pointer-events: auto;
+                                -webkit-appearance: none;
+                                height: 14px;
+                                width: 14px;
+                                border-radius: 50%;
+                                background: #22c55e;
+                                cursor: pointer;
+                                box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+                            }
+                            .thumb-input::-moz-range-thumb {
+                                pointer-events: auto;
+                                height: 14px;
+                                width: 14px;
+                                border: none;
+                                border-radius: 50%;
+                                background: #22c55e;
+                                cursor: pointer;
+                                box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+                            }
+                            .thumb-input::-moz-range-track {
+                                background: transparent;
+                            }
+                        `}</style>
+
+                        <div className="mt-3 flex justify-between gap-2 min-w-0">
+                            <div className="text-xs font-bold bg-gray-800 text-green-400 px-2 py-1 rounded border border-gray-700 truncate shrink min-w-0">
                                 ₹{minPrice.toLocaleString()}
                             </div>
-                            <div className="text-xs font-bold bg-gray-800 text-green-400 px-3 py-1 rounded border border-gray-700">
+                            <div className="text-xs font-bold bg-gray-800 text-green-400 px-2 py-1 rounded border border-gray-700 truncate shrink min-w-0">
                                 ₹{maxPrice.toLocaleString()}
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* --- LOCATION (multi-select) --- */}
-                {(options.states.length > 1 || options.cities.length > 1) && (
-                    <div className="space-y-4">
+                {(options.states.length > 0 || options.cities.length > 0) && (
+                    <div className="min-w-0 space-y-4">
                         <h3 className="text-xs font-bold text-gray-500 uppercase">Location</h3>
-                        {options.states.length > 1 && (
+                        {options.states.length > 0 && (
                             <div>
-                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">States</p>
+                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">
+                                    States
+                                </p>
                                 <MultiSelectDropdown
                                     values={filters.states || []}
-                                    allLabel="ALL"
                                     onChange={(next) => {
                                         const citySet = new Set(
                                             hoardings
                                                 .filter((h) => {
                                                     if (!next.length) return true;
                                                     const hs = String(h.state || '').toLowerCase();
-                                                    return next.some((s) => String(s).toLowerCase() === hs);
+                                                    return next.some(
+                                                        (s) => String(s).toLowerCase() === hs
+                                                    );
                                                 })
                                                 .map((h) => h.city)
                                                 .filter(Boolean)
                                         );
-                                        const nextCities = (filters.cities || []).filter((c) => citySet.has(c));
+                                        const nextCities = (filters.cities || []).filter((c) =>
+                                            citySet.has(c)
+                                        );
                                         setFilters({ ...filters, states: next, cities: nextCities });
                                     }}
-                                    placeholder="All states"
+                                    placeholder="Select states"
                                     options={options.states.map((s) => ({ value: s, label: s }))}
                                     allowSearch
                                     searchPlaceholder="Search states..."
@@ -214,7 +259,9 @@ export default function FilterPanel({
                         )}
                         {options.cities.length > 0 && (
                             <div>
-                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">Cities</p>
+                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">
+                                    Cities
+                                </p>
                                 <MultiSelectDropdown
                                     values={filters.cities || []}
                                     allLabel="ALL"
@@ -230,7 +277,7 @@ export default function FilterPanel({
                 )}
 
                 {/* --- MEDIA TYPE --- */}
-                {options.mediaTypes.length > 1 && (
+                {options.mediaTypes.length > 0 && (
                     <div>
                         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Media Type</h3>
                         <div className="flex flex-wrap gap-2">
@@ -251,7 +298,7 @@ export default function FilterPanel({
                 )}
 
                 {/* --- VENDOR --- */}
-                {options.vendorOptions.length > 1 && (
+                {options.vendorOptions.length > 0 && (
                     <div>
                         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Vendor</h3>
                         <MultiSelectDropdown
@@ -294,7 +341,9 @@ export default function FilterPanel({
                             maxPrice: options.maxRateData,
                             mediaTypes: options.mediaTypes,
                         };
-                        setFilters(structuredClone(base));
+                        const next = structuredClone(base);
+                        if (onResetToLanding) onResetToLanding(next);
+                        else setFilters(next);
                     }}
                     className="w-full py-2 text-xs text-gray-500 hover:text-white underline"
                 >
