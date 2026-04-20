@@ -33,7 +33,18 @@ export default function MultiSelectDropdown({
     const menuRef = useRef(null);
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
-    const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0, width: "100%" });
+    /**
+     * `placement` flips the menu above the button when there is more room upward than downward
+     * (prevents the list from being clipped when the trigger sits near the viewport bottom).
+     * `maxHeight` lets the menu shrink to fit the remaining space so its contents stay scrollable.
+     */
+    const [menuStyle, setMenuStyle] = useState({
+        top: 0,
+        left: 0,
+        width: "100%",
+        maxHeight: 400,
+        placement: "bottom",
+    });
 
     const set = useMemo(() => new Set((values || []).map(String)), [values]);
     const debouncedQuery = useDebouncedValue(query, debounceMs);
@@ -92,12 +103,34 @@ export default function MultiSelectDropdown({
         if (!open) return;
         const btn = buttonRef.current;
         if (!btn) return;
-        const rect = btn.getBoundingClientRect();
-        setMenuStyle({
-            top: rect.bottom + 8,
-            left: rect.left,
-            width: rect.width,
-        });
+
+        function reposition() {
+            const r = btn.getBoundingClientRect();
+            const vh = window.innerHeight;
+            const GAP = 8;
+            const MAX_H = 400;
+            const MIN_H = 160;
+            const spaceBelow = vh - r.bottom - GAP;
+            const spaceAbove = r.top - GAP;
+            const flipUp = spaceBelow < MIN_H && spaceAbove > spaceBelow;
+            const avail = flipUp ? spaceAbove : spaceBelow;
+            const maxHeight = Math.max(MIN_H, Math.min(MAX_H, avail));
+            setMenuStyle({
+                top: flipUp ? r.top - GAP - maxHeight : r.bottom + GAP,
+                left: r.left,
+                width: r.width,
+                maxHeight,
+                placement: flipUp ? "top" : "bottom",
+            });
+        }
+
+        reposition();
+        window.addEventListener("resize", reposition);
+        window.addEventListener("scroll", reposition, true);
+        return () => {
+            window.removeEventListener("resize", reposition);
+            window.removeEventListener("scroll", reposition, true);
+        };
     }, [open]);
 
     function toggle(val) {
@@ -116,13 +149,14 @@ export default function MultiSelectDropdown({
     const menu = (
         <div
             ref={menuRef}
-            className="z-[2000] mt-2 w-full rounded-xl border border-gray-700 bg-black/90 backdrop-blur-xl shadow-2xl overflow-hidden"
+            className="z-[2000] w-full rounded-xl border border-gray-700 bg-black/90 backdrop-blur-xl shadow-2xl overflow-hidden flex flex-col"
             role="listbox"
             style={{
                 position: "fixed",
                 top: menuStyle.top,
                 left: menuStyle.left,
                 width: menuStyle.width,
+                maxHeight: menuStyle.maxHeight,
             }}
         >
             {values?.length > 0 && (
@@ -154,7 +188,7 @@ export default function MultiSelectDropdown({
                 </div>
             )}
 
-            <div className="max-h-64 overflow-y-auto no-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
                 {allLabel && options.length > 1 ? (
                     <button
                         type="button"

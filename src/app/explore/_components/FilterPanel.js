@@ -14,6 +14,7 @@ import {
     normLoc,
     pruneCitiesToMap,
 } from '../../../lib/exploreFilterLocation';
+import { MEDIA_TYPES as CANONICAL_MEDIA_TYPES } from '../../../lib/mediaTypes';
 
 /** Avoid loading 10k+ city names when user selects many states (e.g. multi-select many). */
 const MAX_STATES_FOR_SYNTHETIC_CITY_LIST = 6;
@@ -109,7 +110,16 @@ export default function FilterPanel({
             a.localeCompare(b, undefined, { sensitivity: 'base' })
         );
 
-        const mediaTypes = getUnique('mediaType');
+        /**
+         * Always show every canonical media type so the user can switch selections even when
+         * the current catalog slice has been server-narrowed (e.g. picking Cafe Screen then
+         * hitting Apply refetches only cafe rows — without this union, Cinema Screen would
+         * vanish from the pill row until the user manually cleared filters).
+         */
+        const catalogMediaTypes = getUnique('mediaType');
+        const mediaTypes = [
+            ...new Set([...CANONICAL_MEDIA_TYPES, ...catalogMediaTypes]),
+        ];
 
         const rates = hoardings.map((h) => h.rate).filter((r) => r > 0);
         const maxRateData = rates.length > 0 ? Math.max(...rates) : 100000;
