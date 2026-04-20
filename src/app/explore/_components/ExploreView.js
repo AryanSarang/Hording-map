@@ -25,7 +25,12 @@ const MapSection = dynamic(() => import('./MapSection'), {
     loading: () => <div className="w-full h-full bg-black flex items-center justify-center text-gray-500">Loading Map...</div>
 });
 
-export default function ExploreView({ initialCatalog, user, exploreMetafieldFilters = [] }) {
+export default function ExploreView({
+    initialCatalog,
+    user,
+    exploreMetafieldFilters = [],
+    availableMediaTypes = [],
+}) {
     const [hoardings, setHoardings] = useState(initialCatalog);
     const normalizePlanItems = (items) => {
         if (!Array.isArray(items)) return [];
@@ -553,6 +558,7 @@ export default function ExploreView({ initialCatalog, user, exploreMetafieldFilt
                             applyCreditCost={filterApplyCreditCost}
                             defaultFiltersForReset={landingFilters}
                             exploreMetafieldFilters={exploreMetafieldFilters}
+                            availableMediaTypes={availableMediaTypes}
                             onResetToLanding={(next) => {
                                 setDraftFilters(next);
                                 setAppliedFilters(next);

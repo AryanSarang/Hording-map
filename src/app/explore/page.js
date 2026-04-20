@@ -30,6 +30,31 @@ export default async function ExplorePage() {
 
     const exploreMetafieldIds = exploreMetafieldFilters.map((m) => m.id).filter((id) => id != null);
 
+    /**
+     * Media-type filter pills must reflect every type that currently has ≥ 1 active media in the
+     * database — not just what's in the Maharashtra SSR slice, and not a hardcoded canonical list.
+     * We fetch only the `media_type` column (tiny payload) and dedupe on the server so clients
+     * always see the full set regardless of what catalog slice is currently loaded.
+     */
+    let availableMediaTypes = [];
+    try {
+        const { data: typeRows, error: typeErr } = await supabaseAdmin
+            .from('media')
+            .select('media_type')
+            .or('status.eq.active,status.is.null');
+        if (!typeErr && Array.isArray(typeRows)) {
+            availableMediaTypes = [
+                ...new Set(
+                    typeRows
+                        .map((r) => (r?.media_type || '').trim())
+                        .filter(Boolean)
+                ),
+            ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        }
+    } catch (e) {
+        console.warn('explore: distinct media_type fetch', e);
+    }
+
     const { hoardings: formattedHoardings, error } = await fetchExploreCatalogFormatted(
         supabaseAdmin,
         () => buildInitialExplorePageQuery(supabaseAdmin),
@@ -48,6 +73,7 @@ export default async function ExplorePage() {
             initialCatalog={formattedHoardings}
             user={user}
             exploreMetafieldFilters={exploreMetafieldFilters}
+            availableMediaTypes={availableMediaTypes}
         />
     );
 }

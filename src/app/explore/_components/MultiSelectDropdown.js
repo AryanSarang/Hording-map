@@ -39,7 +39,8 @@ export default function MultiSelectDropdown({
      * `maxHeight` lets the menu shrink to fit the remaining space so its contents stay scrollable.
      */
     const [menuStyle, setMenuStyle] = useState({
-        top: 0,
+        top: "auto",
+        bottom: "auto",
         left: 0,
         width: "100%",
         maxHeight: 400,
@@ -115,8 +116,15 @@ export default function MultiSelectDropdown({
             const flipUp = spaceBelow < MIN_H && spaceAbove > spaceBelow;
             const avail = flipUp ? spaceAbove : spaceBelow;
             const maxHeight = Math.max(MIN_H, Math.min(MAX_H, avail));
+            /**
+             * When flipping up we pin the menu's *bottom* edge to just above the trigger
+             * (using the `bottom` CSS property). Anchoring via `top = r.top - GAP - maxHeight`
+             * would leave an empty gap above the button whenever the menu content is shorter
+             * than maxHeight, because the menu auto-shrinks to content but `top` assumes full height.
+             */
             setMenuStyle({
-                top: flipUp ? r.top - GAP - maxHeight : r.bottom + GAP,
+                top: flipUp ? "auto" : r.bottom + GAP,
+                bottom: flipUp ? vh - r.top + GAP : "auto",
                 left: r.left,
                 width: r.width,
                 maxHeight,
@@ -154,6 +162,7 @@ export default function MultiSelectDropdown({
             style={{
                 position: "fixed",
                 top: menuStyle.top,
+                bottom: menuStyle.bottom,
                 left: menuStyle.left,
                 width: menuStyle.width,
                 maxHeight: menuStyle.maxHeight,

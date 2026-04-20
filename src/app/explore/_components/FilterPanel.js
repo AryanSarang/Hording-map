@@ -14,7 +14,6 @@ import {
     normLoc,
     pruneCitiesToMap,
 } from '../../../lib/exploreFilterLocation';
-import { MEDIA_TYPES as CANONICAL_MEDIA_TYPES } from '../../../lib/mediaTypes';
 
 /** Avoid loading 10k+ city names when user selects many states (e.g. multi-select many). */
 const MAX_STATES_FOR_SYNTHETIC_CITY_LIST = 6;
@@ -44,6 +43,12 @@ export default function FilterPanel({
     onResetToLanding,
     /** `{ id, name }[]` — metafields flagged for explore (from server). */
     exploreMetafieldFilters = [],
+    /**
+     * Distinct media_type values that currently exist in the database (SSR-computed on every
+     * /explore visit). Used as the source of truth for the Media Type pill row so options don't
+     * disappear when the loaded catalog is narrowed server-side by an applied filter.
+     */
+    availableMediaTypes = [],
 }) {
     const selectedStates = useMemo(
         () => coerceLocationStringList(filters.states),
@@ -111,21 +116,21 @@ export default function FilterPanel({
         );
 
         /**
-         * Always show every canonical media type so the user can switch selections even when
-         * the current catalog slice has been server-narrowed (e.g. picking Cafe Screen then
-         * hitting Apply refetches only cafe rows — without this union, Cinema Screen would
-         * vanish from the pill row until the user manually cleared filters).
+         * Source from `availableMediaTypes` (distinct types from the entire DB, computed at SSR)
+         * rather than the current catalog slice — otherwise an applied filter that narrows the
+         * server query would collapse the pill row to the currently selected type(s). Union with
+         * whatever the catalog still contains as a safety net in case the SSR query is missing.
          */
         const catalogMediaTypes = getUnique('mediaType');
         const mediaTypes = [
-            ...new Set([...CANONICAL_MEDIA_TYPES, ...catalogMediaTypes]),
+            ...new Set([...(availableMediaTypes || []), ...catalogMediaTypes]),
         ];
 
         const rates = hoardings.map((h) => h.rate).filter((r) => r > 0);
         const maxRateData = rates.length > 0 ? Math.max(...rates) : 100000;
 
         return { states, cities, mediaTypes, maxRateData };
-    }, [hoardings, selectedStates]);
+    }, [hoardings, selectedStates, availableMediaTypes]);
 
     const toggleArrayItem = (field, value) => {
         const currentList = filters[field];
@@ -418,10 +423,6 @@ export default function FilterPanel({
                 >
                     {isApplying ? 'Applying...' : `Apply filters (${applyCreditCost} credits)`}
                 </button>
-                <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
-                    More states, cities, or custom-field values adds +2 credits each beyond the first in
-                    that group. Narrowing media type or price range adds +2.
-                </p>
                 <div className="h-2" />
                 <button
                     type="button"
