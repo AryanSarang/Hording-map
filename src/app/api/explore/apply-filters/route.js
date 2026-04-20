@@ -7,6 +7,7 @@ import {
     fetchExploreCatalogFormatted,
 } from '../../../../lib/exploreCatalogFetch';
 import { computeExploreFilterCreditCost } from '../../../explore/_components/exploreFilterCredits';
+import { coerceLocationStringList } from '../../../../lib/exploreFilterLocation';
 
 export const maxDuration = 60;
 
@@ -26,27 +27,44 @@ export async function POST(req) {
         const body = await req.json().catch(() => ({}));
 
         const filterPayload = {
-            states: Array.isArray(body.states) ? body.states : [],
-            cities: Array.isArray(body.cities) ? body.cities : [],
-            vendorIds: Array.isArray(body.vendorIds) ? body.vendorIds.map(String) : [],
+            states: coerceLocationStringList(body.states),
+            cities: coerceLocationStringList(body.cities),
             mediaTypes: Array.isArray(body.mediaTypes) ? body.mediaTypes : [],
             minPrice: typeof body.minPrice === 'number' && Number.isFinite(body.minPrice) ? body.minPrice : 0,
             maxPrice:
                 typeof body.maxPrice === 'number' && Number.isFinite(body.maxPrice)
                     ? body.maxPrice
                     : null,
+            metafieldSelections:
+                body.metafieldSelections && typeof body.metafieldSelections === 'object'
+                    ? body.metafieldSelections
+                    : {},
         };
 
         const filterForQuery = {
             states: filterPayload.states,
             cities: filterPayload.cities,
-            vendorIds: filterPayload.vendorIds,
             mediaTypes: filterPayload.mediaTypes,
         };
 
+        let exploreMetafieldIds = [];
+        try {
+            const { data: mfRows, error: mfErr } = await supabaseAdmin
+                .from('vendor_metafields')
+                .select('id')
+                .eq('explore_filter_enabled', true);
+            if (!mfErr && Array.isArray(mfRows)) {
+                exploreMetafieldIds = mfRows.map((r) => r.id).filter((id) => id != null);
+            }
+        } catch {
+            exploreMetafieldIds = [];
+        }
+
         const { hoardings, error } = await fetchExploreCatalogFormatted(
             supabaseAdmin,
-            () => buildExploreMediaQuery(supabaseAdmin, filterForQuery)
+            () => buildExploreMediaQuery(supabaseAdmin, filterForQuery),
+            exploreMetafieldIds,
+            { states: filterPayload.states, cities: filterPayload.cities }
         );
         if (error) {
             console.error('apply-filters catalog', error);
@@ -64,10 +82,10 @@ export async function POST(req) {
         const filtersForCost = {
             states: filterPayload.states,
             cities: filterPayload.cities,
-            vendorIds: filterPayload.vendorIds,
             mediaTypes: filterPayload.mediaTypes,
             minPrice: filterPayload.minPrice,
             maxPrice: maxPriceForCost,
+            metafieldSelections: filterPayload.metafieldSelections,
         };
 
         const rawCost = computeExploreFilterCreditCost(filtersForCost, hoardings, dataMaxPrice);
@@ -84,7 +102,6 @@ export async function POST(req) {
                 filter_cost: cost,
                 states: filterPayload.states.length,
                 cities: filterPayload.cities.length,
-                vendor_ids: filterPayload.vendorIds.length,
             },
         });
 

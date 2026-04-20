@@ -14,12 +14,16 @@ const TILE_OSM = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-/** Teardrop pin SVG — green accent, dark inner dot (matches explore panels). */
-function createExplorePinIcon(selected) {
-    const fill = selected ? '#4ade80' : '#22c55e';
+/** Teardrop pin SVG — green default, brighter green when selected, sky when already on plan. */
+function createExplorePinIcon({ selected, inPlan }) {
+    let fill = '#22c55e';
+    if (selected) fill = '#4ade80';
+    else if (inPlan) fill = '#38bdf8';
     const filter = selected
         ? 'drop-shadow(0 0 8px rgba(74, 222, 128, 0.55))'
-        : 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55))';
+        : inPlan
+            ? 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.45))'
+            : 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55))';
     return L.divIcon({
         className: 'explore-map-pin',
         html: `
@@ -49,7 +53,7 @@ function MapController({ selectedId, hoardings, searchTarget, filterFocus }) {
 
     useEffect(() => {
         if (selectedId) {
-            const target = hoardings.find(h => h.id === selectedId);
+            const target = hoardings.find((h) => String(h.id) === String(selectedId));
             const latLng = getLatLng(target);
             if (latLng) {
                 map.flyTo(latLng, 16, { duration: 1.5 });
@@ -76,12 +80,21 @@ function MapController({ selectedId, hoardings, searchTarget, filterFocus }) {
     return null;
 }
 
-export default function MapSection({ hoardings, selectedId, onSelect, filterFocus }) {
+export default function MapSection({ hoardings, selectedId, onSelect, filterFocus, planMediaIds }) {
+    const planIdSet = useMemo(() => {
+        if (!planMediaIds) return new Set();
+        if (planMediaIds instanceof Set) return planMediaIds;
+        return new Set((planMediaIds || []).map((x) => String(x)));
+    }, [planMediaIds]);
+
     const pinIcons = useMemo(() => {
-        if (typeof window === 'undefined') return { default: null, selected: null };
+        if (typeof window === 'undefined') {
+            return { default: null, inPlan: null, selected: null };
+        }
         return {
-            default: createExplorePinIcon(false),
-            selected: createExplorePinIcon(true),
+            default: createExplorePinIcon({ selected: false, inPlan: false }),
+            inPlan: createExplorePinIcon({ selected: false, inPlan: true }),
+            selected: createExplorePinIcon({ selected: true, inPlan: false }),
         };
     }, []);
 
@@ -368,7 +381,13 @@ export default function MapSection({ hoardings, selectedId, onSelect, filterFocu
                             <Marker
                                 key={h.id}
                                 position={getLatLng(h)}
-                                icon={selectedId === h.id ? pinIcons.selected : pinIcons.default}
+                                icon={
+                                    String(selectedId) === String(h.id)
+                                        ? pinIcons.selected
+                                        : planIdSet.has(String(h.id))
+                                            ? pinIcons.inPlan
+                                            : pinIcons.default
+                                }
                                 eventHandlers={{
                                     click: () => onSelect(h.id),
                                 }}

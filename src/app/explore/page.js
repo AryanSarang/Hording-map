@@ -16,9 +16,24 @@ export const maxDuration = 60;
 export default async function ExplorePage() {
     const userPromise = getCurrentUser();
 
+    let exploreMetafieldFilters = [];
+    try {
+        const { data: mfRows, error: mfErr } = await supabaseAdmin
+            .from('vendor_metafields')
+            .select('id, name')
+            .eq('explore_filter_enabled', true)
+            .order('display_order', { ascending: true });
+        if (!mfErr && Array.isArray(mfRows)) exploreMetafieldFilters = mfRows;
+    } catch (e) {
+        console.warn('explore: vendor_metafields explore_filter_enabled', e);
+    }
+
+    const exploreMetafieldIds = exploreMetafieldFilters.map((m) => m.id).filter((id) => id != null);
+
     const { hoardings: formattedHoardings, error } = await fetchExploreCatalogFormatted(
         supabaseAdmin,
-        () => buildInitialExplorePageQuery(supabaseAdmin)
+        () => buildInitialExplorePageQuery(supabaseAdmin),
+        exploreMetafieldIds
     );
 
     const user = await userPromise;
@@ -28,5 +43,11 @@ export default async function ExplorePage() {
         return <div className="p-10 text-red-500">Error loading data.</div>;
     }
 
-    return <ExploreView initialCatalog={formattedHoardings} user={user} />;
+    return (
+        <ExploreView
+            initialCatalog={formattedHoardings}
+            user={user}
+            exploreMetafieldFilters={exploreMetafieldFilters}
+        />
+    );
 }

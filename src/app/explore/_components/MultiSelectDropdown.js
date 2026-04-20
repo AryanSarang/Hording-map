@@ -110,6 +110,7 @@ export default function MultiSelectDropdown({
 
     function clearAll() {
         onChange?.([]);
+        setOpen(false);
     }
 
     const menu = (

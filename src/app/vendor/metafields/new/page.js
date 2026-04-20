@@ -16,6 +16,7 @@ export default function CreateMetafieldPage() {
         name: '',
         definitionId: '',
         optionsInput: '', // Comma-separated for dropdown
+        exploreFilterEnabled: false,
     });
 
     useEffect(() => {
@@ -63,6 +64,7 @@ export default function CreateMetafieldPage() {
                     name: formData.name.trim(),
                     definitionId: formData.definitionId,
                     options,
+                    exploreFilterEnabled: formData.exploreFilterEnabled,
                 }),
             });
 
@@ -144,6 +146,28 @@ export default function CreateMetafieldPage() {
                                 </small>
                             </div>
                         )}
+
+                        <div className={styles.formGroup}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    name="exploreFilterEnabled"
+                                    checked={formData.exploreFilterEnabled}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            exploreFilterEnabled: e.target.checked,
+                                        }))
+                                    }
+                                />
+                                <span>Use as filter on Explore</span>
+                            </label>
+                            <small style={{ color: '#94a3b8', marginTop: '0.25rem', display: 'block' }}>
+                                When enabled, this metafield appears as a multi-select filter on the public
+                                Explore map. Values are pulled from the inventory you publish (e.g. set
+                                &ldquo;Cinema Chain&rdquo; on every cinema-screen media and users can filter by chain).
+                            </small>
+                        </div>
 
                         <div className={styles.formActions}>
                             <button type="submit" className={styles.submitBtn} disabled={loading}>

@@ -2,7 +2,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { MapPin, X, ListPlus, ListMinus, PlusCircle, Trash2 } from 'lucide-react';
+import { MapPin, X, ListPlus, ListMinus, PlusCircle } from 'lucide-react';
+import MultiSelectDropdown from './MultiSelectDropdown';
 
 export default function DetailsPanel({
     hoardings,
@@ -14,9 +15,10 @@ export default function DetailsPanel({
     currentPlan,
     isAuthenticated,
     planMutatingMediaIds,
+    exploreMetafieldFilters = [],
 }) {
     const selectedHoarding = selectedId
-        ? hoardings.find(h => h.id === selectedId)
+        ? hoardings.find((h) => String(h.id) === String(selectedId))
         : null;
 
     const normalizedPlanItems = Array.isArray(currentPlan?.items)
@@ -29,24 +31,49 @@ export default function DetailsPanel({
     const planVariantIdSet = currentPlanItem
         ? new Set((currentPlanItem.variantIds || []).map(String).filter(Boolean))
         : new Set();
-    const [selectedVariantId, setSelectedVariantId] = useState(null);
     const variants = selectedHoarding?.variants || [];
+    const variantIdsKey = useMemo(() => variants.map((v) => v.id).join(','), [variants]);
+
+    const [checkedVariantIds, setCheckedVariantIds] = useState(() => new Set());
 
     useEffect(() => {
-        setSelectedVariantId(variants[0]?.id || null);
-    }, [selectedHoarding?.id]);
+        setCheckedVariantIds(new Set(variants.map((v) => String(v.id))));
+    }, [selectedHoarding?.id, variantIdsKey]);
 
     const isMutating = selectedHoarding ? planMutatingMediaIds?.has(selectedHoarding.id) : false;
 
-    const selectedVariant = useMemo(
-        () => variants.find((v) => v.id === selectedVariantId) || variants[0] || null,
-        [variants, selectedVariantId]
+    const checkedVariants = useMemo(
+        () => variants.filter((v) => checkedVariantIds.has(String(v.id))),
+        [variants, checkedVariantIds]
     );
 
-    const isThisVariantAdded =
-        !!currentPlanItem &&
-        !!selectedVariant?.id &&
-        (planVariantIdSet.size === 0 || planVariantIdSet.has(String(selectedVariant.id)));
+    const displayVariant = checkedVariants[0] || variants[0] || null;
+
+    const rateSummary = useMemo(() => {
+        const rates = checkedVariants.map((v) => v.rate).filter((r) => r != null && Number(r) > 0);
+        if (rates.length === 0) return selectedHoarding?.rate ?? null;
+        const nums = rates.map(Number);
+        const min = Math.min(...nums);
+        const max = Math.max(...nums);
+        if (min === max) return min;
+        return { min, max };
+    }, [checkedVariants, selectedHoarding?.rate]);
+
+    /**
+     * Flatten vendor metafield values attached to the selected media into label/value pairs
+     * so they render alongside screen size, cinema format, etc. in the Specifications grid.
+     */
+    const metafieldSpecs = useMemo(() => {
+        const mfObj = selectedHoarding?.metafields;
+        if (!mfObj || typeof mfObj !== 'object') return [];
+        return (exploreMetafieldFilters || [])
+            .map((mf) => {
+                const val = mfObj[String(mf.id)];
+                if (val == null || String(val).trim() === '') return null;
+                return { id: mf.id, name: mf.name || `Field ${mf.id}`, value: String(val) };
+            })
+            .filter(Boolean);
+    }, [selectedHoarding?.metafields, exploreMetafieldFilters]);
 
     /** Whole media is fully in plan: no variant rows, or "all variants" (empty ids), or every variant id listed. */
     const isAllVariantsInPlan =
@@ -120,31 +147,45 @@ export default function DetailsPanel({
                             </div>
                             <div className="flex items-center justify-between p-2 bg-green-500/5 border border-green-500/20 rounded">
                                 <span className="text-[10px] text-green-300/70 uppercase">Monthly Rate</span>
-                                <div className="flex items-baseline gap-1"><span className="text-sm font-medium text-green-400">₹{(selectedVariant?.rate ?? selectedHoarding.rate)?.toLocaleString()}</span></div>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-sm font-medium text-green-400">
+                                        {rateSummary && typeof rateSummary === 'object'
+                                            ? `₹${rateSummary.min.toLocaleString()} – ₹${rateSummary.max.toLocaleString()}`
+                                            : `₹${(rateSummary ?? displayVariant?.rate ?? selectedHoarding.rate)?.toLocaleString?.() ?? '—'}`}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
-
-                        {/* PILLS */}
-                        <div className="flex flex-wrap gap-2">
-                            {[formatMediaType(selectedHoarding.mediaType), selectedHoarding.screenPlacement, selectedHoarding.displayFormat, selectedVariant?.option1_value, selectedVariant?.option2_value, selectedVariant?.option3_value].filter(Boolean).map((tag, i) => (
-                                <span key={i} className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-300 capitalize tracking-wide">{tag}</span>
-                            ))}
                         </div>
 
                         {variants.length > 1 && (
                             <section>
-                                <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Variant</h3>
-                                <select
-                                    className="w-full bg-gray-900 border border-gray-700 text-white text-xs rounded p-2 outline-none"
-                                    value={selectedVariant?.id || ''}
-                                    onChange={(e) => setSelectedVariantId(e.target.value)}
-                                >
-                                    {variants.map((v) => (
-                                        <option key={v.id} value={v.id}>
-                                            {(v.variant_title || [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / '))} {v.rate ? `- ₹${v.rate}` : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                                    Variants (add to plan)
+                                </h3>
+                                <MultiSelectDropdown
+                                    values={Array.from(checkedVariantIds)}
+                                    onChange={(next) => setCheckedVariantIds(new Set(next.map(String)))}
+                                    options={variants.map((v) => ({
+                                        value: String(v.id),
+                                        label:
+                                            v.variant_title ||
+                                            [v.option1_value, v.option2_value, v.option3_value]
+                                                .filter(Boolean)
+                                                .join(' / ') ||
+                                            `Variant ${v.id}`,
+                                        sublabel:
+                                            v.rate != null
+                                                ? `₹${Number(v.rate).toLocaleString()}`
+                                                : undefined,
+                                    }))}
+                                    allLabel={`All ${variants.length} variants`}
+                                    placeholder="No variants selected"
+                                    allowSearch={variants.length > 8}
+                                    searchPlaceholder="Search variants..."
+                                />
+                                <p className="text-[10px] text-gray-500 mt-1.5">
+                                    {checkedVariantIds.size} of {variants.length} selected
+                                </p>
                             </section>
                         )}
 
@@ -156,13 +197,14 @@ export default function DetailsPanel({
                             (selectedHoarding.width && selectedHoarding.height) ||
                             selectedHoarding.mediaType ||
                             selectedHoarding.displayFormat ||
-                            selectedVariant?.size ||
-                            selectedVariant?.cinema_format
+                            displayVariant?.size ||
+                            displayVariant?.cinema_format ||
+                            metafieldSpecs.length > 0
                         ) && (
                                 <section>
                                     <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Specifications</h3>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <DisplayValue label="Screen Size" value={selectedVariant?.size || selectedHoarding.screenSize} />
+                                        <DisplayValue label="Screen Size" value={displayVariant?.size || selectedHoarding.screenSize} />
                                         {selectedHoarding.width && selectedHoarding.height && (
                                             <DisplayValue
                                                 label="Dimensions"
@@ -172,9 +214,12 @@ export default function DetailsPanel({
                                         )}
                                         <DisplayValue label="Media Type" value={formatMediaType(selectedHoarding.mediaType)} />
                                         <DisplayValue label="Display" value={selectedHoarding.displayFormat} />
-                                        <DisplayValue label="Cinema Format" value={selectedVariant?.cinema_format} />
-                                        <DisplayValue label="Audience" value={selectedVariant?.audience_category} />
-                                        <DisplayValue label="Seating" value={selectedVariant?.seating} />
+                                        <DisplayValue label="Cinema Format" value={displayVariant?.cinema_format} />
+                                        <DisplayValue label="Audience" value={displayVariant?.audience_category} />
+                                        <DisplayValue label="Seating" value={displayVariant?.seating} />
+                                        {metafieldSpecs.map((mf) => (
+                                            <DisplayValue key={mf.id} label={mf.name} value={mf.value} />
+                                        ))}
                                     </div>
                                 </section>
                             )}
@@ -201,13 +246,16 @@ export default function DetailsPanel({
                                         onClick={() =>
                                             isAllVariantsInPlan
                                                 ? onRemoveMediaFromPlan?.(selectedHoarding.id)
-                                                : onAddToPlan(selectedHoarding.id, variants.map((v) => v.id))
+                                                : onAddToPlan(
+                                                    selectedHoarding.id,
+                                                    Array.from(checkedVariantIds)
+                                                )
                                         }
                                         disabled={
                                             !isAuthenticated ||
                                             !currentPlan ||
                                             isMutating ||
-                                            (!isAllVariantsInPlan && variants.length === 0)
+                                            checkedVariantIds.size === 0
                                         }
                                         className={`w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 border disabled:opacity-60 disabled:cursor-not-allowed ${isAllVariantsInPlan
                                             ? 'bg-red-950/50 text-red-400 border-red-500/45 hover:bg-red-950/70 hover:border-red-400/60'
@@ -224,34 +272,43 @@ export default function DetailsPanel({
                                             : isAllVariantsInPlan
                                                 ? 'Remove All from Plan'
                                                 : isAdded
-                                                    ? 'Update Plan (All Variants)'
+                                                    ? 'Update Plan (selected variants)'
                                                     : !isAuthenticated
                                                         ? 'Sign in to Add'
                                                         : !currentPlan
                                                             ? 'Create a Plan'
-                                                            : 'Add All Variants to Plan'}
+                                                            : 'Add Selected Variants to Plan'}
                                     </button>
                                 )}
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        isThisVariantAdded
-                                            ? onRemoveVariantFromPlan?.(selectedHoarding.id, selectedVariant.id)
-                                            : onAddToPlan(selectedHoarding.id, selectedVariant?.id ? [selectedVariant.id] : [])
-                                    }
-                                    disabled={!isAuthenticated || !currentPlan || isMutating || !selectedVariant?.id}
-                                    className={`w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 border disabled:opacity-60 disabled:cursor-not-allowed ${isThisVariantAdded
-                                        ? 'bg-red-950/50 text-red-400 border-red-500/45 hover:bg-red-950/70 hover:border-red-400/60'
-                                        : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-700'
-                                        }`}
-                                >
-                                    {isThisVariantAdded ? <Trash2 size={14} /> : <PlusCircle size={14} />}
-                                    {isMutating
-                                        ? 'Saving...'
-                                        : isThisVariantAdded
-                                            ? 'Remove from Plan'
-                                            : 'Add This Variant to Plan'}
-                                </button>
+                                {variants.length <= 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            isAdded
+                                                ? onRemoveMediaFromPlan?.(selectedHoarding.id)
+                                                : onAddToPlan(
+                                                    selectedHoarding.id,
+                                                    displayVariant?.id ? [displayVariant.id] : []
+                                                )
+                                        }
+                                        disabled={!isAuthenticated || !currentPlan || isMutating}
+                                        className={`w-full font-bold py-2.5 rounded text-[10px] uppercase tracking-widest shadow-lg transition-all inline-flex items-center justify-center gap-2 border disabled:opacity-60 disabled:cursor-not-allowed ${isAdded
+                                            ? 'bg-red-950/50 text-red-400 border-red-500/45 hover:bg-red-950/70 hover:border-red-400/60'
+                                            : 'bg-white hover:bg-gray-200 text-black border-transparent'
+                                            }`}
+                                    >
+                                        {isAdded ? <ListMinus size={14} /> : <PlusCircle size={14} />}
+                                        {isMutating
+                                            ? 'Saving...'
+                                            : isAdded
+                                                ? 'Remove from Plan'
+                                                : !isAuthenticated
+                                                    ? 'Sign in to Add'
+                                                    : !currentPlan
+                                                        ? 'Create a Plan'
+                                                        : 'Add to Plan'}
+                                    </button>
+                                )}
                             </div>
                         </div>
 

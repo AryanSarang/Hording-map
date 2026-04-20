@@ -61,6 +61,9 @@ export async function PUT(req, { params }) {
         if (body.definitionId !== undefined) updates.definition_id = parseInt(body.definitionId);
         if (body.options !== undefined) updates.options = body.options;
         if (body.displayOrder !== undefined) updates.display_order = body.displayOrder;
+        if (body.exploreFilterEnabled !== undefined) {
+            updates.explore_filter_enabled = Boolean(body.exploreFilterEnabled);
+        }
 
         if (body.name && !updates.key) {
             updates.key = body.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `field_${id}`;

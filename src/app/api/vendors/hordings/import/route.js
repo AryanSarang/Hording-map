@@ -8,7 +8,7 @@ import { parsePricingRulesFromRow, dedupePricingRules } from '../../../../../lib
 import { fetchAllSupabasePages } from '../../../../../lib/fetchAllSupabasePages';
 import { loadVendorNameCache, resolveVendorForImport } from '../../../../../lib/resolveVendorForImport';
 
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 
 /** Every import must include these header names (normalized). Aliases listed per key. */
 const REQUIRED_HEADER_RULES = [

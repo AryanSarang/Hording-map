@@ -41,7 +41,7 @@ CREATE TABLE public.media (
   vendor_rate integer CHECK (vendor_rate > 0),
   payment_terms character varying,
   minimum_booking_duration character varying NOT NULL,
-  media_type character varying NOT NULL CHECK (media_type::text = ANY (ARRAY['Bus Shelter', 'Digital Screens', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other']::text[])),
+  media_type character varying NOT NULL CHECK (media_type::text = ANY (ARRAY['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other']::text[])),
   media ARRAY DEFAULT '{}'::text[],
   zone character varying,
   landmark character varying,

@@ -1,15 +1,34 @@
 // app/explore/_components/FilterPanel.js
 "use client";
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import MultiSelectDropdown from './MultiSelectDropdown';
 import {
     getCityNamesForIndianStates,
     mergeStateOptionsForExplore,
 } from '../../../lib/indiaGeoOptions';
+import {
+    allowedCityOptionsMap,
+    coerceLocationStringList,
+    deriveStateChangeCities,
+    normLoc,
+    pruneCitiesToMap,
+} from '../../../lib/exploreFilterLocation';
 
 /** Avoid loading 10k+ city names when user selects many states (e.g. multi-select many). */
 const MAX_STATES_FOR_SYNTHETIC_CITY_LIST = 6;
+
+function uniqueSortedMetafieldValues(hoardings, metafieldId) {
+    const id = String(metafieldId);
+    const m = new Map();
+    for (const h of hoardings || []) {
+        const raw = h.metafields?.[id];
+        if (raw == null || String(raw).trim() === '') continue;
+        const v = String(raw).trim();
+        m.set(normLoc(v), v);
+    }
+    return [...m.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
 
 export default function FilterPanel({
     hoardings,
@@ -22,13 +41,49 @@ export default function FilterPanel({
     defaultFiltersForReset,
     /** When set, Reset restores draft + applied + in-memory catalog (SSR slice) without a new Apply. */
     onResetToLanding,
+    /** `{ id, name }[]` — metafields flagged for explore (from server). */
+    exploreMetafieldFilters = [],
 }) {
+    const selectedStates = useMemo(
+        () => coerceLocationStringList(filters.states),
+        [filters.states]
+    );
 
-    const selectedStates = filters.states || [];
+    /** Remount city multiselect when state selection changes so options + search reset immediately. */
+    const stateSelectionKey = useMemo(
+        () => selectedStates.slice().sort().join('|') || '__none__',
+        [selectedStates]
+    );
 
-    // --- 1. DATA ANALYSIS ---
+    /**
+     * Keep `filters.cities` strictly inside the set of cities allowed by the current state selection.
+     * - No states selected → cities must be cleared (city filter is hidden anyway).
+     * - States selected → drop any city that isn’t in the CSC-validated allow set for those states.
+     * This runs whenever states or catalog change so stale city picks from a prior state never leak.
+     */
+    useEffect(() => {
+        setFilters((f) => {
+            const current = coerceLocationStringList(f.cities);
+            if (!selectedStates.length) {
+                if (current.length === 0) return f;
+                return { ...f, cities: [] };
+            }
+            const allowed = allowedCityOptionsMap(
+                hoardings,
+                selectedStates,
+                getCityNamesForIndianStates,
+                MAX_STATES_FOR_SYNTHETIC_CITY_LIST
+            );
+            const nextCities = pruneCitiesToMap(current, allowed);
+            const prevKey = [...new Set(current.map(normLoc))].sort().join('|');
+            const nextKey = [...new Set(nextCities.map(normLoc))].sort().join('|');
+            if (prevKey === nextKey) return f;
+            return { ...f, cities: nextCities };
+        });
+    }, [hoardings, selectedStates, setFilters]);
+
     const options = useMemo(() => {
-        const getUnique = (key) => [...new Set(hoardings.map(h => h[key]).filter(Boolean))];
+        const getUnique = (key) => [...new Set(hoardings.map((h) => h[key]).filter(Boolean))];
 
         const catalogStateLabels = (() => {
             const byKey = new Map();
@@ -44,71 +99,33 @@ export default function FilterPanel({
 
         const states = mergeStateOptionsForExplore(catalogStateLabels);
 
-        const catalogCities = hoardings
-            .filter((h) => {
-                if (!selectedStates.length) return true;
-                const hs = String(h.state || '').toLowerCase();
-                return selectedStates.some((s) => String(s).toLowerCase() === hs);
-            })
-            .map((h) => h.city)
-            .filter(Boolean);
-
-        const syntheticCities =
-            selectedStates.length > 0 &&
-                selectedStates.length <= MAX_STATES_FOR_SYNTHETIC_CITY_LIST
-                ? getCityNamesForIndianStates(selectedStates)
-                : [];
-
-        const cities = (() => {
-            const byKey = new Map();
-            for (const c of syntheticCities) {
-                const label = String(c).trim();
-                if (label) byKey.set(label.toLowerCase(), label);
-            }
-            for (const c of catalogCities) {
-                const label = String(c).trim();
-                if (label) byKey.set(label.toLowerCase(), label);
-            }
-            return [...byKey.values()].sort((a, b) =>
-                a.localeCompare(b, undefined, { sensitivity: 'base' })
-            );
-        })();
+        const cityMap = allowedCityOptionsMap(
+            hoardings,
+            selectedStates,
+            getCityNamesForIndianStates,
+            MAX_STATES_FOR_SYNTHETIC_CITY_LIST
+        );
+        const cities = [...cityMap.values()].sort((a, b) =>
+            a.localeCompare(b, undefined, { sensitivity: 'base' })
+        );
 
         const mediaTypes = getUnique('mediaType');
 
-        const vendorMap = new Map();
-        for (const h of hoardings) {
-            const vid = h.vendorId;
-            if (vid == null || vid === '') continue;
-            const id = String(vid);
-            if (vendorMap.has(id)) continue;
-            const nm = h.vendorName;
-            const label = nm && String(nm).trim() ? String(nm).trim() : `Vendor #${id}`;
-            vendorMap.set(id, label);
-        }
-        const vendorOptions = Array.from(vendorMap.entries())
-            .map(([value, label]) => ({ value, label }))
-            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
-
-        const rates = hoardings.map(h => h.rate).filter(r => r > 0);
+        const rates = hoardings.map((h) => h.rate).filter((r) => r > 0);
         const maxRateData = rates.length > 0 ? Math.max(...rates) : 100000;
 
-        return { states, cities, mediaTypes, vendorOptions, maxRateData };
+        return { states, cities, mediaTypes, maxRateData };
     }, [hoardings, selectedStates]);
 
-    // --- 2. HANDLERS ---
     const toggleArrayItem = (field, value) => {
         const currentList = filters[field];
         if (currentList.includes(value)) {
-            setFilters({ ...filters, [field]: currentList.filter(item => item !== value) });
+            setFilters({ ...filters, [field]: currentList.filter((item) => item !== value) });
         } else {
             setFilters({ ...filters, [field]: [...currentList, value] });
         }
     };
 
-    // Vendor dropdown now uses custom component; no native event handler needed.
-
-    // --- 3. DUAL SLIDER LOGIC ---
     const minPrice = filters.minPrice;
     const maxPrice = filters.maxPrice;
     const rangeMax = options.maxRateData;
@@ -124,15 +141,30 @@ export default function FilterPanel({
         setFilters({ ...filters, maxPrice: value });
     };
 
+    const metafieldSelections = filters.metafieldSelections && typeof filters.metafieldSelections === 'object'
+        ? filters.metafieldSelections
+        : {};
+
     return (
-        <div className="flex flex-col h-full bg-[#111] text-white border-l border-gray-800 font-sans">
+        <div className="relative flex flex-col h-full bg-[#111] text-white border-l border-gray-800 font-sans">
+            {isApplying ? (
+                <div
+                    className="absolute inset-0 z-[30] bg-black/55 flex items-center justify-center pointer-events-none"
+                    aria-hidden
+                >
+                    <p className="text-xs font-semibold text-white uppercase tracking-widest animate-pulse">
+                        Loading catalog…
+                    </p>
+                </div>
+            ) : null}
+
             <div className="p-4 border-b border-gray-800 bg-[#111] sticky top-0 z-10">
                 <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wide">Filters</h2>
             </div>
 
-            <div className="min-w-0 p-6 space-y-8 overflow-y-auto overflow-x-hidden">
-
-                {/* --- DUAL PRICE SLIDER --- */}
+            <div
+                className={`min-w-0 p-6 space-y-8 overflow-y-auto overflow-x-hidden ${isApplying ? 'opacity-50 pointer-events-none' : ''}`}
+            >
                 {options.maxRateData > 0 && (
                     <div className="w-full min-w-0 max-w-full">
                         <div className="flex justify-between items-center mb-4">
@@ -140,13 +172,21 @@ export default function FilterPanel({
                         </div>
 
                         <div className="w-full min-w-0 max-w-full px-2 box-border">
+                            {/**
+                             * Native range thumbs are clipped so their centers live inside
+                             * [thumbRadius, width − thumbRadius]. We inset the track + fill by the
+                             * same radius so the green line always stops exactly at the thumb dots.
+                             */}
                             <div className="relative h-9 w-full max-w-full">
-                                <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-0 h-0.5 -translate-y-1/2 rounded bg-gray-700" />
+                                <div
+                                    className="pointer-events-none absolute top-1/2 z-0 h-0.5 -translate-y-1/2 rounded bg-gray-700"
+                                    style={{ left: 7, right: 7 }}
+                                />
                                 <div
                                     className="pointer-events-none absolute top-1/2 z-[1] h-0.5 -translate-y-1/2 rounded bg-green-500"
                                     style={{
-                                        left: `${(minPrice / rangeMax) * 100}%`,
-                                        width: `${Math.max(0, ((maxPrice - minPrice) / rangeMax) * 100)}%`,
+                                        left: `calc(7px + ${(minPrice / rangeMax) * 100}% - ${(minPrice / rangeMax) * 14}px)`,
+                                        width: `calc(${Math.max(0, ((maxPrice - minPrice) / rangeMax) * 100)}% - ${Math.max(0, ((maxPrice - minPrice) / rangeMax) * 14)}px)`,
                                     }}
                                 />
                                 <input
@@ -181,10 +221,15 @@ export default function FilterPanel({
                                 right: 0;
                                 width: 100%;
                                 max-width: 100%;
-                                height: 8px;
+                                height: 14px;
                                 margin: 0;
                                 padding: 0;
                                 background: transparent;
+                            }
+                            .thumb-input::-webkit-slider-runnable-track {
+                                background: transparent;
+                                border: none;
+                                height: 14px;
                             }
                             .thumb-input::-webkit-slider-thumb {
                                 pointer-events: auto;
@@ -195,6 +240,7 @@ export default function FilterPanel({
                                 background: #22c55e;
                                 cursor: pointer;
                                 box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+                                border: none;
                             }
                             .thumb-input::-moz-range-thumb {
                                 pointer-events: auto;
@@ -208,6 +254,8 @@ export default function FilterPanel({
                             }
                             .thumb-input::-moz-range-track {
                                 background: transparent;
+                                border: none;
+                                height: 14px;
                             }
                         `}</style>
 
@@ -222,50 +270,65 @@ export default function FilterPanel({
                     </div>
                 )}
 
-                {(options.states.length > 0 || options.cities.length > 0) && (
+                {options.states.length > 0 && (
                     <div className="min-w-0 space-y-4">
                         <h3 className="text-xs font-bold text-gray-500 uppercase">Location</h3>
-                        {options.states.length > 0 && (
+                        <div>
+                            <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">
+                                States
+                            </p>
+                            <MultiSelectDropdown
+                                values={filters.states || []}
+                                onChange={(next) => {
+                                    setFilters((prev) => {
+                                        const { cities } = deriveStateChangeCities({
+                                            hoardings,
+                                            prevStates: prev.states || [],
+                                            nextStates: next,
+                                            prevCities: prev.cities || [],
+                                            getCityNamesForIndianStates,
+                                        });
+                                        return { ...prev, states: next, cities };
+                                    });
+                                }}
+                                placeholder="Select states"
+                                options={options.states.map((s) => ({ value: s, label: s }))}
+                                allowSearch
+                                searchPlaceholder="Search states..."
+                            />
+                        </div>
+
+                        {/**
+                         * Cascading city filter: only rendered once at least one state is selected.
+                         * This enforces “city ⊂ state” visually and prevents stale cities from any
+                         * previously selected state from appearing.
+                         */}
+                        {selectedStates.length > 0 && options.cities.length > 0 && (
                             <div>
-                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">
-                                    States
-                                </p>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <p className="text-[10px] text-gray-600 uppercase tracking-wide">
+                                        Cities
+                                    </p>
+                                    {(filters.cities?.length ?? 0) > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setFilters((prev) => ({ ...prev, cities: [] }))
+                                            }
+                                            className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-green-400"
+                                            title="Clear city selection"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
                                 <MultiSelectDropdown
-                                    values={filters.states || []}
-                                    onChange={(next) => {
-                                        const citySet = new Set(
-                                            hoardings
-                                                .filter((h) => {
-                                                    if (!next.length) return true;
-                                                    const hs = String(h.state || '').toLowerCase();
-                                                    return next.some(
-                                                        (s) => String(s).toLowerCase() === hs
-                                                    );
-                                                })
-                                                .map((h) => h.city)
-                                                .filter(Boolean)
-                                        );
-                                        const nextCities = (filters.cities || []).filter((c) =>
-                                            citySet.has(c)
-                                        );
-                                        setFilters({ ...filters, states: next, cities: nextCities });
-                                    }}
-                                    placeholder="Select states"
-                                    options={options.states.map((s) => ({ value: s, label: s }))}
-                                    allowSearch
-                                    searchPlaceholder="Search states..."
-                                />
-                            </div>
-                        )}
-                        {options.cities.length > 0 && (
-                            <div>
-                                <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">
-                                    Cities
-                                </p>
-                                <MultiSelectDropdown
+                                    key={`cities-${stateSelectionKey}`}
                                     values={filters.cities || []}
                                     allLabel="ALL"
-                                    onChange={(next) => setFilters({ ...filters, cities: next })}
+                                    onChange={(next) =>
+                                        setFilters((prev) => ({ ...prev, cities: next }))
+                                    }
                                     placeholder="All cities"
                                     options={options.cities.map((c) => ({ value: c, label: c }))}
                                     allowSearch
@@ -276,7 +339,6 @@ export default function FilterPanel({
                     </div>
                 )}
 
-                {/* --- MEDIA TYPE --- */}
                 {options.mediaTypes.length > 0 && (
                     <div>
                         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Media Type</h3>
@@ -284,6 +346,7 @@ export default function FilterPanel({
                             {options.mediaTypes.map((type) => (
                                 <button
                                     key={type}
+                                    type="button"
                                     onClick={() => toggleArrayItem('mediaTypes', type)}
                                     className={`py-2 px-4 rounded-full text-xs font-medium border transition-all ${filters.mediaTypes.includes(type)
                                         ? 'bg-white text-black border-white'
@@ -297,25 +360,44 @@ export default function FilterPanel({
                     </div>
                 )}
 
-                {/* --- VENDOR --- */}
-                {options.vendorOptions.length > 0 && (
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Vendor</h3>
-                        <MultiSelectDropdown
-                            values={filters.vendorIds || []}
-                            allLabel="ALL"
-                            onChange={(next) => setFilters({ ...filters, vendorIds: next.map(String) })}
-                            placeholder="All vendors"
-                            options={options.vendorOptions}
-                            allowSearch
-                            searchPlaceholder="Search vendors..."
-                        />
+                {exploreMetafieldFilters.length > 0 && (
+                    <div className="min-w-0 space-y-4">
+                        {exploreMetafieldFilters.map((mf) => {
+                            const mfId = String(mf.id);
+                            const vals = uniqueSortedMetafieldValues(hoardings, mfId);
+                            if (vals.length === 0) return null;
+                            const selected = Array.isArray(metafieldSelections[mfId])
+                                ? metafieldSelections[mfId]
+                                : [];
+                            return (
+                                <div key={mfId}>
+                                    <p className="text-[10px] text-gray-600 uppercase tracking-wide mb-1.5">
+                                        {mf.name || `Field ${mfId}`}
+                                    </p>
+                                    <MultiSelectDropdown
+                                        values={selected}
+                                        allLabel="ALL"
+                                        onChange={(next) =>
+                                            setFilters({
+                                                ...filters,
+                                                metafieldSelections: {
+                                                    ...metafieldSelections,
+                                                    [mfId]: next.map(String),
+                                                },
+                                            })
+                                        }
+                                        placeholder={`All ${mf.name || 'values'}`}
+                                        options={vals.map((v) => ({ value: v, label: v }))}
+                                        allowSearch
+                                        searchPlaceholder="Search…"
+                                    />
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
-
             </div>
 
-            {/* Footer */}
             <div className="mt-auto p-4 border-t border-gray-800">
                 <button
                     type="button"
@@ -327,7 +409,8 @@ export default function FilterPanel({
                     {isApplying ? 'Applying...' : `Apply filters (${applyCreditCost} credits)`}
                 </button>
                 <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
-                    More states, cities, or vendors adds +2 credits each beyond the first in that group. Narrowing media type or price range adds +2.
+                    More states, cities, or custom-field values adds +2 credits each beyond the first in
+                    that group. Narrowing media type or price range adds +2.
                 </p>
                 <div className="h-2" />
                 <button
@@ -336,10 +419,10 @@ export default function FilterPanel({
                         const base = defaultFiltersForReset ?? {
                             states: [],
                             cities: [],
-                            vendorIds: [],
                             minPrice: 0,
                             maxPrice: options.maxRateData,
                             mediaTypes: options.mediaTypes,
+                            metafieldSelections: {},
                         };
                         const next = structuredClone(base);
                         if (onResetToLanding) onResetToLanding(next);

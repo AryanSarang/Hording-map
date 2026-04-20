@@ -12,13 +12,20 @@ import {
     normalizeExploreFiltersForCompare,
 } from './exploreFilterCredits';
 import { buildDefaultExploreLandingFilters } from './exploreFilterDefaults';
+import {
+    coerceLocationStringList,
+    hoardingMatchesCityFilter,
+    hoardingMatchesStateFilter,
+    normLoc,
+} from '../../../lib/exploreFilterLocation';
+import { resolveIndianStateRow, isIndianCityInCscState } from '../../../lib/indiaGeoOptions';
 
 const MapSection = dynamic(() => import('./MapSection'), {
     ssr: false,
     loading: () => <div className="w-full h-full bg-black flex items-center justify-center text-gray-500">Loading Map...</div>
 });
 
-export default function ExploreView({ initialCatalog, user }) {
+export default function ExploreView({ initialCatalog, user, exploreMetafieldFilters = [] }) {
     const [hoardings, setHoardings] = useState(initialCatalog);
     const normalizePlanItems = (items) => {
         if (!Array.isArray(items)) return [];
@@ -330,6 +337,19 @@ export default function ExploreView({ initialCatalog, user }) {
         [draftFilters, hoardings, dataMaxPrice]
     );
 
+    const planMediaIdSet = useMemo(() => {
+        const s = new Set();
+        const items = currentPlan?.items;
+        if (!Array.isArray(items)) return s;
+        for (const raw of items) {
+            if (!raw) continue;
+            const mediaId =
+                typeof raw === 'string' ? raw : String(raw.mediaId || raw.id || '').trim();
+            if (mediaId) s.add(mediaId);
+        }
+        return s;
+    }, [currentPlan]);
+
     const handleApplyFilters = async () => {
         if (!filterHasChanges || applyingFilters) return;
 
@@ -348,10 +368,10 @@ export default function ExploreView({ initialCatalog, user }) {
                 body: JSON.stringify({
                     states: draftFilters.states ?? [],
                     cities: draftFilters.cities ?? [],
-                    vendorIds: draftFilters.vendorIds ?? [],
                     mediaTypes: draftFilters.mediaTypes ?? [],
                     minPrice: draftFilters.minPrice ?? 0,
                     maxPrice: draftFilters.maxPrice,
+                    metafieldSelections: draftFilters.metafieldSelections ?? {},
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -374,28 +394,34 @@ export default function ExploreView({ initialCatalog, user }) {
         }
     };
 
+    /**
+     * Map + list reflect the LAST APPLIED filter set only — the Apply button is the single source of
+     * truth for what the catalog shows. Editing the panel changes draft state but must never mutate
+     * the visible map/list until the user confirms via Apply (prevents credit-billed updates from
+     * bleeding into free preview changes).
+     */
     const filteredHoardings = useMemo(() => {
         return hoardings.filter((h) => {
             const f = appliedFilters;
             if (h.rate !== null && h.rate !== undefined && (h.rate < f.minPrice || h.rate > f.maxPrice)) return false;
-            const states = Array.isArray(f.states) ? f.states : [];
-            if (states.length > 0) {
-                const hs = String(h.state || '').toLowerCase();
-                if (!states.some((s) => String(s).toLowerCase() === hs)) return false;
-            }
-            const cities = Array.isArray(f.cities) ? f.cities : [];
-            if (cities.length > 0) {
-                const hc = String(h.city || '').toLowerCase();
-                if (!cities.some((c) => String(c).toLowerCase() === hc)) return false;
+            const states = coerceLocationStringList(f.states);
+            if (!hoardingMatchesStateFilter(states, h.state)) return false;
+            const cities = coerceLocationStringList(f.cities);
+            if (!hoardingMatchesCityFilter(cities, h.city)) return false;
+            if (states.length > 0 && h.city) {
+                const sr = resolveIndianStateRow(h.state);
+                if (sr && !isIndianCityInCscState(h.state, h.city)) return false;
             }
             const mediaTypes = Array.isArray(f.mediaTypes) ? f.mediaTypes : [];
             if (mediaTypes.length > 0 && h.mediaType && !mediaTypes.includes(h.mediaType)) {
                 return false;
             }
-            const vendorIds = Array.isArray(f.vendorIds) ? f.vendorIds.map(String) : [];
-            if (vendorIds.length > 0) {
-                const hid = h.vendorId != null && h.vendorId !== '' ? String(h.vendorId) : '';
-                if (!hid || !vendorIds.includes(hid)) return false;
+            const mfs = f.metafieldSelections && typeof f.metafieldSelections === 'object' ? f.metafieldSelections : {};
+            for (const [mfId, vals] of Object.entries(mfs)) {
+                if (!Array.isArray(vals) || vals.length === 0) continue;
+                const rowVal = h.metafields?.[String(mfId)];
+                const rowNorm = normLoc(rowVal);
+                if (!rowNorm || !vals.some((v) => normLoc(v) === rowNorm)) return false;
             }
             return true;
         });
@@ -462,7 +488,16 @@ export default function ExploreView({ initialCatalog, user }) {
                     selectedId={selectedId}
                     onSelect={setSelectedId}
                     filterFocus={filterMapFocus}
+                    planMediaIds={planMediaIdSet}
                 />
+                {applyingFilters ? (
+                    <div className="absolute inset-0 z-[2400] bg-black/55 flex flex-col items-center justify-center gap-2 pointer-events-auto">
+                        <div className="h-8 w-8 rounded-full border-2 border-white/30 border-t-green-400 animate-spin" aria-hidden />
+                        <p className="text-xs font-semibold text-white uppercase tracking-widest">
+                            Updating filters…
+                        </p>
+                    </div>
+                ) : null}
                 {filteredHoardings.length === 0 && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 p-4 rounded text-center z-[2000] pointer-events-none">
                         <p className="text-white font-bold text-sm">No Hoardings Found</p>
@@ -502,6 +537,7 @@ export default function ExploreView({ initialCatalog, user }) {
                             currentPlan={currentPlan}
                             isAuthenticated={isAuthenticated}
                             planMutatingMediaIds={planMutatingMediaIds}
+                            exploreMetafieldFilters={exploreMetafieldFilters}
                         />
                     </div>
 
@@ -516,6 +552,7 @@ export default function ExploreView({ initialCatalog, user }) {
                             isApplying={applyingFilters}
                             applyCreditCost={filterApplyCreditCost}
                             defaultFiltersForReset={landingFilters}
+                            exploreMetafieldFilters={exploreMetafieldFilters}
                             onResetToLanding={(next) => {
                                 setDraftFilters(next);
                                 setAppliedFilters(next);

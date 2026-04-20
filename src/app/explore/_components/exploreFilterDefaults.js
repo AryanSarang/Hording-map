@@ -10,10 +10,10 @@ export function buildDefaultExploreLandingFilters(hoardings, initialMaxPrice) {
         return {
             states: [],
             cities: [],
-            vendorIds: [],
             minPrice: 0,
             maxPrice: maxPrice,
             mediaTypes: allTypes,
+            metafieldSelections: {},
         };
     }
 
@@ -51,19 +51,19 @@ export function buildDefaultExploreLandingFilters(hoardings, initialMaxPrice) {
         return {
             states: [],
             cities: [],
-            vendorIds: [],
             minPrice: 0,
             maxPrice: maxPrice,
             mediaTypes: allTypes,
+            metafieldSelections: {},
         };
     }
 
     return {
         states: statesForMumbai,
         cities: mumbaiCityNames,
-        vendorIds: [],
         minPrice: 0,
         maxPrice: maxPrice,
         mediaTypes: cinemaTypes,
+        metafieldSelections: {},
     };
 }

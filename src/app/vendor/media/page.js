@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Inbox } from 'lucide-react';
 import styles from './media.module.css';
 
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const STATUS_OPTIONS = ['active', 'inactive', 'maintenance'];
 const PAGE_SIZE = 50;
 

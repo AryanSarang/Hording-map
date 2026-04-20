@@ -25,6 +25,7 @@ export async function GET() {
                 options,
                 display_order,
                 created_at,
+                explore_filter_enabled,
                 metafield_definitions (id, key, label, value_type)
             `)
             .eq('user_id', user.id)
@@ -80,7 +81,8 @@ export async function POST(req) {
             key: key || `field_${Date.now()}`,
             definition_id: parseInt(body.definitionId),
             options: body.options || null,
-            display_order: body.displayOrder ?? 0
+            display_order: body.displayOrder ?? 0,
+            explore_filter_enabled: Boolean(body.exploreFilterEnabled),
         };
 
         const { data: newMetafield, error } = await supabaseAdmin

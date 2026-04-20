@@ -13,7 +13,7 @@ const LocationPicker = dynamic(() => import('../components/LocationPicker'), {
     loading: () => <div className={styles.mapPlaceholder}>Loading map...</div>,
 });
 
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 const STATUS_OPTIONS = ['active', 'inactive', 'maintenance'];
 
 const initialForm = {

@@ -2,14 +2,27 @@
  * Explore filter panel: stable compare + variable credit cost for apply.
  */
 
+import { coerceLocationStringList } from '../../../lib/exploreFilterLocation';
+
+function stableMetafieldSelectionsCompare(m) {
+    const obj = m && typeof m === 'object' ? m : {};
+    return Object.keys(obj)
+        .map(String)
+        .sort()
+        .map((k) => ({
+            k,
+            v: [...(obj[k] || [])].map(String).sort(),
+        }));
+}
+
 export function normalizeExploreFiltersForCompare(f) {
     return JSON.stringify({
         minPrice: f.minPrice,
         maxPrice: f.maxPrice,
-        states: [...(f.states || [])].map(String).sort(),
-        cities: [...(f.cities || [])].map(String).sort(),
-        vendorIds: [...(f.vendorIds || [])].map(String).sort(),
+        states: coerceLocationStringList(f.states).map(String).sort(),
+        cities: coerceLocationStringList(f.cities).map(String).sort(),
         mediaTypes: [...(f.mediaTypes || [])].map(String).sort(),
+        metafieldSelections: stableMetafieldSelectionsCompare(f.metafieldSelections),
     });
 }
 
@@ -23,12 +36,16 @@ export function computeExploreFilterCreditCost(f, hoardings, dataMaxPrice) {
     const base = 5;
     let add = 0;
 
-    const s = f.states?.length ?? 0;
-    const c = f.cities?.length ?? 0;
-    const v = f.vendorIds?.length ?? 0;
+    const s = coerceLocationStringList(f.states).length;
+    const c = coerceLocationStringList(f.cities).length;
     if (s > 1) add += 2 * (s - 1);
     if (c > 1) add += 2 * (c - 1);
-    if (v > 1) add += 2 * (v - 1);
+
+    const mfs = f.metafieldSelections && typeof f.metafieldSelections === 'object' ? f.metafieldSelections : {};
+    for (const vals of Object.values(mfs)) {
+        const n = Array.isArray(vals) ? vals.length : 0;
+        if (n > 1) add += 2 * (n - 1);
+    }
 
     const allTypes = [...new Set(hoardings.map((h) => h.mediaType).filter(Boolean))];
     const mt = f.mediaTypes?.length ?? 0;

@@ -14,12 +14,14 @@ export default function EditMetafieldPage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [error, setError] = useState(null);
     const [definitions, setDefinitions] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
         definitionId: '',
         optionsInput: '',
+        exploreFilterEnabled: false,
     });
 
     useEffect(() => {
@@ -34,6 +36,7 @@ export default function EditMetafieldPage() {
                     name: m.name || '',
                     definitionId: String(m.definition_id || ''),
                     optionsInput: Array.isArray(m.options) ? m.options.join(', ') : '',
+                    exploreFilterEnabled: Boolean(m.explore_filter_enabled),
                 });
             } else {
                 setError(metaRes.error || 'Metafield not found');
@@ -47,6 +50,27 @@ export default function EditMetafieldPage() {
     function handleInputChange(e) {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    }
+
+    async function handleDelete() {
+        if (deleting || saving) return;
+        if (!confirm('Delete this metafield? It will be removed from all hordings.')) return;
+
+        setDeleting(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/vendors/metafields/${id}`, { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success !== false) {
+                router.push('/vendor/metafields');
+            } else {
+                setError(data.error || 'Failed to delete metafield');
+                setDeleting(false);
+            }
+        } catch (err) {
+            setError('Failed to delete metafield');
+            setDeleting(false);
+        }
     }
 
     async function handleSubmit(e) {
@@ -75,6 +99,7 @@ export default function EditMetafieldPage() {
                     name: formData.name.trim(),
                     definitionId: formData.definitionId,
                     options,
+                    exploreFilterEnabled: formData.exploreFilterEnabled,
                 }),
             });
 
@@ -153,12 +178,47 @@ export default function EditMetafieldPage() {
                             </div>
                         )}
 
+                        <div className={styles.formGroup}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    name="exploreFilterEnabled"
+                                    checked={formData.exploreFilterEnabled}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            exploreFilterEnabled: e.target.checked,
+                                        }))
+                                    }
+                                />
+                                <span>Use as filter on Explore</span>
+                            </label>
+                            <small style={{ color: '#94a3b8', marginTop: '0.25rem', display: 'block' }}>
+                                When enabled, this metafield appears as a multi-select filter on the public Explore map
+                                (values are loaded from inventory you publish).
+                            </small>
+                        </div>
+
                         <div className={styles.formActions}>
-                            <button type="submit" className={styles.submitBtn} disabled={saving}>
+                            <button type="submit" className={styles.submitBtn} disabled={saving || deleting}>
                                 {saving ? 'Saving...' : 'Update Metafield'}
                             </button>
-                            <button type="button" className={styles.cancelBtn} onClick={() => router.push('/vendor/metafields')}>
+                            <button
+                                type="button"
+                                className={styles.cancelBtn}
+                                onClick={() => router.push('/vendor/metafields')}
+                                disabled={saving || deleting}
+                            >
                                 Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.deleteBtn}
+                                onClick={handleDelete}
+                                disabled={saving || deleting}
+                                style={{ marginLeft: 'auto' }}
+                            >
+                                {deleting ? 'Deleting...' : 'Delete metafield'}
                             </button>
                         </div>
                     </form>

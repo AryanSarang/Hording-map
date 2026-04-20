@@ -3,6 +3,12 @@
  */
 
 import { fetchAllSupabasePagesParallel } from './fetchAllSupabasePages';
+import {
+    coerceLocationStringList,
+    hoardingMatchesCityFilter,
+    hoardingMatchesStateFilter,
+} from './exploreFilterLocation';
+import { resolveIndianStateRow, isIndianCityInCscState } from './indiaGeoOptions';
 
 export const EXPLORE_MEDIA_COLUMNS =
     'id,vendor_id,latitude,longitude,address,locality,landmark,city,zone,state,pincode,media_type,monthly_rental,media,screen_size,display_format,display_hours,title,option1_name,option2_name,option3_name,vendor:vendors(name)';
@@ -21,14 +27,17 @@ function sanitizeIlikeFragment(s) {
 
 /**
  * @param {import('@supabase/supabase-js').SupabaseClient} admin
- * @param {{ states?: string[]; cities?: string[]; vendorIds?: string[]; mediaTypes?: string[] }} filters
+ * @param {{ states?: string[]; cities?: string[]; mediaTypes?: string[] }} filters
  * Empty array on an axis = no restriction (full table on that axis).
+ *
+ * When **states** are set, only state (+ status + media type) is narrowed in SQL; **cities** are
+ * applied in `fetchExploreCatalogFormatted` so PostgREST never OR-merges state vs city in a way
+ * that can return rows outside the selected state(s).
  */
 export function buildExploreMediaQuery(admin, filters) {
-    const states = Array.isArray(filters.states) ? filters.states : [];
-    const cities = Array.isArray(filters.cities) ? filters.cities : [];
-    const vendorIds = Array.isArray(filters.vendorIds) ? filters.vendorIds.map(String) : [];
-    const mediaTypes = Array.isArray(filters.mediaTypes) ? filters.mediaTypes : [];
+    const states = coerceLocationStringList(filters?.states);
+    const cities = coerceLocationStringList(filters?.cities);
+    const mediaTypes = Array.isArray(filters?.mediaTypes) ? filters.mediaTypes : [];
 
     let q = admin
         .from('media')
@@ -41,16 +50,12 @@ export function buildExploreMediaQuery(admin, filters) {
             .filter(Boolean)
             .map((s) => `state.ilike.%${s}%`);
         if (parts.length > 0) q = q.or(parts.join(','));
-    }
-    if (cities.length > 0) {
+    } else if (cities.length > 0) {
         const parts = cities
             .map((c) => sanitizeIlikeFragment(c))
             .filter(Boolean)
             .map((c) => `city.ilike.%${c}%`);
         if (parts.length > 0) q = q.or(parts.join(','));
-    }
-    if (vendorIds.length > 0) {
-        q = q.in('vendor_id', vendorIds);
     }
     if (mediaTypes.length > 0) {
         q = q.in('media_type', mediaTypes);
@@ -73,12 +78,14 @@ export function buildInitialExplorePageQuery(admin) {
         .order('id', { ascending: true });
 }
 
-function formatHoardingRows(hoardings, variantsByMedia) {
+function formatHoardingRows(hoardings, variantsByMedia, metafieldsByMediaId = new Map()) {
     return (hoardings || []).map((h) => {
         const mediaVariants = variantsByMedia[h.id] || [];
         const firstVariant = mediaVariants[0] || null;
+        const mfObj = metafieldsByMediaId.get(h.id) || {};
         return {
             ...h,
+            metafields: mfObj,
             vendorId: h.vendor_id,
             rate: firstVariant?.rate ?? h.monthly_rental,
             mediaType: h.media_type,
@@ -110,7 +117,44 @@ function formatHoardingRows(hoardings, variantsByMedia) {
  * @param {import('@supabase/supabase-js').SupabaseClient} admin
  * @param {import('@supabase/supabase-js').PostgrestFilterBuilder} mediaQuery - query before .range()
  */
-export async function fetchVariantsAndFormat(admin, hoardings) {
+async function loadMetafieldsForMedia(admin, hoardingRows, vendorMetafieldIds) {
+    const map = new Map();
+    if (!hoardingRows?.length || !vendorMetafieldIds?.length) return map;
+    const ids = [
+        ...new Set(
+            vendorMetafieldIds
+                .map((x) => Number(x))
+                .filter((n) => Number.isFinite(n) && n > 0)
+        ),
+    ];
+    if (!ids.length) return map;
+    const mediaIds = hoardingRows.map((h) => h.id);
+    // Keep `in()` URL payload small enough to fit Node 22 undici header limits
+    // (~8 KiB). With 10-char media IDs that's ≈ 130 per chunk; stay well under.
+    const CHUNK = 100;
+    for (let i = 0; i < mediaIds.length; i += CHUNK) {
+        const chunk = mediaIds.slice(i, i + CHUNK);
+        const { data, error } = await admin
+            .from('media_metafields')
+            .select('media_id, vendor_metafield_id, value')
+            .in('media_id', chunk)
+            .in('vendor_metafield_id', ids);
+        if (error) {
+            console.error('explore: media_metafields', error);
+            continue;
+        }
+        for (const row of data || []) {
+            const mid = row.media_id;
+            const vid = row.vendor_metafield_id;
+            if (!map.has(mid)) map.set(mid, {});
+            const o = map.get(mid);
+            o[String(vid)] = row.value != null ? String(row.value) : '';
+        }
+    }
+    return map;
+}
+
+export async function fetchVariantsAndFormat(admin, hoardings, metafieldsByMediaId = new Map()) {
     const variants = [];
     let variantsError = null;
     if (Array.isArray(hoardings) && hoardings.length > 0) {
@@ -140,7 +184,7 @@ export async function fetchVariantsAndFormat(admin, hoardings) {
     if (variantsError) {
         console.error('explore: media_variants fetch failed', variantsError);
         return {
-            hoardings: formatHoardingRows(hoardings, {}),
+            hoardings: formatHoardingRows(hoardings, {}, metafieldsByMediaId),
             error: null,
         };
     }
@@ -157,7 +201,7 @@ export async function fetchVariantsAndFormat(admin, hoardings) {
     }
 
     return {
-        hoardings: formatHoardingRows(hoardings, variantsByMedia),
+        hoardings: formatHoardingRows(hoardings, variantsByMedia, metafieldsByMediaId),
         error: null,
     };
 }
@@ -168,7 +212,16 @@ export async function fetchVariantsAndFormat(admin, hoardings) {
  *        Must return a **new** query each call — PostgREST builders mutate; reusing one instance
  *        across parallel `.range()` calls races and yields empty/wrong rows.
  */
-export async function fetchExploreCatalogFormatted(admin, mediaQueryFactory) {
+/**
+ * @param {string[]} exploreMetafieldIds - vendor_metafields.id values flagged for explore filters
+ * @param {{ states?: string[]; cities?: string[] } | null} locFilters - AND state/city in memory (required when states+cities used together)
+ */
+export async function fetchExploreCatalogFormatted(
+    admin,
+    mediaQueryFactory,
+    exploreMetafieldIds = [],
+    locFilters = null
+) {
     const { data: hoardings, error } = await fetchAllSupabasePagesParallel(
         (from, to) => mediaQueryFactory().range(from, to),
         1000,
@@ -177,5 +230,24 @@ export async function fetchExploreCatalogFormatted(admin, mediaQueryFactory) {
     if (error) {
         return { hoardings: [], error };
     }
-    return fetchVariantsAndFormat(admin, hoardings || []);
+    let rows = hoardings || [];
+    const lf = locFilters && typeof locFilters === 'object' ? locFilters : {};
+    const st = coerceLocationStringList(lf.states);
+    const ct = coerceLocationStringList(lf.cities);
+    if (st.length > 0) {
+        rows = rows.filter((h) => hoardingMatchesStateFilter(st, h.state));
+    }
+    if (ct.length > 0) {
+        rows = rows.filter((h) => hoardingMatchesCityFilter(ct, h.city));
+    }
+    if (st.length > 0) {
+        rows = rows.filter((h) => {
+            if (!h.city) return true;
+            const r = resolveIndianStateRow(h.state);
+            if (!r) return true;
+            return isIndianCityInCscState(h.state, h.city);
+        });
+    }
+    const mfMap = await loadMetafieldsForMedia(admin, rows, exploreMetafieldIds);
+    return fetchVariantsAndFormat(admin, rows, mfMap);
 }
