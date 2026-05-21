@@ -379,6 +379,25 @@ export default function FilterPanel({
                     <div className="min-w-0 space-y-4">
                         {exploreMetafieldFilters.map((mf) => {
                             const mfId = String(mf.id);
+                            /**
+                             * Metafields can be scoped to specific media types via the admin form.
+                             * Hide the filter entirely when the current `filters.mediaTypes`
+                             * selection doesn't overlap the metafield's whitelist. An empty
+                             * whitelist means "applies to all media types" (legacy default).
+                             * An empty `filters.mediaTypes` means "no media-type filter yet",
+                             * in which case we show every scoped metafield so the user can see
+                             * what's available.
+                             */
+                            const scope = Array.isArray(mf.applies_to_media_types)
+                                ? mf.applies_to_media_types.filter(Boolean)
+                                : [];
+                            if (scope.length > 0 && (filters.mediaTypes?.length || 0) > 0) {
+                                const wanted = new Set(scope.map((s) => String(s).toLowerCase()));
+                                const overlap = filters.mediaTypes.some((mt) =>
+                                    wanted.has(String(mt).toLowerCase())
+                                );
+                                if (!overlap) return null;
+                            }
                             const vals = uniqueSortedMetafieldValues(hoardings, mfId);
                             if (vals.length === 0) return null;
                             const selected = Array.isArray(metafieldSelections[mfId])

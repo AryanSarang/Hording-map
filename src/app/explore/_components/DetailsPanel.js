@@ -49,15 +49,68 @@ export default function DetailsPanel({
 
     const displayVariant = checkedVariants[0] || variants[0] || null;
 
+    /**
+     * Sum the rates of every variant the user has currently checked. This represents the
+     * combined cost of what they would add to the plan right now — more useful for cinema/cafe
+     * media (where a media has many bookable screens) than a per-variant min/max range.
+     * Falls back to the single rate on the media when no variants exist.
+     */
     const rateSummary = useMemo(() => {
-        const rates = checkedVariants.map((v) => v.rate).filter((r) => r != null && Number(r) > 0);
-        if (rates.length === 0) return selectedHoarding?.rate ?? null;
-        const nums = rates.map(Number);
-        const min = Math.min(...nums);
-        const max = Math.max(...nums);
-        if (min === max) return min;
-        return { min, max };
+        const rates = checkedVariants
+            .map((v) => Number(v.rate))
+            .filter((r) => Number.isFinite(r) && r > 0);
+        if (rates.length === 0) {
+            const base = Number(selectedHoarding?.rate);
+            return Number.isFinite(base) ? base : null;
+        }
+        return rates.reduce((a, b) => a + b, 0);
     }, [checkedVariants, selectedHoarding?.rate]);
+
+    /**
+     * Vendors price Cinema Screen inventory weekly and Cafe Screens (+ everything else) monthly.
+     * The numeric `rate` field semantics don't change — we just relabel based on media type so
+     * advertisers understand the billing cadence they're seeing.
+     */
+    const mediaTypeKey = String(selectedHoarding?.mediaType || '').toLowerCase();
+    const isCinema = mediaTypeKey.includes('cinema');
+    const rateCadenceLabel = isCinema ? 'Weekly Rate' : 'Monthly Rate';
+    const variantSectionLabel = isCinema ? 'Auditorium Selector' : 'Variants';
+    const variantAllLabel = isCinema
+        ? `All ${variants.length} auditoriums`
+        : `All ${variants.length} variants`;
+    const variantAddLabel = isCinema
+        ? 'Add Selected Auditoriums to Plan'
+        : 'Add Selected Media to Plan';
+
+    /**
+     * Build the variant display label as `Screen 1 - ₹1500` with an inline seating annotation
+     * `(Seating - 105)` as the sublabel. The label/sublabel split is so MultiSelectDropdown can
+     * keep its existing two-line option layout without bespoke styling.
+     */
+    const variantOptionLabel = (v) => {
+        const title =
+            v.variant_title ||
+            [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ') ||
+            `Variant ${v.id}`;
+        const rateNum = Number(v.rate);
+        const ratePart = Number.isFinite(rateNum) && rateNum > 0
+            ? ` - ₹${rateNum.toLocaleString()}`
+            : '';
+        return `${title}${ratePart}`;
+    };
+    const variantOptionSublabel = (v) => {
+        const seating = v.seating || v.seating_capacity;
+        return seating ? `(Seating - ${seating})` : undefined;
+    };
+
+    const fullAddress = [
+        selectedHoarding?.address,
+        selectedHoarding?.landmark,
+        selectedHoarding?.zone,
+    ]
+        .map((s) => (s == null ? '' : String(s).trim()))
+        .filter(Boolean)
+        .join(' • ');
 
     /**
      * Flatten vendor metafield values attached to the selected media into label/value pairs
@@ -115,7 +168,7 @@ export default function DetailsPanel({
             {/* Header */}
             <div className="p-3 border-b border-gray-800 sticky top-0 bg-[#0a0a0a]/95 backdrop-blur-sm z-20 flex justify-between items-center">
                 <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    {selectedId ? "Property Details" : "Explore Sites"}
+                    {selectedId ? "Media Details" : "Explore Sites"}
                 </h2>
                 {selectedId && (
                     <button onClick={() => onSelect(null)} className="text-[10px] text-green-500 hover:text-green-400 font-medium transition-colors uppercase tracking-wide inline-flex items-center gap-1">
@@ -132,7 +185,10 @@ export default function DetailsPanel({
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-5 p-4 no-scrollbar overflow-y-auto flex-1">
                         {/* ... (Hero Section, Pills, Specs, Visibility, Playback remain the same) ... */}
 
-                        {/* HERO SECTION */}
+                        {/* HERO SECTION
+                            Field order (per UX spec): media type → title → city/state → full
+                            address → rate. Media type is shown big and bold first because the
+                            advertiser typically navigated here looking for a particular format. */}
                         <div>
                             {selectedHoarding.imageUrls && selectedHoarding.imageUrls.length > 0 && (
                                 <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden mb-3 relative border border-gray-700">
@@ -140,18 +196,30 @@ export default function DetailsPanel({
                                     <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">#{selectedHoarding.id}</div>
                                 </div>
                             )}
-                            <h1 className="text-sm font-medium text-white leading-snug mb-1">{selectedHoarding.displayTitle || selectedHoarding.title || selectedHoarding.address || selectedHoarding.landmark || selectedHoarding.zone || "Site #" + selectedHoarding.id}</h1>
-                            <div className="flex items-center gap-2 text-gray-400 text-[10px] mb-3">
+                            {selectedHoarding.mediaType && (
+                                <p className="text-base font-bold text-white leading-tight mb-1">
+                                    {formatMediaType(selectedHoarding.mediaType)}
+                                </p>
+                            )}
+                            <h1 className="text-sm font-medium text-white leading-snug mb-1">
+                                {selectedHoarding.displayTitle || selectedHoarding.title || selectedHoarding.address || selectedHoarding.landmark || selectedHoarding.zone || "Site #" + selectedHoarding.id}
+                            </h1>
+                            <div className="flex items-center gap-2 text-gray-400 text-[10px] mb-2">
                                 <MapPin size={12} />
                                 <span>{selectedHoarding.city}, {selectedHoarding.state}</span>
                             </div>
+                            {fullAddress && (
+                                <p className="text-[11px] text-gray-300 leading-snug mb-3">
+                                    {fullAddress}
+                                </p>
+                            )}
                             <div className="flex items-center justify-between p-2 bg-green-500/5 border border-green-500/20 rounded">
-                                <span className="text-[10px] text-green-300/70 uppercase">Monthly Rate</span>
+                                <span className="text-[10px] text-green-300/70 uppercase">{rateCadenceLabel}</span>
                                 <div className="flex items-baseline gap-1">
                                     <span className="text-sm font-medium text-green-400">
-                                        {rateSummary && typeof rateSummary === 'object'
-                                            ? `₹${rateSummary.min.toLocaleString()} – ₹${rateSummary.max.toLocaleString()}`
-                                            : `₹${(rateSummary ?? displayVariant?.rate ?? selectedHoarding.rate)?.toLocaleString?.() ?? '—'}`}
+                                        {rateSummary != null
+                                            ? `₹${Number(rateSummary).toLocaleString()}`
+                                            : `₹${(displayVariant?.rate ?? selectedHoarding.rate)?.toLocaleString?.() ?? '—'}`}
                                     </span>
                                 </div>
                             </div>
@@ -160,28 +228,20 @@ export default function DetailsPanel({
                         {variants.length > 1 && (
                             <section>
                                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
-                                    Variants (add to plan)
+                                    {variantSectionLabel}
                                 </h3>
                                 <MultiSelectDropdown
                                     values={Array.from(checkedVariantIds)}
                                     onChange={(next) => setCheckedVariantIds(new Set(next.map(String)))}
                                     options={variants.map((v) => ({
                                         value: String(v.id),
-                                        label:
-                                            v.variant_title ||
-                                            [v.option1_value, v.option2_value, v.option3_value]
-                                                .filter(Boolean)
-                                                .join(' / ') ||
-                                            `Variant ${v.id}`,
-                                        sublabel:
-                                            v.rate != null
-                                                ? `₹${Number(v.rate).toLocaleString()}`
-                                                : undefined,
+                                        label: variantOptionLabel(v),
+                                        sublabel: variantOptionSublabel(v),
                                     }))}
-                                    allLabel={`All ${variants.length} variants`}
-                                    placeholder="No variants selected"
+                                    allLabel={variantAllLabel}
+                                    placeholder={isCinema ? 'No auditoriums selected' : 'No variants selected'}
                                     allowSearch={variants.length > 8}
-                                    searchPlaceholder="Search variants..."
+                                    searchPlaceholder={isCinema ? 'Search auditoriums...' : 'Search variants...'}
                                 />
                                 <p className="text-[10px] text-gray-500 mt-1.5">
                                     {checkedVariantIds.size} of {variants.length} selected
@@ -272,12 +332,12 @@ export default function DetailsPanel({
                                             : isAllVariantsInPlan
                                                 ? 'Remove All from Plan'
                                                 : isAdded
-                                                    ? 'Update Plan (selected variants)'
+                                                    ? `Update Plan (selected ${isCinema ? 'auditoriums' : 'variants'})`
                                                     : !isAuthenticated
                                                         ? 'Sign in to Add'
                                                         : !currentPlan
                                                             ? 'Create a Plan'
-                                                            : 'Add Selected Variants to Plan'}
+                                                            : variantAddLabel}
                                     </button>
                                 )}
                                 {variants.length <= 1 && (
@@ -306,7 +366,7 @@ export default function DetailsPanel({
                                                     ? 'Sign in to Add'
                                                     : !currentPlan
                                                         ? 'Create a Plan'
-                                                        : 'Add to Plan'}
+                                                        : 'Add Media to Plan'}
                                     </button>
                                 )}
                             </div>

@@ -26,6 +26,7 @@ export async function GET() {
                 display_order,
                 created_at,
                 explore_filter_enabled,
+                applies_to_media_types,
                 metafield_definitions (id, key, label, value_type)
             `)
             .eq('user_id', user.id)
@@ -83,6 +84,14 @@ export async function POST(req) {
             options: body.options || null,
             display_order: body.displayOrder ?? 0,
             explore_filter_enabled: Boolean(body.exploreFilterEnabled),
+            /**
+             * Empty / missing array = applies to every media type (legacy default).
+             * We trim + dedupe on the way in so admin UIs don't have to be careful with
+             * whitespace or duplicates from multi-select widgets.
+             */
+            applies_to_media_types: Array.isArray(body.appliesToMediaTypes)
+                ? [...new Set(body.appliesToMediaTypes.map((s) => String(s).trim()).filter(Boolean))]
+                : [],
         };
 
         const { data: newMetafield, error } = await supabaseAdmin

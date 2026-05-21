@@ -7,6 +7,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from '../metafields.module.css';
 
+/**
+ * Mirrors the canonical list used by vendor media pages + the import API. Kept inline
+ * here (matching the project's existing pattern) rather than centralized to a shared
+ * constants file — vendor-form sources of truth are intentionally duplicated for now.
+ */
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+
 export default function CreateMetafieldPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
@@ -15,8 +22,14 @@ export default function CreateMetafieldPage() {
     const [formData, setFormData] = useState({
         name: '',
         definitionId: '',
-        optionsInput: '', // Comma-separated for dropdown
+        optionsInput: '',
         exploreFilterEnabled: false,
+        /**
+         * Empty array = "applies to all media types" on /explore. When the user picks one or
+         * more types here, the filter will only appear when the matching media type is
+         * selected in the explore filter panel.
+         */
+        appliesToMediaTypes: [],
     });
 
     useEffect(() => {
@@ -65,6 +78,7 @@ export default function CreateMetafieldPage() {
                     definitionId: formData.definitionId,
                     options,
                     exploreFilterEnabled: formData.exploreFilterEnabled,
+                    appliesToMediaTypes: formData.appliesToMediaTypes,
                 }),
             });
 
@@ -168,6 +182,54 @@ export default function CreateMetafieldPage() {
                                 &ldquo;Cinema Chain&rdquo; on every cinema-screen media and users can filter by chain).
                             </small>
                         </div>
+
+                        {formData.exploreFilterEnabled && (
+                            <div className={styles.formGroup}>
+                                <label>Show only for these media types</label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                    {MEDIA_TYPES.map((mt) => {
+                                        const checked = formData.appliesToMediaTypes.includes(mt);
+                                        return (
+                                            <label
+                                                key={mt}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.4rem',
+                                                    padding: '0.35rem 0.6rem',
+                                                    borderRadius: '999px',
+                                                    border: checked ? '1px solid #22c55e' : '1px solid #334155',
+                                                    background: checked ? 'rgba(34,197,94,0.12)' : 'transparent',
+                                                    color: checked ? '#86efac' : '#cbd5e1',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8rem',
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            appliesToMediaTypes: e.target.checked
+                                                                ? [...prev.appliesToMediaTypes, mt]
+                                                                : prev.appliesToMediaTypes.filter((x) => x !== mt),
+                                                        }))
+                                                    }
+                                                    style={{ accentColor: '#22c55e' }}
+                                                />
+                                                {mt}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                <small style={{ color: '#94a3b8', marginTop: '0.5rem', display: 'block' }}>
+                                    Leave all unchecked to show the filter for every media type. Pick one or
+                                    more to hide it unless the advertiser has selected a matching media type
+                                    (e.g. &ldquo;Cinema Chain&rdquo; only on Cinema Screen).
+                                </small>
+                            </div>
+                        )}
 
                         <div className={styles.formActions}>
                             <button type="submit" className={styles.submitBtn} disabled={loading}>

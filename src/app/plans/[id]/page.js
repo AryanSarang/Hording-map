@@ -14,7 +14,10 @@ import {
     Boxes,
     Building2,
     Target,
-    LocateFixed
+    LocateFixed,
+    ChevronDown,
+    ChevronUp,
+    MapPin,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import '../../explore/_components/explore-map.css';
@@ -35,6 +38,23 @@ export default function PlanDetailsPage() {
     const [filters, setFilters] = useState({ city: '', mediaType: '', q: '' });
     const [viewMode, setViewMode] = useState('split');
     const [selectedMediaId, setSelectedMediaId] = useState(null);
+    /**
+     * Per-card variant disclosure. Plan rows show only media-level info by default; users
+     * click a chevron to expand the variant list when they actually need to edit it. Keyed
+     * by mediaId so toggling one card doesn't collapse others, and so the state survives
+     * filter/search changes that re-render the list.
+     */
+    const [expandedVariants, setExpandedVariants] = useState(() => new Set());
+
+    function toggleVariantsExpanded(mediaId) {
+        setExpandedVariants((prev) => {
+            const next = new Set(prev);
+            const key = String(mediaId);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    }
 
     async function loadPlan() {
         try {
@@ -383,6 +403,25 @@ export default function PlanDetailsPage() {
                                         ? availableVariants.filter((v) => variantIdSet.has(String(v.id)))
                                         : availableVariants;
                                     const isSelected = selectedMediaId === mediaId;
+                                    const variantsOpen = expandedVariants.has(String(mediaId));
+                                    const mediaTypeKey = String(m?.media_type || '').toLowerCase();
+                                    const isCinemaRow = mediaTypeKey.includes('cinema');
+                                    const rateLabel = isCinemaRow ? 'Weekly' : 'Monthly';
+                                    /**
+                                     * Sum every variant the user has on the plan for this media. When
+                                     * `variantIds` is empty (= "all variants"), include every available
+                                     * variant. Falls back to the media's own `rate` for media without
+                                     * variants. This gives advertisers the combined billing cost of
+                                     * exactly what's saved on the plan for this row.
+                                     */
+                                    const ratesForSum = selectedVariants
+                                        .map((v) => Number(v.rate))
+                                        .filter((r) => Number.isFinite(r) && r > 0);
+                                    const combinedRate = ratesForSum.length > 0
+                                        ? ratesForSum.reduce((a, b) => a + b, 0)
+                                        : (Number.isFinite(Number(m?.rate)) ? Number(m?.rate) : null);
+                                    const variantCount = selectedVariants.length;
+                                    const fullAddr = [m?.address, m?.landmark, m?.zone].filter(Boolean).join(' • ');
 
                                     return (
                                         <div
@@ -391,22 +430,43 @@ export default function PlanDetailsPage() {
                                             onClick={() => setSelectedMediaId(mediaId)}
                                         >
                                             <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <h3 className="text-sm font-medium text-white leading-snug">{m?.title || m?.address || m?.landmark || mediaId}</h3>
-                                                    <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide">
-                                                        {[m?.city, m?.state, m?.media_type].filter(Boolean).join(' · ')}
+                                                <div className="min-w-0 flex-1">
+                                                    {m?.media_type && (
+                                                        <p className="text-[11px] font-bold text-white uppercase tracking-wide leading-tight">
+                                                            {m.media_type}
+                                                        </p>
+                                                    )}
+                                                    <h3 className="text-sm font-medium text-white leading-snug mt-0.5">
+                                                        {m?.title || m?.address || m?.landmark || mediaId}
+                                                    </h3>
+                                                    <p className="text-[10px] text-gray-400 mt-1 inline-flex items-center gap-1">
+                                                        <MapPin size={11} />
+                                                        {[m?.city, m?.state].filter(Boolean).join(', ')}
                                                     </p>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedMediaId(mediaId);
-                                                        }}
-                                                        className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-green-500 hover:text-green-400"
-                                                    >
-                                                        <LocateFixed size={12} />
-                                                        Focus map
-                                                    </button>
+                                                    {fullAddr && (
+                                                        <p className="text-[11px] text-gray-300 leading-snug mt-1.5">
+                                                            {fullAddr}
+                                                        </p>
+                                                    )}
+                                                    <div className="mt-2 flex items-center gap-3 flex-wrap">
+                                                        {combinedRate != null && (
+                                                            <span className="inline-flex items-baseline gap-1 text-[11px]">
+                                                                <span className="text-gray-500 uppercase tracking-wide text-[10px]">{rateLabel}</span>
+                                                                <span className="text-green-400 font-medium">₹{combinedRate.toLocaleString()}</span>
+                                                            </span>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedMediaId(mediaId);
+                                                            }}
+                                                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-green-500 hover:text-green-400"
+                                                        >
+                                                            <LocateFixed size={12} />
+                                                            Focus map
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <button
                                                     type="button"
@@ -423,35 +483,62 @@ export default function PlanDetailsPage() {
                                                 </button>
                                             </div>
                                             <div className="mt-3 pt-3 border-t border-gray-800">
-                                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                                                    {selectedVariantIds.length > 0 ? 'Variants' : 'All Variants'}
-                                                </p>
-                                                <div className="space-y-1.5">
-                                                    {selectedVariants.length === 0 && (
-                                                        <p className="text-xs text-gray-600">No variants.</p>
-                                                    )}
-                                                    {selectedVariants.map((v) => (
-                                                        <div key={v.id} className="flex items-center justify-between gap-3 text-xs text-gray-300 bg-[#1a1a1a] border border-gray-800 rounded px-2 py-1.5">
-                                                            <span className="min-w-0 truncate">
-                                                                {(v.variant_title || [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / '))}
-                                                                {v.rate ? <span className="text-green-400 font-medium"> · ₹{v.rate.toLocaleString()}</span> : null}
-                                                            </span>
-                                                            <button
-                                                                type="button"
-                                                                disabled={saving}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    removeVariantFromPlan(mediaId, v.id);
-                                                                }}
-                                                                className="shrink-0 inline-flex items-center justify-center text-red-400 hover:text-red-300 border border-red-500/35 hover:border-red-400/55 rounded p-1 disabled:opacity-60"
-                                                                title="Remove variant"
-                                                                aria-label="Remove variant"
-                                                            >
-                                                                <Trash2 size={12} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleVariantsExpanded(mediaId);
+                                                    }}
+                                                    aria-expanded={variantsOpen}
+                                                    aria-label={variantsOpen ? 'Hide variants' : 'Show variants'}
+                                                    className="w-full flex items-center justify-between gap-2 text-[10px] font-bold text-gray-500 hover:text-gray-300 uppercase tracking-widest"
+                                                >
+                                                    <span>
+                                                        {selectedVariantIds.length > 0 ? 'Variants' : 'All Variants'}
+                                                        {variantCount > 0 ? ` (${variantCount})` : ''}
+                                                    </span>
+                                                    {variantsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                </button>
+                                                {variantsOpen && (
+                                                    <div className="mt-2 space-y-1.5">
+                                                        {selectedVariants.length === 0 && (
+                                                            <p className="text-xs text-gray-600">No variants.</p>
+                                                        )}
+                                                        {selectedVariants.map((v) => {
+                                                            const title = v.variant_title
+                                                                || [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ')
+                                                                || `Variant ${v.id}`;
+                                                            const rateNum = Number(v.rate);
+                                                            const ratePart = Number.isFinite(rateNum) && rateNum > 0
+                                                                ? ` - ₹${rateNum.toLocaleString()}`
+                                                                : '';
+                                                            const seating = v.seating || v.seating_capacity;
+                                                            return (
+                                                                <div key={v.id} className="flex items-center justify-between gap-3 text-xs text-gray-300 bg-[#1a1a1a] border border-gray-800 rounded px-2 py-1.5">
+                                                                    <span className="min-w-0 truncate">
+                                                                        <span className="text-white">{title}{ratePart}</span>
+                                                                        {seating ? (
+                                                                            <span className="text-gray-400">  |  (Seating - {seating})</span>
+                                                                        ) : null}
+                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={saving}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            removeVariantFromPlan(mediaId, v.id);
+                                                                        }}
+                                                                        className="shrink-0 inline-flex items-center justify-center text-red-400 hover:text-red-300 border border-red-500/35 hover:border-red-400/55 rounded p-1 disabled:opacity-60"
+                                                                        title="Remove variant"
+                                                                        aria-label="Remove variant"
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );

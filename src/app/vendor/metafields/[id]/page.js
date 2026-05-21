@@ -7,6 +7,9 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import styles from '../metafields.module.css';
 
+/** Keep in sync with the create page + vendor media forms. */
+const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+
 export default function EditMetafieldPage() {
     const router = useRouter();
     const params = useParams();
@@ -22,6 +25,7 @@ export default function EditMetafieldPage() {
         definitionId: '',
         optionsInput: '',
         exploreFilterEnabled: false,
+        appliesToMediaTypes: [],
     });
 
     useEffect(() => {
@@ -37,6 +41,9 @@ export default function EditMetafieldPage() {
                     definitionId: String(m.definition_id || ''),
                     optionsInput: Array.isArray(m.options) ? m.options.join(', ') : '',
                     exploreFilterEnabled: Boolean(m.explore_filter_enabled),
+                    appliesToMediaTypes: Array.isArray(m.applies_to_media_types)
+                        ? m.applies_to_media_types
+                        : [],
                 });
             } else {
                 setError(metaRes.error || 'Metafield not found');
@@ -100,6 +107,7 @@ export default function EditMetafieldPage() {
                     definitionId: formData.definitionId,
                     options,
                     exploreFilterEnabled: formData.exploreFilterEnabled,
+                    appliesToMediaTypes: formData.appliesToMediaTypes,
                 }),
             });
 
@@ -198,6 +206,52 @@ export default function EditMetafieldPage() {
                                 (values are loaded from inventory you publish).
                             </small>
                         </div>
+
+                        {formData.exploreFilterEnabled && (
+                            <div className={styles.formGroup}>
+                                <label>Show only for these media types</label>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                    {MEDIA_TYPES.map((mt) => {
+                                        const checked = formData.appliesToMediaTypes.includes(mt);
+                                        return (
+                                            <label
+                                                key={mt}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.4rem',
+                                                    padding: '0.35rem 0.6rem',
+                                                    borderRadius: '999px',
+                                                    border: checked ? '1px solid #22c55e' : '1px solid #334155',
+                                                    background: checked ? 'rgba(34,197,94,0.12)' : 'transparent',
+                                                    color: checked ? '#86efac' : '#cbd5e1',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8rem',
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={(e) =>
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            appliesToMediaTypes: e.target.checked
+                                                                ? [...prev.appliesToMediaTypes, mt]
+                                                                : prev.appliesToMediaTypes.filter((x) => x !== mt),
+                                                        }))
+                                                    }
+                                                    style={{ accentColor: '#22c55e' }}
+                                                />
+                                                {mt}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                <small style={{ color: '#94a3b8', marginTop: '0.5rem', display: 'block' }}>
+                                    Leave all unchecked to show the filter for every media type.
+                                </small>
+                            </div>
+                        )}
 
                         <div className={styles.formActions}>
                             <button type="submit" className={styles.submitBtn} disabled={saving || deleting}>

@@ -20,7 +20,7 @@ export default async function ExplorePage() {
     try {
         const { data: mfRows, error: mfErr } = await supabaseAdmin
             .from('vendor_metafields')
-            .select('id, name')
+            .select('id, name, applies_to_media_types')
             .eq('explore_filter_enabled', true)
             .order('display_order', { ascending: true });
         if (!mfErr && Array.isArray(mfRows)) exploreMetafieldFilters = mfRows;

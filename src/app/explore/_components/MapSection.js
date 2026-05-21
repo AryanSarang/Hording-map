@@ -14,21 +14,31 @@ const TILE_OSM = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-/** Teardrop pin SVG — green default, brighter green when selected, sky when already on plan. */
+/**
+ * Teardrop pin SVG with a 3-way color scheme so users can tell at a glance:
+ *   - yellow  → media currently being browsed (selected in details panel)
+ *   - blue    → media already added to the active plan
+ *   - green   → available media that's neither selected nor on the plan
+ *
+ * Priority: selected > inPlan > default. We still flag in-plan with a subtle blue ring
+ * even when selected (yellow body), so users don't lose track of which sites are saved.
+ */
 function createExplorePinIcon({ selected, inPlan }) {
     let fill = '#22c55e';
-    if (selected) fill = '#4ade80';
+    if (selected) fill = '#facc15';
     else if (inPlan) fill = '#38bdf8';
     const filter = selected
-        ? 'drop-shadow(0 0 8px rgba(74, 222, 128, 0.55))'
+        ? 'drop-shadow(0 0 10px rgba(250, 204, 21, 0.65))'
         : inPlan
             ? 'drop-shadow(0 0 6px rgba(56, 189, 248, 0.45))'
             : 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.55))';
+    const ringStroke = selected && inPlan ? '#38bdf8' : 'rgba(0,0,0,0.4)';
+    const ringWidth = selected && inPlan ? 2 : 1;
     return L.divIcon({
         className: 'explore-map-pin',
         html: `
 <svg width="32" height="40" viewBox="0 0 32 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="filter:${filter}">
-  <path d="M16 2C8.8 2 3 7.6 3 14.5c0 8.5 12.2 21.3 12.6 21.7.2.2.5.3.8.3s.6-.1.8-.3C17.6 35.8 29 23 29 14.5 29 7.6 23.2 2 16 2z" fill="${fill}" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>
+  <path d="M16 2C8.8 2 3 7.6 3 14.5c0 8.5 12.2 21.3 12.6 21.7.2.2.5.3.8.3s.6-.1.8-.3C17.6 35.8 29 23 29 14.5 29 7.6 23.2 2 16 2z" fill="${fill}" stroke="${ringStroke}" stroke-width="${ringWidth}"/>
   <circle cx="16" cy="14.5" r="4.5" fill="#0a0a0a" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
 </svg>`,
         iconSize: [32, 40],
@@ -89,12 +99,13 @@ export default function MapSection({ hoardings, selectedId, onSelect, filterFocu
 
     const pinIcons = useMemo(() => {
         if (typeof window === 'undefined') {
-            return { default: null, inPlan: null, selected: null };
+            return { default: null, inPlan: null, selected: null, selectedInPlan: null };
         }
         return {
             default: createExplorePinIcon({ selected: false, inPlan: false }),
             inPlan: createExplorePinIcon({ selected: false, inPlan: true }),
             selected: createExplorePinIcon({ selected: true, inPlan: false }),
+            selectedInPlan: createExplorePinIcon({ selected: true, inPlan: true }),
         };
     }, []);
 
@@ -381,13 +392,14 @@ export default function MapSection({ hoardings, selectedId, onSelect, filterFocu
                             <Marker
                                 key={h.id}
                                 position={getLatLng(h)}
-                                icon={
-                                    String(selectedId) === String(h.id)
-                                        ? pinIcons.selected
-                                        : planIdSet.has(String(h.id))
-                                            ? pinIcons.inPlan
-                                            : pinIcons.default
-                                }
+                                icon={(() => {
+                                    const isSelected = String(selectedId) === String(h.id);
+                                    const isInPlan = planIdSet.has(String(h.id));
+                                    if (isSelected && isInPlan) return pinIcons.selectedInPlan;
+                                    if (isSelected) return pinIcons.selected;
+                                    if (isInPlan) return pinIcons.inPlan;
+                                    return pinIcons.default;
+                                })()}
                                 eventHandlers={{
                                     click: () => onSelect(h.id),
                                 }}

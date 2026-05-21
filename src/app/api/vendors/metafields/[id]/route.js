@@ -64,6 +64,16 @@ export async function PUT(req, { params }) {
         if (body.exploreFilterEnabled !== undefined) {
             updates.explore_filter_enabled = Boolean(body.exploreFilterEnabled);
         }
+        if (body.appliesToMediaTypes !== undefined) {
+            /**
+             * Empty array clears the scope (= "applies to all media types"); a populated array
+             * narrows visibility on /explore to only those media types. Dedupe + trim for
+             * defensive normalization against whatever the admin form sends.
+             */
+            updates.applies_to_media_types = Array.isArray(body.appliesToMediaTypes)
+                ? [...new Set(body.appliesToMediaTypes.map((s) => String(s).trim()).filter(Boolean))]
+                : [];
+        }
 
         if (body.name && !updates.key) {
             updates.key = body.name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `field_${id}`;
