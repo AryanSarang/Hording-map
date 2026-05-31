@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { fetchAllSupabasePages } from '../../../../lib/fetchAllSupabasePages';
+import {
+    invalidateExploreCatalog,
+    invalidateExploreMediaTypes,
+} from '../../../../lib/exploreCacheInvalidation';
 
 function normalizeVariant(input, index = 0) {
     const option1 = String(input.option1Value ?? input.screenCode ?? '').trim();
@@ -333,6 +337,10 @@ export async function POST(req) {
                 await supabaseAdmin.from('media_metafields').insert(rows);
             }
         }
+
+        // Catalog + media-type caches contain pre-merge views — both are now stale.
+        invalidateExploreCatalog();
+        invalidateExploreMediaTypes();
 
         return NextResponse.json({
             success: true,

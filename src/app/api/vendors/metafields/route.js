@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { invalidateExploreMetafieldList } from '../../../../lib/exploreCacheInvalidation';
 
 // GET - Fetch current user's metafield definitions
 export async function GET() {
@@ -111,6 +112,10 @@ export async function POST(req) {
                 }, { status: 400 });
             }
             throw error;
+        }
+
+        if (dbPayload.explore_filter_enabled) {
+            invalidateExploreMetafieldList();
         }
 
         return NextResponse.json({

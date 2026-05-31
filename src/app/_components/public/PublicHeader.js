@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import LoadingLink from "../ui/LoadingLink";
 
 export default function PublicHeader({ initialUser }) {
   const [user, setUser] = useState(initialUser ?? null);
@@ -40,12 +41,12 @@ export default function PublicHeader({ initialUser }) {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
+          <LoadingLink
             href="/explore"
-            className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-normal text-slate-200 hover:border-slate-500"
+            className="inline-flex items-center rounded-md border border-slate-700 px-3 py-1.5 text-xs font-normal text-slate-200 hover:border-slate-500"
           >
             Explore
-          </Link>
+          </LoadingLink>
           {user ? (
             <Link
               href="/vendor/dashboard"

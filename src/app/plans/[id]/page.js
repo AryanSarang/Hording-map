@@ -21,6 +21,12 @@ import {
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import '../../explore/_components/explore-map.css';
+import {
+    groupPricingRules,
+    multiplierForSelection,
+    withDefaultsForGroups,
+} from '../../../lib/pricingConditions';
+import { SkeletonBlock, SkeletonText } from '../../_components/ui/Skeleton';
 
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
@@ -34,6 +40,9 @@ export default function PlanDetailsPage() {
     const [plan, setPlan] = useState(null);
     const [media, setMedia] = useState([]);
     const [variants, setVariants] = useState([]);
+    /** Live media_pricing_rules for the media on this plan. Used to render condition
+     *  dropdowns and to recompute multipliers when the user changes a pick. */
+    const [pricingRules, setPricingRules] = useState([]);
     const [saving, setSaving] = useState(false);
     const [filters, setFilters] = useState({ city: '', mediaType: '', q: '' });
     const [viewMode, setViewMode] = useState('split');
@@ -65,6 +74,7 @@ export default function PlanDetailsPage() {
             setPlan(data.plan || null);
             setMedia(Array.isArray(data.media) ? data.media : []);
             setVariants(Array.isArray(data.variants) ? data.variants : []);
+            setPricingRules(Array.isArray(data.pricingRules) ? data.pricingRules : []);
         } catch (err) {
             setError(err?.message || 'Failed to load plan');
         } finally {
@@ -92,6 +102,31 @@ export default function PlanDetailsPage() {
         });
         return out;
     }, [variants]);
+
+    /** Grouped pricing rules per media (the shape DetailsPanel uses too). */
+    const pricingRulesByMedia = useMemo(() => {
+        const flatByMedia = new Map();
+        for (const r of pricingRules || []) {
+            const mid = r.media_id;
+            if (!flatByMedia.has(mid)) flatByMedia.set(mid, []);
+            flatByMedia.get(mid).push(r);
+        }
+        const out = {};
+        for (const [mid, rows] of flatByMedia.entries()) {
+            out[mid] = groupPricingRules(rows);
+        }
+        return out;
+    }, [pricingRules]);
+
+    /**
+     * Returns the live selection map for a plan item, falling back to defaults for any
+     * condition the user has not picked yet. Centralized so totals + per-card rate
+     * displays + the dropdown UI all stay in sync.
+     */
+    function resolvedSelectionsFor(item) {
+        const groups = pricingRulesByMedia[item?.mediaId] || [];
+        return withDefaultsForGroups(groups, item?.pricingSelections || {});
+    }
 
     const cityOptions = useMemo(
         () => Array.from(new Set(media.map((m) => m.city).filter(Boolean))).sort(),
@@ -138,14 +173,21 @@ export default function PlanDetailsPage() {
                     : availableVariants;
 
             selectedVariantCount += selected.length;
+            const itemMultiplier = multiplierForSelection(
+                pricingRulesByMedia[item.mediaId] || [],
+                resolvedSelectionsFor(item)
+            );
             selected.forEach((v) => {
                 const val = Number(v?.rate);
-                if (Number.isFinite(val)) estimatedCost += val;
+                if (Number.isFinite(val)) estimatedCost += val * itemMultiplier;
             });
         });
 
         return { mediaCount, cityCount, selectedVariantCount, estimatedCost };
-    }, [filteredItems, mediaById, variantsByMedia]);
+        // resolvedSelectionsFor is stable (no closure deps that change unexpectedly);
+        // we list pricingRulesByMedia explicitly so the total recomputes on edits.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filteredItems, mediaById, variantsByMedia, pricingRulesByMedia]);
 
     const mapPoints = useMemo(() => (
         filteredItems
@@ -197,6 +239,35 @@ export default function PlanDetailsPage() {
         await saveItems(nextItems);
     }
 
+    /**
+     * Update the user's pricing-condition pick for a single line item, then persist
+     * the whole plan. The selection map is stored per-item as
+     * `{ [ruleName]: { optionLabel, multiplier } }`. We snapshot the multiplier even
+     * though we also do a live lookup at render time — the snapshot is what survives
+     * if the vendor later removes the rule.
+     */
+    async function updatePricingSelection(mediaId, ruleName, optionLabel) {
+        if (!plan) return;
+        const groups = pricingRulesByMedia[mediaId] || [];
+        const group = groups.find((g) => g.ruleName === ruleName);
+        const opt = group?.options.find((o) => o.optionLabel === optionLabel);
+        if (!opt) return;
+        const nextItems = (plan.items || []).map((it) => {
+            if (it.mediaId !== mediaId) return it;
+            const prev = (it.pricingSelections && typeof it.pricingSelections === 'object')
+                ? it.pricingSelections
+                : {};
+            return {
+                ...it,
+                pricingSelections: {
+                    ...prev,
+                    [ruleName]: { optionLabel: opt.optionLabel, multiplier: opt.multiplier },
+                },
+            };
+        });
+        await saveItems(nextItems);
+    }
+
     async function removeVariantFromPlan(mediaId, variantId) {
         if (!plan) return;
         const mediaVariants = variantsByMedia[mediaId] || [];
@@ -214,59 +285,42 @@ export default function PlanDetailsPage() {
         await saveItems(nextItems);
     }
 
-    function exportCsv() {
-        const headers = [
-            'plan_id', 'plan_name', 'media_id', 'city', 'state', 'media_type', 'address',
-            'variant_id', 'variant_title', 'option1_value', 'option2_value', 'option3_value', 'variant_rate'
-        ];
-        const rows = [];
-        for (const item of filteredItems) {
-            const m = mediaById[item.mediaId];
-            if (!m) continue;
-            const allVariants = variantsByMedia[item.mediaId] || [];
-            const idSet = new Set((Array.isArray(item.variantIds) ? item.variantIds : []).map(String));
-            const selected = idSet.size > 0
-                ? allVariants.filter((v) => idSet.has(String(v.id)))
-                : allVariants;
-            if (selected.length === 0) {
-                rows.push([
-                    plan.id, plan.name, m.id, m.city || '', m.state || '', m.media_type || '', m.address || '',
-                    '', '', '', '', '', ''
-                ]);
-                continue;
+    /**
+     * Export the *current* plan via the server endpoint (which computes spec /
+     * pricing-condition multipliers, joins metafields, and renders PPTX). We don't
+     * pass the filter UI's narrowing — the export always represents the full saved
+     * plan so the file an advertiser sends out matches what they agreed to.
+     */
+    async function exportPlan(format) {
+        if (!plan) return;
+        try {
+            setSaving(true);
+            const res = await fetch(
+                `/api/plans/${encodeURIComponent(plan.id)}/export?format=${encodeURIComponent(format)}`,
+                { credentials: 'include' }
+            );
+            if (!res.ok) {
+                const text = await res.text().catch(() => '');
+                throw new Error(text || `Export failed (${res.status})`);
             }
-            selected.forEach((v) => {
-                rows.push([
-                    plan.id,
-                    plan.name,
-                    m.id,
-                    m.city || '',
-                    m.state || '',
-                    m.media_type || '',
-                    m.address || '',
-                    v.id || '',
-                    v.variant_title || '',
-                    v.option1_value || '',
-                    v.option2_value || '',
-                    v.option3_value || '',
-                    v.rate ?? ''
-                ]);
-            });
+            const blob = await res.blob();
+            const disposition = res.headers.get('content-disposition') || '';
+            const filenameMatch = /filename="([^"]+)"/.exec(disposition);
+            const fallback = `${(plan.name || 'plan').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_')}.${format}`;
+            const filename = filenameMatch ? filenameMatch[1] : fallback;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError(err?.message || `Failed to export ${format.toUpperCase()}`);
+        } finally {
+            setSaving(false);
         }
-        const escape = (val) => {
-            const s = String(val ?? '');
-            if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
-            return s;
-        };
-        const csv = [headers, ...rows].map((r) => r.map(escape).join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `plan-${plan?.id || 'export'}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
     }
 
     return (
@@ -298,7 +352,39 @@ export default function PlanDetailsPage() {
                     </div>
                 </div>
 
-                {loading && <div className="text-xs text-gray-500 uppercase tracking-wide">Loading plan…</div>}
+                {loading && (
+                    <div className="space-y-4" aria-label="Loading plan">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="rounded-lg border border-gray-800 bg-[#111] p-3 space-y-2">
+                                    <SkeletonText width="50%" />
+                                    <SkeletonBlock className="h-6 w-24" />
+                                </div>
+                            ))}
+                        </div>
+                        <div className="rounded-lg border border-gray-800 bg-[#111] p-4">
+                            <SkeletonText width="20%" className="mb-3" />
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                    <SkeletonBlock key={i} className="h-9 w-full" />
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+                            <div className="space-y-3">
+                                {Array.from({ length: 4 }).map((_, i) => (
+                                    <div key={i} className="rounded-lg border border-gray-800 bg-[#111] p-3 space-y-2">
+                                        <SkeletonText width="30%" />
+                                        <SkeletonBlock className="h-5 w-3/4" />
+                                        <SkeletonText width="40%" />
+                                        <SkeletonText width="60%" />
+                                    </div>
+                                ))}
+                            </div>
+                            <SkeletonBlock className="h-[620px] w-full rounded-lg" />
+                        </div>
+                    </div>
+                )}
                 {error && <div className="text-xs text-red-400 border border-red-500/30 bg-red-950/20 rounded-lg px-3 py-2">{error}</div>}
 
                 {!loading && !error && plan && (
@@ -362,14 +448,28 @@ export default function PlanDetailsPage() {
                                     placeholder="Search title / address / city"
                                     className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 outline-none focus:border-green-500/60"
                                 />
-                                <button
-                                    type="button"
-                                    onClick={exportCsv}
-                                    className="inline-flex items-center justify-center gap-2 bg-[#0a0a0a] border border-gray-700 hover:border-green-500/60 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-300 hover:text-white transition-colors"
-                                >
-                                    <Download size={14} />
-                                    Export CSV
-                                </button>
+                                <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => exportPlan('csv')}
+                                        disabled={saving || !plan}
+                                        className="inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold uppercase tracking-widest flex-1 bg-[#0a0a0a] text-gray-300 hover:text-white hover:bg-[#111] disabled:opacity-60"
+                                        title="Download as spreadsheet (CSV)"
+                                    >
+                                        <Download size={14} />
+                                        CSV
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => exportPlan('pptx')}
+                                        disabled={saving || !plan}
+                                        className="inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold uppercase tracking-widest flex-1 border-l border-gray-700 bg-[#0a0a0a] text-gray-300 hover:text-white hover:bg-[#111] disabled:opacity-60"
+                                        title="Download client-ready deck (PowerPoint)"
+                                    >
+                                        <Download size={14} />
+                                        PPT
+                                    </button>
+                                </div>
                                 <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
                                     <button
                                         type="button"
@@ -417,9 +517,15 @@ export default function PlanDetailsPage() {
                                     const ratesForSum = selectedVariants
                                         .map((v) => Number(v.rate))
                                         .filter((r) => Number.isFinite(r) && r > 0);
-                                    const combinedRate = ratesForSum.length > 0
+                                    const baseCombinedRate = ratesForSum.length > 0
                                         ? ratesForSum.reduce((a, b) => a + b, 0)
                                         : (Number.isFinite(Number(m?.rate)) ? Number(m?.rate) : null);
+                                    const itemPricingGroups = pricingRulesByMedia[mediaId] || [];
+                                    const itemResolvedSelections = resolvedSelectionsFor(item);
+                                    const itemMultiplier = multiplierForSelection(itemPricingGroups, itemResolvedSelections);
+                                    const combinedRate = baseCombinedRate != null
+                                        ? baseCombinedRate * itemMultiplier
+                                        : null;
                                     const variantCount = selectedVariants.length;
                                     const fullAddr = [m?.address, m?.landmark, m?.zone].filter(Boolean).join(' • ');
 
@@ -450,9 +556,14 @@ export default function PlanDetailsPage() {
                                                     )}
                                                     <div className="mt-2 flex items-center gap-3 flex-wrap">
                                                         {combinedRate != null && (
-                                                            <span className="inline-flex items-baseline gap-1 text-[11px]">
+                                                            <span className="inline-flex items-baseline gap-2 text-[11px]">
                                                                 <span className="text-gray-500 uppercase tracking-wide text-[10px]">{rateLabel}</span>
-                                                                <span className="text-green-400 font-medium">₹{combinedRate.toLocaleString()}</span>
+                                                                {itemMultiplier !== 1 && baseCombinedRate != null && (
+                                                                    <span className="text-gray-500 line-through text-[10px]">
+                                                                        ₹{Math.round(baseCombinedRate).toLocaleString()}
+                                                                    </span>
+                                                                )}
+                                                                <span className="text-green-400 font-medium">₹{Math.round(combinedRate).toLocaleString()}</span>
                                                             </span>
                                                         )}
                                                         <button
@@ -499,26 +610,79 @@ export default function PlanDetailsPage() {
                                                     </span>
                                                     {variantsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                                 </button>
+                                                {variantsOpen && itemPricingGroups.length > 0 && (
+                                                    <div className="mt-2 mb-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {itemPricingGroups.map((g) => {
+                                                            const current =
+                                                                itemResolvedSelections[g.ruleName]?.optionLabel ||
+                                                                g.defaultOptionLabel;
+                                                            return (
+                                                                <div
+                                                                    key={g.ruleName}
+                                                                    className="bg-[#1a1a1a] border border-gray-800 rounded px-2 py-1.5"
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">
+                                                                        {g.ruleName}
+                                                                    </label>
+                                                                    <select
+                                                                        value={current}
+                                                                        disabled={saving}
+                                                                        onChange={(e) =>
+                                                                            updatePricingSelection(
+                                                                                mediaId,
+                                                                                g.ruleName,
+                                                                                e.target.value
+                                                                            )
+                                                                        }
+                                                                        className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-green-500 disabled:opacity-60"
+                                                                    >
+                                                                        {g.options.map((o) => (
+                                                                            <option key={o.optionLabel} value={o.optionLabel}>
+                                                                                {o.optionLabel}
+                                                                                {o.multiplier !== 1
+                                                                                    ? ` (×${o.multiplier})`
+                                                                                    : ''}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                                 {variantsOpen && (
                                                     <div className="mt-2 space-y-1.5">
                                                         {selectedVariants.length === 0 && (
                                                             <p className="text-xs text-gray-600">No variants.</p>
                                                         )}
-                                                        {selectedVariants.map((v) => {
-                                                            const title = v.variant_title
+                                                        {selectedVariants.map((v, vIdx) => {
+                                                            /**
+                                                             * Mirror the explore-pane cleanup: strip vendor screen-code
+                                                             * prefixes like `MH40_` and expand `Audi1` → `Auditorium 1`
+                                                             * so the price never gets visually clipped by the title.
+                                                             */
+                                                            const raw = (v.variant_title
                                                                 || [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ')
-                                                                || `Variant ${v.id}`;
+                                                                || '').trim();
+                                                            let title = raw.replace(/^[A-Z]{2,4}\d{0,4}_+/, '');
+                                                            title = title.replace(/^Audi(?:torium)?[\s_-]?(\d+)$/i, 'Auditorium $1');
+                                                            title = title.replace(/^Screen[\s_-]?(\d+)$/i, 'Screen $1');
+                                                            if (!title) {
+                                                                const ordinal = (v.display_order ?? vIdx) + 1;
+                                                                title = isCinemaRow ? `Auditorium ${ordinal}` : `Variant ${ordinal}`;
+                                                            }
                                                             const rateNum = Number(v.rate);
-                                                            const ratePart = Number.isFinite(rateNum) && rateNum > 0
-                                                                ? ` - ₹${rateNum.toLocaleString()}`
-                                                                : '';
                                                             const seating = v.seating || v.seating_capacity;
                                                             return (
                                                                 <div key={v.id} className="flex items-center justify-between gap-3 text-xs text-gray-300 bg-[#1a1a1a] border border-gray-800 rounded px-2 py-1.5">
-                                                                    <span className="min-w-0 truncate">
-                                                                        <span className="text-white">{title}{ratePart}</span>
+                                                                    <span className="min-w-0 flex items-baseline gap-2 flex-wrap">
+                                                                        <span className="text-white truncate max-w-[12rem]">{title}</span>
+                                                                        {Number.isFinite(rateNum) && rateNum > 0 ? (
+                                                                            <span className="text-green-400 font-medium whitespace-nowrap">₹{rateNum.toLocaleString()}</span>
+                                                                        ) : null}
                                                                         {seating ? (
-                                                                            <span className="text-gray-400">  |  (Seating - {seating})</span>
+                                                                            <span className="text-gray-400 whitespace-nowrap">· Seating {seating}</span>
                                                                         ) : null}
                                                                     </span>
                                                                     <button

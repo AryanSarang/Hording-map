@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../lib/genId10';
 import { getCurrentUser } from '../../../../../lib/authServer';
+import {
+    invalidateExploreCatalog,
+    invalidateExploreMediaTypes,
+} from '../../../../../lib/exploreCacheInvalidation';
 
 // Helper to map DB snake_case to Frontend camelCase
 function mapToFrontend(h) {
@@ -326,6 +330,9 @@ export async function PUT(req, { params }) {
             }
         }
 
+        invalidateExploreCatalog();
+        invalidateExploreMediaTypes();
+
         return NextResponse.json({
             success: true,
             data: mapToFrontend(data),
@@ -360,6 +367,9 @@ export async function DELETE(req, { params }) {
             .eq('user_id', user.id);
 
         if (error) throw error;
+
+        invalidateExploreCatalog();
+        invalidateExploreMediaTypes();
 
         return NextResponse.json({ success: true, message: 'Hording deleted successfully' }, { status: 200 });
     } catch (error) {

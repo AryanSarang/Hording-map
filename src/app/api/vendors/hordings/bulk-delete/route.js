@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../lib/genId10';
 import { getCurrentUser } from '../../../../../lib/authServer';
+import {
+    invalidateExploreCatalog,
+    invalidateExploreMediaTypes,
+} from '../../../../../lib/exploreCacheInvalidation';
 
 /**
  * PostgREST sends `.in()` filters on the query string. Cloudflare returns 414 when the URI is too large
@@ -63,6 +67,11 @@ export async function POST(req) {
 
             if (error) throw error;
             deleted += (data || []).length;
+        }
+
+        if (deleted > 0) {
+            invalidateExploreCatalog();
+            invalidateExploreMediaTypes();
         }
 
         return NextResponse.json({

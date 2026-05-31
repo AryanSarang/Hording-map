@@ -9,6 +9,7 @@ import {
     hoardingMatchesStateFilter,
 } from './exploreFilterLocation';
 import { resolveIndianStateRow, isIndianCityInCscState } from './indiaGeoOptions';
+import { groupPricingRules } from './pricingConditions';
 
 export const EXPLORE_MEDIA_COLUMNS =
     'id,vendor_id,latitude,longitude,address,locality,landmark,city,zone,state,pincode,media_type,monthly_rental,media,screen_size,display_format,display_hours,title,option1_name,option2_name,option3_name,vendor:vendors(name)';
@@ -69,23 +70,44 @@ export function buildExploreMediaQuery(admin, filters) {
  * City names like Dombivli / Thane / Navi Mumbai often do not contain “mumbai”; media_type may
  * not include “cinema”. Client landing filters still default to Mumbai + cinema when that data exists.
  */
-export function buildInitialExplorePageQuery(admin) {
-    return admin
+/**
+ * Builds the initial /explore catalog query.
+ *
+ * Historically this was hard-coded to Maharashtra. After the onboarding-modal feature
+ * (#6) the landing slice is per-user: if the user has set explore preferences (or
+ * provided `?state=` on the URL), we narrow the SSR query to that state and optional
+ * media type so they don't have to wait for a client-side re-fetch. Falls back to
+ * Maharashtra for unauthenticated or first-time visitors so the page never SSR-loads
+ * the entire country (which would be slow and expensive).
+ */
+export function buildInitialExplorePageQuery(admin, { state, mediaType } = {}) {
+    let q = admin
         .from('media')
         .select(EXPLORE_MEDIA_COLUMNS)
-        .or('status.eq.active,status.is.null')
-        .ilike('state', '%maharashtra%')
-        .order('id', { ascending: true });
+        .or('status.eq.active,status.is.null');
+    const trimmedState = (state || '').trim();
+    q = q.ilike('state', `%${trimmedState || 'maharashtra'}%`);
+    if (mediaType && String(mediaType).trim()) {
+        q = q.eq('media_type', String(mediaType).trim());
+    }
+    return q.order('id', { ascending: true });
 }
 
-function formatHoardingRows(hoardings, variantsByMedia, metafieldsByMediaId = new Map()) {
+function formatHoardingRows(
+    hoardings,
+    variantsByMedia,
+    metafieldsByMediaId = new Map(),
+    pricingRulesByMedia = new Map()
+) {
     return (hoardings || []).map((h) => {
         const mediaVariants = variantsByMedia[h.id] || [];
         const firstVariant = mediaVariants[0] || null;
         const mfObj = metafieldsByMediaId.get(h.id) || {};
+        const pricingRules = pricingRulesByMedia.get(h.id) || [];
         return {
             ...h,
             metafields: mfObj,
+            pricingRules,
             vendorId: h.vendor_id,
             rate: firstVariant?.rate ?? h.monthly_rental,
             mediaType: h.media_type,
@@ -111,6 +133,40 @@ function formatHoardingRows(hoardings, variantsByMedia, metafieldsByMediaId = ne
             selectedVariantId: firstVariant?.id || null,
         };
     });
+}
+
+/**
+ * Batched load of media_pricing_rules for a set of media rows. Returns a Map keyed by
+ * media_id whose value is the already-grouped condition list (see pricingConditions.js).
+ * Chunked the same way as metafields to stay under Node 22 undici header limits.
+ */
+async function loadPricingRulesForMedia(admin, hoardingRows) {
+    const out = new Map();
+    if (!hoardingRows?.length) return out;
+    const mediaIds = hoardingRows.map((h) => h.id);
+    const CHUNK = 100;
+    const flatByMedia = new Map();
+    for (let i = 0; i < mediaIds.length; i += CHUNK) {
+        const chunk = mediaIds.slice(i, i + CHUNK);
+        const { data, error } = await admin
+            .from('media_pricing_rules')
+            .select('media_id, rule_name, option_label, multiplier, display_order')
+            .in('media_id', chunk)
+            .order('display_order', { ascending: true });
+        if (error) {
+            console.error('explore: media_pricing_rules', error);
+            continue;
+        }
+        for (const row of data || []) {
+            const mid = row.media_id;
+            if (!flatByMedia.has(mid)) flatByMedia.set(mid, []);
+            flatByMedia.get(mid).push(row);
+        }
+    }
+    for (const [mid, rows] of flatByMedia.entries()) {
+        out.set(mid, groupPricingRules(rows));
+    }
+    return out;
 }
 
 /**
@@ -154,7 +210,12 @@ async function loadMetafieldsForMedia(admin, hoardingRows, vendorMetafieldIds) {
     return map;
 }
 
-export async function fetchVariantsAndFormat(admin, hoardings, metafieldsByMediaId = new Map()) {
+export async function fetchVariantsAndFormat(
+    admin,
+    hoardings,
+    metafieldsByMediaId = new Map(),
+    pricingRulesByMedia = new Map()
+) {
     const variants = [];
     let variantsError = null;
     if (Array.isArray(hoardings) && hoardings.length > 0) {
@@ -184,7 +245,7 @@ export async function fetchVariantsAndFormat(admin, hoardings, metafieldsByMedia
     if (variantsError) {
         console.error('explore: media_variants fetch failed', variantsError);
         return {
-            hoardings: formatHoardingRows(hoardings, {}, metafieldsByMediaId),
+            hoardings: formatHoardingRows(hoardings, {}, metafieldsByMediaId, pricingRulesByMedia),
             error: null,
         };
     }
@@ -201,7 +262,7 @@ export async function fetchVariantsAndFormat(admin, hoardings, metafieldsByMedia
     }
 
     return {
-        hoardings: formatHoardingRows(hoardings, variantsByMedia, metafieldsByMediaId),
+        hoardings: formatHoardingRows(hoardings, variantsByMedia, metafieldsByMediaId, pricingRulesByMedia),
         error: null,
     };
 }
@@ -248,6 +309,9 @@ export async function fetchExploreCatalogFormatted(
             return isIndianCityInCscState(h.state, h.city);
         });
     }
-    const mfMap = await loadMetafieldsForMedia(admin, rows, exploreMetafieldIds);
-    return fetchVariantsAndFormat(admin, rows, mfMap);
+    const [mfMap, prMap] = await Promise.all([
+        loadMetafieldsForMedia(admin, rows, exploreMetafieldIds),
+        loadPricingRulesForMedia(admin, rows),
+    ]);
+    return fetchVariantsAndFormat(admin, rows, mfMap, prMap);
 }

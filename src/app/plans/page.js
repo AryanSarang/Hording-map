@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from '../_components/ui/ConfirmDialog';
+import { SkeletonCard } from '../_components/ui/Skeleton';
 
 export default function PlansPage() {
     const [plans, setPlans] = useState([]);
@@ -46,7 +47,13 @@ export default function PlansPage() {
                     </Link>
                 </div>
 
-                {loading && <div className="text-xs text-gray-500 uppercase tracking-wide">Loading plans…</div>}
+                {loading && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2" aria-label="Loading plans">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <SkeletonCard key={i} />
+                        ))}
+                    </div>
+                )}
                 {error && <div className="text-xs text-red-400 border border-red-500/30 bg-red-950/20 rounded-lg px-3 py-2">{error}</div>}
                 {!loading && !error && plans.length === 0 && (
                     <div className="text-xs text-gray-600 uppercase tracking-wide">No plans yet. Create one from Explore.</div>

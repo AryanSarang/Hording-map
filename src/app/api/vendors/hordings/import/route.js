@@ -7,6 +7,10 @@ import { isValidMediaId } from '../../../../../lib/genId10';
 import { parsePricingRulesFromRow, dedupePricingRules } from '../../../../../lib/csvPricingRules';
 import { fetchAllSupabasePages } from '../../../../../lib/fetchAllSupabasePages';
 import { loadVendorNameCache, resolveVendorForImport } from '../../../../../lib/resolveVendorForImport';
+import {
+    invalidateExploreCatalog,
+    invalidateExploreMediaTypes,
+} from '../../../../../lib/exploreCacheInvalidation';
 
 const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
 
@@ -799,6 +803,11 @@ async function commitPreparedImport(user, replaceExisting, preparedRows, rowErro
             await supabaseAdmin.from('media_pricing_rules').insert(pricingRules);
         }
         imported++;
+    }
+
+    if (imported > 0 || replaced > 0) {
+        invalidateExploreCatalog();
+        invalidateExploreMediaTypes();
     }
 
     return NextResponse.json({

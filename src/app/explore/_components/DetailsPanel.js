@@ -1,11 +1,23 @@
 // app/explore/_components/DetailsPanel.js
 "use client";
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { MapPin, X, ListPlus, ListMinus, PlusCircle } from 'lucide-react';
 import MultiSelectDropdown from './MultiSelectDropdown';
+import {
+    multiplierForSelection,
+    normalizePricingSelections,
+    withDefaultsForGroups,
+} from '../../../lib/pricingConditions';
 
-export default function DetailsPanel({
+/**
+ * `DetailsPanel` is wrapped in `memo` at the bottom of the file. Skipping
+ * re-renders when sibling state (e.g. filter draft inputs) changes saves us
+ * re-rendering a virtualized list + heavy detail content for every keystroke
+ * in the filter rail. Setter props are stable refs from `useState`, so memo's
+ * shallow-prop comparison reliably wins.
+ */
+function DetailsPanel({
     hoardings,
     selectedId,
     onSelect,
@@ -40,6 +52,47 @@ export default function DetailsPanel({
         setCheckedVariantIds(new Set(variants.map((v) => String(v.id))));
     }, [selectedHoarding?.id, variantIdsKey]);
 
+    /**
+     * Pricing conditions are a per-media set of dropdowns (e.g. "Duration" → 1w/2w/4w)
+     * whose chosen multipliers compound into the displayed rate. Each media carries
+     * its own set on `selectedHoarding.pricingRules` (grouped + ordered). We store the
+     * picks as `{ [ruleName]: { optionLabel, multiplier } }` so we can later persist
+     * exactly that on the plan item.
+     *
+     * Default behaviour:
+     *   - First time the panel sees a media → seed with the first option of every
+     *     condition (industry convention: vendors list the "no surcharge" option first).
+     *   - If the user already added this media to the current plan and saved picks,
+     *     seed with those instead so they don't have to redo the dropdowns.
+     */
+    const pricingRules = useMemo(
+        () => (Array.isArray(selectedHoarding?.pricingRules) ? selectedHoarding.pricingRules : []),
+        [selectedHoarding?.pricingRules]
+    );
+    const planSelections = currentPlanItem?.pricingSelections;
+    const [pricingSelections, setPricingSelections] = useState({});
+    useEffect(() => {
+        setPricingSelections(withDefaultsForGroups(pricingRules, planSelections || {}));
+        // We intentionally re-seed whenever the selected media or its rule shape
+        // changes — switching media in the list should not leak last media's picks.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedHoarding?.id, pricingRules.length]);
+
+    const pricingMultiplier = useMemo(
+        () => multiplierForSelection(pricingRules, pricingSelections),
+        [pricingRules, pricingSelections]
+    );
+
+    function updatePricingSelection(ruleName, optionLabel) {
+        const group = pricingRules.find((g) => g.ruleName === ruleName);
+        const opt = group?.options.find((o) => o.optionLabel === optionLabel);
+        if (!opt) return;
+        setPricingSelections((prev) => ({
+            ...prev,
+            [ruleName]: { optionLabel: opt.optionLabel, multiplier: opt.multiplier },
+        }));
+    }
+
     const isMutating = selectedHoarding ? planMutatingMediaIds?.has(selectedHoarding.id) : false;
 
     const checkedVariants = useMemo(
@@ -59,9 +112,27 @@ export default function DetailsPanel({
         const rates = checkedVariants
             .map((v) => Number(v.rate))
             .filter((r) => Number.isFinite(r) && r > 0);
+        let base = null;
         if (rates.length === 0) {
-            const base = Number(selectedHoarding?.rate);
-            return Number.isFinite(base) ? base : null;
+            const fallback = Number(selectedHoarding?.rate);
+            base = Number.isFinite(fallback) ? fallback : null;
+        } else {
+            base = rates.reduce((a, b) => a + b, 0);
+        }
+        if (base == null) return null;
+        const product = Number(pricingMultiplier);
+        return Number.isFinite(product) && product > 0 ? base * product : base;
+    }, [checkedVariants, selectedHoarding?.rate, pricingMultiplier]);
+
+    /** Show the un-adjusted (base) total alongside, so the user can see what the
+     *  conditions are doing to the price. Only render when a multiplier ≠ 1 is active. */
+    const baseRateSummary = useMemo(() => {
+        const rates = checkedVariants
+            .map((v) => Number(v.rate))
+            .filter((r) => Number.isFinite(r) && r > 0);
+        if (rates.length === 0) {
+            const fallback = Number(selectedHoarding?.rate);
+            return Number.isFinite(fallback) ? fallback : null;
         }
         return rates.reduce((a, b) => a + b, 0);
     }, [checkedVariants, selectedHoarding?.rate]);
@@ -83,24 +154,40 @@ export default function DetailsPanel({
         : 'Add Selected Media to Plan';
 
     /**
-     * Build the variant display label as `Screen 1 - ₹1500` with an inline seating annotation
-     * `(Seating - 105)` as the sublabel. The label/sublabel split is so MultiSelectDropdown can
-     * keep its existing two-line option layout without bespoke styling.
+     * Clean up vendor-supplied variant titles so screen codes like `MH40_Audi1` don't push
+     * the price out of the truncated dropdown row. Strips state-code prefixes (`MH40_`,
+     * `KA12_`, etc.) and expands abbreviated terms (`Audi1` → `Auditorium 1`,
+     * `Screen2` → `Screen 2`). Falls back to a sequential `Auditorium N` / `Variant N`
+     * label keyed on the variant's display_order or array index so cinema users always
+     * see a human-readable name even when the raw title is unusable.
      */
-    const variantOptionLabel = (v) => {
-        const title =
-            v.variant_title ||
-            [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ') ||
-            `Variant ${v.id}`;
-        const rateNum = Number(v.rate);
-        const ratePart = Number.isFinite(rateNum) && rateNum > 0
-            ? ` - ₹${rateNum.toLocaleString()}`
-            : '';
-        return `${title}${ratePart}`;
+    const cleanVariantName = (v, idx) => {
+        const raw = (v.variant_title
+            || [v.option1_value, v.option2_value, v.option3_value].filter(Boolean).join(' / ')
+            || '').trim();
+        let cleaned = raw.replace(/^[A-Z]{2,4}\d{0,4}_+/, '');
+        cleaned = cleaned.replace(/^Audi(?:torium)?[\s_-]?(\d+)$/i, 'Auditorium $1');
+        cleaned = cleaned.replace(/^Screen[\s_-]?(\d+)$/i, 'Screen $1');
+        if (!cleaned) {
+            const ordinal = (v.display_order ?? idx) + 1;
+            cleaned = isCinema ? `Auditorium ${ordinal}` : `Variant ${ordinal}`;
+        }
+        return cleaned;
     };
+
+    /**
+     * Move price + seating into the sublabel slot so the truncating MultiSelectDropdown
+     * row always shows them on a dedicated line. Earlier we packed everything into the
+     * main label (`Screen 1 - ₹1500`) and the price got clipped whenever the vendor
+     * title was long.
+     */
     const variantOptionSublabel = (v) => {
+        const rateNum = Number(v.rate);
+        const parts = [];
+        if (Number.isFinite(rateNum) && rateNum > 0) parts.push(`₹${rateNum.toLocaleString()}`);
         const seating = v.seating || v.seating_capacity;
-        return seating ? `(Seating - ${seating})` : undefined;
+        if (seating) parts.push(`Seating ${seating}`);
+        return parts.length ? parts.join(' · ') : undefined;
     };
 
     const fullAddress = [
@@ -111,6 +198,29 @@ export default function DetailsPanel({
         .map((s) => (s == null ? '' : String(s).trim()))
         .filter(Boolean)
         .join(' • ');
+
+    /**
+     * Per-media-type whitelist of spec rows so each media type only surfaces the fields
+     * advertisers actually care about. Media types without an entry here fall back to the
+     * full default spec grid (screen size, dimensions, media type, display, cinema format,
+     * audience, seating + all enabled metafields).
+     *
+     * Keys correspond to internal field identifiers:
+     *   - `screenSize`, `dimensions`, `mediaType`, `displayFormat` → media table columns
+     *   - `cinema_format`, `audience`, `seating` → variant table columns
+     *   - `metafield:<metafield_name>` (case-insensitive) → matched against the vendor
+     *      metafield's `name`. Use `metafield:*` to include every metafield.
+     */
+    const SPEC_WHITELIST_BY_MEDIA_TYPE = {
+        'Cinema Screen': ['metafield:cinema chain', 'audience', 'cinema_format'],
+    };
+    const specWhitelist = SPEC_WHITELIST_BY_MEDIA_TYPE[selectedHoarding?.mediaType] || null;
+    const matchesMetafield = (mfName, whitelistEntry) =>
+        whitelistEntry === 'metafield:*' ||
+        whitelistEntry.toLowerCase() === `metafield:${String(mfName || '').toLowerCase()}`;
+    const showSpec = (key) => !specWhitelist || specWhitelist.includes(key);
+    const showMetafield = (mfName) =>
+        !specWhitelist || specWhitelist.some((w) => w.startsWith('metafield:') && matchesMetafield(mfName, w));
 
     /**
      * Flatten vendor metafield values attached to the selected media into label/value pairs
@@ -192,7 +302,13 @@ export default function DetailsPanel({
                         <div>
                             {selectedHoarding.imageUrls && selectedHoarding.imageUrls.length > 0 && (
                                 <div className="aspect-video bg-gray-800 rounded-lg overflow-hidden mb-3 relative border border-gray-700">
-                                    <img src={selectedHoarding.imageUrls[0]} alt="Hoarding View" className="w-full h-full object-cover" />
+                                    <img
+                                        src={selectedHoarding.imageUrls[0]}
+                                        alt="Hoarding View"
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="w-full h-full object-cover"
+                                    />
                                     <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">#{selectedHoarding.id}</div>
                                 </div>
                             )}
@@ -215,10 +331,15 @@ export default function DetailsPanel({
                             )}
                             <div className="flex items-center justify-between p-2 bg-green-500/5 border border-green-500/20 rounded">
                                 <span className="text-[10px] text-green-300/70 uppercase">{rateCadenceLabel}</span>
-                                <div className="flex items-baseline gap-1">
+                                <div className="flex items-baseline gap-2">
+                                    {pricingMultiplier !== 1 && baseRateSummary != null && (
+                                        <span className="text-[10px] text-gray-500 line-through">
+                                            ₹{Number(baseRateSummary).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                        </span>
+                                    )}
                                     <span className="text-sm font-medium text-green-400">
                                         {rateSummary != null
-                                            ? `₹${Number(rateSummary).toLocaleString()}`
+                                            ? `₹${Number(rateSummary).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                                             : `₹${(displayVariant?.rate ?? selectedHoarding.rate)?.toLocaleString?.() ?? '—'}`}
                                     </span>
                                 </div>
@@ -233,9 +354,9 @@ export default function DetailsPanel({
                                 <MultiSelectDropdown
                                     values={Array.from(checkedVariantIds)}
                                     onChange={(next) => setCheckedVariantIds(new Set(next.map(String)))}
-                                    options={variants.map((v) => ({
+                                    options={variants.map((v, idx) => ({
                                         value: String(v.id),
-                                        label: variantOptionLabel(v),
+                                        label: cleanVariantName(v, idx),
                                         sublabel: variantOptionSublabel(v),
                                     }))}
                                     allLabel={variantAllLabel}
@@ -246,6 +367,47 @@ export default function DetailsPanel({
                                 <p className="text-[10px] text-gray-500 mt-1.5">
                                     {checkedVariantIds.size} of {variants.length} selected
                                 </p>
+                            </section>
+                        )}
+
+                        {/* Pricing conditions — one dropdown per rule. Picks recompute the
+                            displayed rate immediately and ride along to the plan on save. */}
+                        {pricingRules.length > 0 && (
+                            <section>
+                                <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">
+                                    Pricing Conditions
+                                </h3>
+                                <div className="space-y-2">
+                                    {pricingRules.map((g) => {
+                                        const current = pricingSelections[g.ruleName]?.optionLabel || g.defaultOptionLabel;
+                                        return (
+                                            <div
+                                                key={g.ruleName}
+                                                className="bg-[#1a1a1a] border border-gray-800 rounded px-2 py-1.5"
+                                            >
+                                                <label className="block text-[10px] text-gray-500 uppercase tracking-wide mb-1">
+                                                    {g.ruleName}
+                                                </label>
+                                                <select
+                                                    value={current}
+                                                    onChange={(e) =>
+                                                        updatePricingSelection(g.ruleName, e.target.value)
+                                                    }
+                                                    className="w-full bg-[#0a0a0a] border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-green-500"
+                                                >
+                                                    {g.options.map((o) => (
+                                                        <option key={o.optionLabel} value={o.optionLabel}>
+                                                            {o.optionLabel}
+                                                            {o.multiplier !== 1
+                                                                ? ` (×${o.multiplier})`
+                                                                : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </section>
                         )}
 
@@ -264,22 +426,36 @@ export default function DetailsPanel({
                                 <section>
                                     <h3 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-widest">Specifications</h3>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <DisplayValue label="Screen Size" value={displayVariant?.size || selectedHoarding.screenSize} />
-                                        {selectedHoarding.width && selectedHoarding.height && (
+                                        {showSpec('screenSize') && (
+                                            <DisplayValue label="Screen Size" value={displayVariant?.size || selectedHoarding.screenSize} />
+                                        )}
+                                        {showSpec('dimensions') && selectedHoarding.width && selectedHoarding.height && (
                                             <DisplayValue
                                                 label="Dimensions"
                                                 value={`${selectedHoarding.width}x${selectedHoarding.height}`}
                                                 suffix=" ft"
                                             />
                                         )}
-                                        <DisplayValue label="Media Type" value={formatMediaType(selectedHoarding.mediaType)} />
-                                        <DisplayValue label="Display" value={selectedHoarding.displayFormat} />
-                                        <DisplayValue label="Cinema Format" value={displayVariant?.cinema_format} />
-                                        <DisplayValue label="Audience" value={displayVariant?.audience_category} />
-                                        <DisplayValue label="Seating" value={displayVariant?.seating} />
-                                        {metafieldSpecs.map((mf) => (
-                                            <DisplayValue key={mf.id} label={mf.name} value={mf.value} />
-                                        ))}
+                                        {showSpec('mediaType') && (
+                                            <DisplayValue label="Media Type" value={formatMediaType(selectedHoarding.mediaType)} />
+                                        )}
+                                        {showSpec('displayFormat') && (
+                                            <DisplayValue label="Display" value={selectedHoarding.displayFormat} />
+                                        )}
+                                        {showSpec('cinema_format') && (
+                                            <DisplayValue label="Cinema Format" value={displayVariant?.cinema_format} />
+                                        )}
+                                        {showSpec('audience') && (
+                                            <DisplayValue label="Audience" value={displayVariant?.audience_category} />
+                                        )}
+                                        {showSpec('seating') && (
+                                            <DisplayValue label="Seating" value={displayVariant?.seating} />
+                                        )}
+                                        {metafieldSpecs
+                                            .filter((mf) => showMetafield(mf.name))
+                                            .map((mf) => (
+                                                <DisplayValue key={mf.id} label={mf.name} value={mf.value} />
+                                            ))}
                                     </div>
                                 </section>
                             )}
@@ -308,7 +484,8 @@ export default function DetailsPanel({
                                                 ? onRemoveMediaFromPlan?.(selectedHoarding.id)
                                                 : onAddToPlan(
                                                     selectedHoarding.id,
-                                                    Array.from(checkedVariantIds)
+                                                    Array.from(checkedVariantIds),
+                                                    normalizePricingSelections(pricingSelections, pricingRules)
                                                 )
                                         }
                                         disabled={
@@ -348,7 +525,8 @@ export default function DetailsPanel({
                                                 ? onRemoveMediaFromPlan?.(selectedHoarding.id)
                                                 : onAddToPlan(
                                                     selectedHoarding.id,
-                                                    displayVariant?.id ? [displayVariant.id] : []
+                                                    displayVariant?.id ? [displayVariant.id] : [],
+                                                    normalizePricingSelections(pricingSelections, pricingRules)
                                                 )
                                         }
                                         disabled={!isAuthenticated || !currentPlan || isMutating}
@@ -409,7 +587,13 @@ export default function DetailsPanel({
                                         >
                                             <div className="w-10 h-10 bg-gray-800 rounded flex-shrink-0 overflow-hidden border border-gray-700 relative">
                                                 {item.imageUrls?.[0] ? (
-                                                    <img src={item.imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                                                    <img
+                                                        src={item.imageUrls[0]}
+                                                        alt=""
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                        className="w-full h-full object-cover"
+                                                    />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-600">NO IMG</div>
                                                 )}
@@ -436,3 +620,5 @@ export default function DetailsPanel({
         </div>
     );
 }
+
+export default memo(DetailsPanel);

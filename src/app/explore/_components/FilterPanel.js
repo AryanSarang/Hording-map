@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo } from 'react';
 import MultiSelectDropdown from './MultiSelectDropdown';
+import RadiusFilterControl from './RadiusFilterControl';
 import {
     getCityNamesForIndianStates,
     mergeStateOptionsForExplore,
@@ -49,6 +50,13 @@ export default function FilterPanel({
      * disappear when the loaded catalog is narrowed server-side by an applied filter.
      */
     availableMediaTypes = [],
+    /**
+     * Radius filter state lives in ExploreView so the map and catalog filter pipeline can
+     * both consume it. We render the control surface here (per UX spec #1 update) — toggle
+     * place mode, show distance slider, clear. The map's click handler closes the loop.
+     */
+    radiusFilter = null,
+    onRadiusFilterChange,
 }) {
     const selectedStates = useMemo(
         () => coerceLocationStringList(filters.states),
@@ -282,6 +290,16 @@ export default function FilterPanel({
                                 ₹{maxPrice.toLocaleString()}
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {onRadiusFilterChange && (
+                    <div className="min-w-0 space-y-2">
+                        <h3 className="text-xs font-bold text-gray-500 uppercase">Radius</h3>
+                        <RadiusFilterControl
+                            radiusFilter={radiusFilter}
+                            onRadiusFilterChange={onRadiusFilterChange}
+                        />
                     </div>
                 )}
 

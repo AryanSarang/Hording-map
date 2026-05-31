@@ -4,6 +4,11 @@ import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { applyCreditDelta } from '../../../../lib/creditsServer';
 
+/**
+ * Normalize plan items received from the client. Preserves the pricing-condition
+ * picks the user made on each line item (`pricingSelections`) so the plan reflects
+ * the agreed-upon multipliers and the same numbers show up across edit sessions.
+ */
 function normalizePlanItems(items) {
     if (!Array.isArray(items)) return [];
     const merged = new Map();
@@ -16,12 +21,31 @@ function normalizePlanItems(items) {
         const incomingVariantIds = Array.isArray(raw?.variantIds)
             ? raw.variantIds.map((v) => String(v).trim()).filter(Boolean)
             : [];
+        const incomingSelections =
+            raw && typeof raw === 'object' && raw.pricingSelections && typeof raw.pricingSelections === 'object'
+                ? raw.pricingSelections
+                : null;
         if (!merged.has(mediaId)) {
-            merged.set(mediaId, { mediaId, variantIds: [] });
+            merged.set(mediaId, { mediaId, variantIds: [], pricingSelections: {} });
         }
         const entry = merged.get(mediaId);
         const nextSet = new Set([...(entry.variantIds || []), ...incomingVariantIds]);
         entry.variantIds = Array.from(nextSet);
+        if (incomingSelections) {
+            const cleaned = {};
+            for (const [ruleName, picked] of Object.entries(incomingSelections)) {
+                const rn = String(ruleName || '').trim();
+                if (!rn || !picked) continue;
+                const optionLabel = String(picked.optionLabel ?? picked ?? '').trim();
+                const mult = Number(picked.multiplier);
+                if (!optionLabel) continue;
+                cleaned[rn] = {
+                    optionLabel,
+                    multiplier: Number.isFinite(mult) && mult > 0 ? mult : 1,
+                };
+            }
+            entry.pricingSelections = { ...(entry.pricingSelections || {}), ...cleaned };
+        }
         merged.set(mediaId, entry);
     }
     return Array.from(merged.values());
@@ -52,8 +76,13 @@ export async function GET(req, { params }) {
         const mediaIds = plan.items.map((i) => i.mediaId).filter(Boolean);
         let media = [];
         let variants = [];
+        let pricingRules = [];
         if (mediaIds.length > 0) {
-            const [{ data: mediaRows }, { data: variantRows }] = await Promise.all([
+            const [
+                { data: mediaRows },
+                { data: variantRows },
+                { data: pricingRuleRows },
+            ] = await Promise.all([
                 supabaseAdmin
                     .from('media')
                     .select('id, city, state, address, landmark, title, media_type, monthly_rental, media, screen_size, display_format, latitude, longitude')
@@ -63,12 +92,18 @@ export async function GET(req, { params }) {
                     .select('id, media_id, variant_title, option1_value, option2_value, option3_value, rate, display_order')
                     .in('media_id', mediaIds)
                     .order('display_order', { ascending: true }),
+                supabaseAdmin
+                    .from('media_pricing_rules')
+                    .select('id, media_id, rule_name, option_label, multiplier, display_order')
+                    .in('media_id', mediaIds)
+                    .order('display_order', { ascending: true }),
             ]);
             media = mediaRows || [];
             variants = variantRows || [];
+            pricingRules = pricingRuleRows || [];
         }
 
-        return NextResponse.json({ success: true, plan, media, variants });
+        return NextResponse.json({ success: true, plan, media, variants, pricingRules });
     } catch (error) {
         console.error('GET /api/plans/[id] error:', error);
         return NextResponse.json(

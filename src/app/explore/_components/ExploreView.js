@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import DetailsPanel from './DetailsPanel';
 import FilterPanel from './FilterPanel';
 import ExploreHeader from './ExploreHeader';
+import ExploreOnboardingModal from './ExploreOnboardingModal';
 import { toast } from 'sonner';
 import {
     computeExploreFilterCreditCost,
@@ -19,6 +20,7 @@ import {
     normLoc,
 } from '../../../lib/exploreFilterLocation';
 import { resolveIndianStateRow, isIndianCityInCscState } from '../../../lib/indiaGeoOptions';
+import { haversineDistanceKm } from '../../../lib/haversine';
 
 const MapSection = dynamic(() => import('./MapSection'), {
     ssr: false,
@@ -30,8 +32,42 @@ export default function ExploreView({
     user,
     exploreMetafieldFilters = [],
     availableMediaTypes = [],
+    landingPreferences = null,
+    needsOnboarding = false,
 }) {
+    /**
+     * Onboarding modal (UX spec #6): single-step state + media-type form, no skip.
+     * Page.js decides whether to show it (logged-in user with empty explore_preferences
+     * and no `?state=` URL param). We mirror that into local state so we can dismiss
+     * after a successful save without forcing a page reload (the modal itself does a
+     * `window.location.href` redirect to re-run SSR with the new slice).
+     */
+    const [showOnboarding, setShowOnboarding] = useState(Boolean(needsOnboarding));
+
+    /**
+     * Radius filter (UX spec #1): a single circle on the map with an adjustable km
+     * slider, used to filter the visible catalog down to media within the chosen
+     * radius of a user-placed center point. Lives at this level (not inside MapSection)
+     * so the list view + apply pipeline can both honor it.
+     *
+     * Shape:
+     *   - active:   user is in "place center" mode; next map click drops the center
+     *   - center:   [lat, lng] | null
+     *   - radiusKm: 1..500 — slider value when a center is placed
+     */
+    const [radiusFilter, setRadiusFilter] = useState({
+        active: false,
+        center: null,
+        radiusKm: 10,
+    });
     const [hoardings, setHoardings] = useState(initialCatalog);
+    /**
+     * Normalize plan item shape across legacy/string entries and the current object form.
+     * Items collapse on `mediaId`. We additionally preserve `pricingSelections` —
+     * the per-condition picks the user made in DetailsPanel — as
+     * `{ [ruleName]: { optionLabel, multiplier } }`. When merging duplicates the later
+     * occurrence wins for selections (covers re-adds with new picks).
+     */
     const normalizePlanItems = (items) => {
         if (!Array.isArray(items)) return [];
         const merged = new Map();
@@ -40,9 +76,25 @@ export default function ExploreView({
             const mediaId = typeof raw === 'string' ? raw : String(raw.mediaId || raw.id || '').trim();
             if (!mediaId) continue;
             const incomingVariantIds = Array.isArray(raw?.variantIds) ? raw.variantIds.map(String).filter(Boolean) : [];
-            if (!merged.has(mediaId)) merged.set(mediaId, { mediaId, variantIds: [] });
+            const incomingSelections =
+                raw && typeof raw === 'object' && raw.pricingSelections && typeof raw.pricingSelections === 'object'
+                    ? raw.pricingSelections
+                    : null;
+            if (!merged.has(mediaId)) merged.set(mediaId, { mediaId, variantIds: [], pricingSelections: {} });
             const prev = merged.get(mediaId);
             prev.variantIds = Array.from(new Set([...(prev.variantIds || []), ...incomingVariantIds]));
+            if (incomingSelections) {
+                const cleaned = {};
+                for (const [ruleName, picked] of Object.entries(incomingSelections)) {
+                    const rn = String(ruleName || '').trim();
+                    if (!rn || !picked) continue;
+                    const optionLabel = String(picked.optionLabel ?? picked ?? '').trim();
+                    const mult = Number(picked.multiplier);
+                    if (!optionLabel) continue;
+                    cleaned[rn] = { optionLabel, multiplier: Number.isFinite(mult) && mult > 0 ? mult : 1 };
+                }
+                prev.pricingSelections = { ...(prev.pricingSelections || {}), ...cleaned };
+            }
             merged.set(mediaId, prev);
         }
         return Array.from(merged.values());
@@ -126,7 +178,7 @@ export default function ExploreView({
         }
     };
 
-    const handleAddToPlan = async (hoardingId, selectedVariantIds = []) => {
+    const handleAddToPlan = async (hoardingId, selectedVariantIds = [], pricingSelections = null) => {
         if (!isAuthenticated) {
             alert('Sign in to add sites to a plan.');
             return;
@@ -141,13 +193,29 @@ export default function ExploreView({
         const safeSelectedVariantIds = Array.isArray(selectedVariantIds)
             ? selectedVariantIds.map(String).filter(Boolean)
             : [];
+        // Latest picks fully replace any previously stored picks for this media — we
+        // never merge across "Add to plan" clicks because the user has just made a
+        // fresh decision on the panel.
+        const safePricingSelections =
+            pricingSelections && typeof pricingSelections === 'object' ? pricingSelections : {};
         let updatedItems = currentItems;
         if (idx === -1) {
-            updatedItems = [...currentItems, { mediaId: hoardingId, variantIds: safeSelectedVariantIds }];
+            updatedItems = [
+                ...currentItems,
+                {
+                    mediaId: hoardingId,
+                    variantIds: safeSelectedVariantIds,
+                    pricingSelections: safePricingSelections,
+                },
+            ];
         } else {
             const existing = currentItems[idx];
             const mergedVariantIds = Array.from(new Set([...(existing.variantIds || []), ...safeSelectedVariantIds]));
-            updatedItems = currentItems.map((it, i) => i === idx ? { ...it, variantIds: mergedVariantIds } : it);
+            updatedItems = currentItems.map((it, i) =>
+                i === idx
+                    ? { ...it, variantIds: mergedVariantIds, pricingSelections: safePricingSelections }
+                    : it
+            );
         }
         const optimisticPlan = { ...currentPlan, items: updatedItems };
         const previousPlan = currentPlan;
@@ -428,9 +496,20 @@ export default function ExploreView({
                 const rowNorm = normLoc(rowVal);
                 if (!rowNorm || !vals.some((v) => normLoc(v) === rowNorm)) return false;
             }
+            /**
+             * Radius filter — applied client-side because the SSR catalog is already loaded
+             * and the user can move the center / change the radius interactively. Falling
+             * back to Haversine in JS keeps the round trip zero for what's a sub-millisecond
+             * computation per pin.
+             */
+            if (radiusFilter?.center) {
+                const [clat, clng] = radiusFilter.center;
+                const dist = haversineDistanceKm(h.latitude, h.longitude, clat, clng);
+                if (dist > Number(radiusFilter.radiusKm || 0)) return false;
+            }
             return true;
         });
-    }, [hoardings, appliedFilters]);
+    }, [hoardings, appliedFilters, radiusFilter]);
 
     /** After applying a state/city filter, fit the map to remaining markers (industry-standard map UX). */
     const filterMapFocus = useMemo(() => {
@@ -484,6 +563,11 @@ export default function ExploreView({
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-black text-white">
+            <ExploreOnboardingModal
+                open={showOnboarding}
+                availableMediaTypes={availableMediaTypes}
+                onSaved={() => setShowOnboarding(false)}
+            />
 
             {/* --- LEFT COLUMN: MAP (60%) --- */}
             {/* Map takes full height, independent of the header */}
@@ -494,6 +578,8 @@ export default function ExploreView({
                     onSelect={setSelectedId}
                     filterFocus={filterMapFocus}
                     planMediaIds={planMediaIdSet}
+                    radiusFilter={radiusFilter}
+                    onRadiusFilterChange={setRadiusFilter}
                 />
                 {applyingFilters ? (
                     <div className="absolute inset-0 z-[2400] bg-black/55 flex flex-col items-center justify-center gap-2 pointer-events-auto">
@@ -559,6 +645,8 @@ export default function ExploreView({
                             defaultFiltersForReset={landingFilters}
                             exploreMetafieldFilters={exploreMetafieldFilters}
                             availableMediaTypes={availableMediaTypes}
+                            radiusFilter={radiusFilter}
+                            onRadiusFilterChange={setRadiusFilter}
                             onResetToLanding={(next) => {
                                 setDraftFilters(next);
                                 setAppliedFilters(next);

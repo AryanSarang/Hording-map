@@ -1,7 +1,8 @@
 import Link from "next/link";
 import PublicHeader from "./_components/public/PublicHeader";
 import PublicFooter from "./_components/public/PublicFooter";
-import ThreeHeroBanner from "./_components/public/ThreeHeroBanner";
+import ThreeHeroBanner from "./_components/public/ThreeHeroBannerLazy";
+import LoadingLink from "./_components/ui/LoadingLink";
 import { getCurrentUser } from "../lib/authServer";
 
 export default async function Page() {
@@ -61,9 +62,9 @@ export default async function Page() {
                 allocation, and launch high-performing campaigns with confidence.
               </p>
               <div className="fade-up fade-up-delay-3 mt-7 flex flex-wrap gap-3">
-                <Link href="/explore" className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:scale-[1.02] hover:bg-blue-500">
+                <LoadingLink href="/explore" className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:scale-[1.02] hover:bg-blue-500">
                   Start Planning
-                </Link>
+                </LoadingLink>
                 <Link href="/contact-us" className="rounded-lg border border-slate-600 bg-slate-900/30 px-5 py-2.5 text-sm font-medium text-slate-100 transition hover:scale-[1.02] hover:border-slate-400">
                   Book a Demo
                 </Link>

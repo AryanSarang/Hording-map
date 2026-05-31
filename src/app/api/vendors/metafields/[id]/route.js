@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../../lib/supabase';
+import { invalidateExploreMetafieldList } from '../../../../../lib/exploreCacheInvalidation';
 
 // GET - Fetch single metafield (only if owned by current user)
 export async function GET(req, { params }) {
@@ -100,6 +101,9 @@ export async function PUT(req, { params }) {
             throw error;
         }
 
+        // Any change to a metafield potentially affects the explore filter list.
+        invalidateExploreMetafieldList();
+
         return NextResponse.json({
             success: true,
             data: updatedMetafield
@@ -137,6 +141,8 @@ export async function DELETE(req, { params }) {
             }
             throw error;
         }
+
+        invalidateExploreMetafieldList();
 
         return NextResponse.json({
             success: true,
