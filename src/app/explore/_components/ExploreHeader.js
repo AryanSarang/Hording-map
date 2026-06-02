@@ -23,7 +23,6 @@ function getUserInitials(user) {
 export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCreatePlan, onCreateAiPlan, user, isAuthenticated, loadingPlans, planError }) {
     const [isPlanOpen, setIsPlanOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [newPlanName, setNewPlanName] = useState("");
     const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
@@ -70,18 +69,8 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
         };
     }, [isAuthenticated, user?.id]);
 
-    const handleCreate = async (e) => {
-        e.preventDefault();
-        if (!isAuthenticated) {
-            alert('Please log in to create and save plans.');
-            return;
-        }
-        if (newPlanName.trim()) {
-            await onCreatePlan(newPlanName);
-            setNewPlanName("");
-            setIsPlanOpen(false);
-        }
-    };
+    // Inline name-only plan creation was removed — new plans now require a
+    // media type + states, captured by the modal on /plans?new=1.
 
     useEffect(() => {
         try {
@@ -180,9 +169,9 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                                 </div>
                             )}
                             {plans.map(plan => (
-                                <button
+                                <a
                                     key={plan.id}
-                                    onClick={() => { onSwitchPlan(plan); setIsPlanOpen(false); }}
+                                    href={`/explore?planId=${encodeURIComponent(plan.id)}`}
                                     className={`w-full text-left px-3 py-2.5 rounded-lg text-xs flex justify-between items-center group ${currentPlan?.id === plan.id
                                         ? 'bg-green-500/10 text-green-400'
                                         : 'text-gray-300 hover:bg-gray-800'
@@ -190,34 +179,28 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                                 >
                                     <span className="font-medium truncate">{plan.name}</span>
                                     {currentPlan?.id === plan.id && <span className="text-[10px]">●</span>}
-                                </button>
+                                </a>
                             ))}
                         </div>
-                        <div className="p-2 border-t border-gray-800 bg-[#0a0a0a]">
-                            <form onSubmit={handleCreate} className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newPlanName}
-                                    onChange={(e) => setNewPlanName(e.target.value)}
-                                    placeholder="New plan name..."
-                                    className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:border-green-500 outline-none placeholder-gray-600"
-                                    autoFocus
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={!newPlanName.trim()}
-                                    className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-black px-3 py-1 rounded text-xs font-bold transition-colors"
-                                >
-                                    +
-                                </button>
-                            </form>
+                        <div className="p-2 border-t border-gray-800 bg-[#0a0a0a] space-y-2">
+                            {/* New plans must go through /plans?new=1 — the create
+                                form now requires media type + states, which the
+                                modal there collects. Inline name-only creation
+                                would fail server-side validation. */}
+                            <Link
+                                href="/plans?new=1"
+                                onClick={() => setIsPlanOpen(false)}
+                                className="w-full inline-flex items-center justify-center gap-2 bg-green-500 hover:bg-green-400 text-black rounded px-3 py-2 text-xs font-bold transition-colors"
+                            >
+                                + New Plan
+                            </Link>
                             <Link
                                 href="/plans"
                                 onClick={() => setIsPlanOpen(false)}
-                                className="mt-2 w-full inline-flex items-center justify-center gap-2 bg-gray-900 border border-gray-700 hover:border-green-500 rounded px-3 py-2 text-xs text-gray-200 transition-colors"
+                                className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 border border-gray-700 hover:border-green-500 rounded px-3 py-2 text-xs text-gray-200 transition-colors"
                             >
                                 <FolderOpen size={14} />
-                                View Plans
+                                View All Plans
                             </Link>
                         </div>
                     </div>
@@ -305,7 +288,7 @@ export default function ExploreHeader({ plans, currentPlan, onSwitchPlan, onCrea
                                         <CreditCard size={14} /> Billing
                                     </button>
                                     <div className="h-px bg-gray-800 my-1"></div>
-                                    <button type="button" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/explore'; }} className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2">
+                                    <button type="button" onClick={async () => { await supabase.auth.signOut(); window.location.href = '/'; }} className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg flex items-center gap-2">
                                         <LogOut size={14} /> Log Out
                                     </button>
                                 </>

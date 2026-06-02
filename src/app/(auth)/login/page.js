@@ -18,12 +18,25 @@ export default function LoginPage() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
+    /**
+     * Build the OAuth redirect URL, forwarding any `next` query param so the
+     * callback can land the user on their original destination (e.g. an
+     * `/explore?planId=…` link they clicked while signed out).
+     */
+    const buildCallbackUrl = () => {
+        if (typeof window === 'undefined') return `${location.origin}/callback`;
+        const url = new URL('/callback', window.location.origin);
+        const next = new URLSearchParams(window.location.search).get('next');
+        if (next) url.searchParams.set('next', next);
+        return url.toString();
+    };
+
     const handleGoogleLogin = async () => {
         setLoading(true);
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${location.origin}/callback`,
+                redirectTo: buildCallbackUrl(),
             },
         });
         if (error) setMessage({ type: 'error', text: error.message });
@@ -36,7 +49,7 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signInWithOtp({
             email,
             options: {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
+                emailRedirectTo: buildCallbackUrl(),
             },
         });
 

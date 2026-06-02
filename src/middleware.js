@@ -47,11 +47,13 @@ export async function middleware(request) {
         }
 
         // Define paths
+        // Note: /explore and /plans are NOT public — they require a logged-in,
+        // approved user. The new flow is: marketing → login → /plans (create) →
+        // /explore?planId=X. /explore on its own should never be reachable.
         const path = request.nextUrl.pathname;
         const isAuthPage = path.startsWith('/login') || path.startsWith('/auth') || path.startsWith('/callback');
         const isPublicPage =
             path === '/' ||
-            path.startsWith('/explore') ||
             path.startsWith('/about-us') ||
             path.startsWith('/contact-us') ||
             path.startsWith('/privacy-policy') ||
@@ -65,7 +67,13 @@ export async function middleware(request) {
         if (!user) {
             // Allow Public Page & Auth Pages. Block everything else.
             if (!isAuthPage && !isPublicPage && !isPublicApi) {
-                return NextResponse.redirect(new URL('/login', request.url));
+                // Bounce to /login but preserve the destination so the callback can
+                // resume the user's intent (e.g. "Explore" → login → /plans).
+                const loginUrl = new URL('/login', request.url);
+                if (path && path !== '/') {
+                    loginUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
+                }
+                return NextResponse.redirect(loginUrl);
             }
             return response;
         }
@@ -73,16 +81,25 @@ export async function middleware(request) {
         // SCENARIO 2: User IS logged in
         if (user) {
             try {
-                // Fetch Profile status
-                const { data: profile, error } = await supabase
-                    .from('profiles')
-                    .select('status, is_onboarded')
-                    .eq('id', user.id)
-                    .single();
-
-                if (error && error.code !== 'PGRST116') {
-                    // If error is not "row not found", log it but don't block
-                    console.error('Middleware Profile Fetch Error:', error);
+                // Fetch Profile status — network blips to Supabase must not crash middleware.
+                let profile = null;
+                try {
+                    const { data, error } = await supabase
+                        .from('profiles')
+                        .select('status, is_onboarded')
+                        .eq('id', user.id)
+                        .single();
+                    if (error && error.code !== 'PGRST116') {
+                        console.warn('Middleware Profile Fetch Error:', error.message || error);
+                    } else {
+                        profile = data;
+                    }
+                } catch (profileErr) {
+                    console.warn(
+                        'Middleware: profile fetch failed (network):',
+                        profileErr?.message || 'fetch failed'
+                    );
+                    return response;
                 }
 
                 if (profile) {
@@ -112,9 +129,12 @@ export async function middleware(request) {
 
                     // C. ACTIVE (Approved)
                     else if (profile.status === 'approved' || profile.status === 'active') {
-                        // If they try to go to setup pages, send them to Explore
+                        // Setup pages → bounce to the plans landing (new flow). If
+                        // the user was being sent through a `next` after login, the
+                        // callback route honors that — this fallback only fires when
+                        // someone manually lands on /login/onboarding/pending.
                         if (path === '/login' || path === '/onboarding' || path === '/pending') {
-                            return NextResponse.redirect(new URL('/explore', request.url));
+                            return NextResponse.redirect(new URL('/plans', request.url));
                         }
                     }
                 }

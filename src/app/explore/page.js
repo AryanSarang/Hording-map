@@ -1,4 +1,20 @@
 // app/explore/page.js
+//
+// SSR entry for the explore experience. /explore is no longer a public landing —
+// it's the "edit a plan" surface in the new flow. We enforce three gates at the
+// server before rendering anything:
+//   1. The user must be authenticated.
+//   2. The user must have `profiles.status` of `approved` (or legacy `active`).
+//      Middleware also enforces this, but doubling up here keeps a future
+//      refactor of middleware from accidentally opening the route.
+//   3. A valid `?planId=…` must be present and belong to the user. Without it,
+//      we redirect to /plans so they pick or create one.
+//
+// Once those pass we use the plan's `media_type` + `states` to slice the
+// initial SSR catalog so the user lands directly on the inventory that matches
+// their plan intent — no client-side re-fetch on first paint.
+
+import { redirect } from 'next/navigation';
 import ExploreView from './_components/ExploreView';
 import { supabaseAdmin } from '../../lib/supabase';
 import { getCurrentUser } from '../../lib/authServer';
@@ -8,72 +24,63 @@ import {
 } from '../../lib/exploreCatalogFetch';
 import { getOrSetCached } from '../../lib/memoryCache';
 
-// Force the page to fetch fresh data on every visit
 export const revalidate = 0;
-
-/** Vercel Pro+: raises serverless limit past 10s if the catalog is large. Hobby stays capped at 10s. */
 export const maxDuration = 60;
 
-/**
- * The page reads the current user (cookies) so it can't go full ISR. Instead we cache the
- * three public sub-queries that don't depend on the user — together they're ~80% of the
- * per-visit time. TTLs deliberately differ:
- *   - Catalog (60s)  — biggest query, changes when vendors add inventory; OK to be a minute stale.
- *   - Metafield list (5 min) — only changes when an admin toggles `explore_filter_enabled`.
- *   - Distinct media types (5 min) — only changes when a brand-new media_type appears.
- *
- * Side effect: this means a freshly published media won't show on /explore for up to 60s.
- * We accept that trade-off because the alternative is the multi-second cold load every visit.
- */
 const CATALOG_TTL_MS = 60_000;
 const METAFIELD_LIST_TTL_MS = 5 * 60_000;
 const MEDIA_TYPES_TTL_MS = 5 * 60_000;
 
 export default async function ExplorePage({ searchParams }) {
-    const userPromise = getCurrentUser();
-
-    /**
-     * Resolve the landing-slice filters in priority order:
-     *   1. URL params (`?state=&type=`)   — explicit user / external link
-     *   2. Profile.explore_preferences    — saved from the onboarding modal
-     *   3. Default (Maharashtra)           — first-time / unauthenticated visitor
-     *
-     * We do this before SSR so the first paint reflects the user's actual selection
-     * (no flash of Maharashtra data for someone who picked UP). The profile read is
-     * a single tiny query and the user fetch is already in-flight.
-     */
-    const sp = (await searchParams) || {};
-    const urlState = typeof sp.state === 'string' ? sp.state : null;
-    const urlMediaType = typeof sp.type === 'string' ? sp.type : null;
-
-    let resolvedState = urlState;
-    let resolvedMediaType = urlMediaType;
-    let userPrefsForClient = null;
-    let needsOnboarding = false;
-    const userForPrefs = await userPromise;
-    if (userForPrefs && !urlState) {
-        try {
-            const { data: prof } = await supabaseAdmin
-                .from('profiles')
-                .select('explore_preferences')
-                .eq('id', userForPrefs.id)
-                .maybeSingle();
-            const prefs = prof?.explore_preferences || {};
-            if (prefs?.state) {
-                resolvedState = resolvedState || prefs.state;
-                resolvedMediaType = resolvedMediaType || prefs.mediaType || null;
-                userPrefsForClient = prefs;
-            } else {
-                // Authenticated but never completed onboarding — modal will gate /explore.
-                needsOnboarding = true;
-            }
-        } catch (e) {
-            console.warn('explore: profile prefs read', e);
-        }
+    // --- Gate 1: authenticated user ---
+    const user = await getCurrentUser();
+    if (!user) {
+        redirect('/login?next=/plans');
     }
-    const landingState = resolvedState || 'Maharashtra';
-    const landingMediaType = resolvedMediaType || null;
 
+    // --- Gate 2: approved profile ---
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('status, is_onboarded')
+        .eq('id', user.id)
+        .maybeSingle();
+    if (!profile?.is_onboarded) {
+        redirect('/onboarding');
+    }
+    if (profile.status !== 'approved' && profile.status !== 'active') {
+        redirect('/pending');
+    }
+
+    // --- Gate 3: plan id present + owned by user ---
+    const sp = (await searchParams) || {};
+    const planId = typeof sp.planId === 'string' ? sp.planId.trim() : null;
+    if (!planId) {
+        // The new flow always enters /explore via a plan — there's no anonymous
+        // "browse the map" mode any more. Push the user to /plans where they can
+        // pick or create one.
+        redirect('/plans');
+    }
+    const { data: planRow, error: planErr } = await supabaseAdmin
+        .from('plans')
+        .select('*')
+        .eq('id', planId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+    if (planErr || !planRow) {
+        // Stale URL or someone else's plan id → bounce.
+        redirect('/plans');
+    }
+
+    // The plan's intent drives the SSR catalog slice. `states` is the chosen
+    // 1–2 array; we slice on the first state for the SSR query because the
+    // catalog fetch helper currently takes a single state. Any additional
+    // state is enforced client-side after Apply — which keeps the SSR fast
+    // and avoids ballooning catalog size on first paint.
+    const planStates = Array.isArray(planRow.states) ? planRow.states.filter(Boolean) : [];
+    const landingState = planStates[0] || 'Maharashtra';
+    const landingMediaType = planRow.media_type || null;
+
+    // --- Shared explore-side caches ---
     const exploreMetafieldFilters = await getOrSetCached(
         'explore:metafield-filter-list',
         METAFIELD_LIST_TTL_MS,
@@ -92,14 +99,8 @@ export default async function ExplorePage({ searchParams }) {
             }
         }
     );
-
     const exploreMetafieldIds = exploreMetafieldFilters.map((m) => m.id).filter((id) => id != null);
 
-    /**
-     * Media-type filter pills must reflect every type that currently has ≥ 1 active media in the
-     * database. The old implementation full-scanned the media table on every /explore visit;
-     * caching here drops that to ~1 fetch per 5 minutes per serverless instance.
-     */
     const availableMediaTypes = await getOrSetCached(
         'explore:distinct-media-types',
         MEDIA_TYPES_TTL_MS,
@@ -122,15 +123,6 @@ export default async function ExplorePage({ searchParams }) {
         }
     );
 
-    /**
-     * Catalog cache is keyed by:
-     *   - the landing state + media type (per-user onboarding slice)
-     *   - the metafield-id list (the formatter merges metafield values; toggling an
-     *     `explore_filter_enabled` flag should invalidate older permutations)
-     *
-     * Different users with the same chosen (state, mediaType, metafields) tuple
-     * will share a single Supabase fetch — which is the entire point of caching.
-     */
     const catalogCacheKey = [
         'explore:catalog',
         landingState.toLowerCase(),
@@ -151,8 +143,6 @@ export default async function ExplorePage({ searchParams }) {
     const formattedHoardings = cachedCatalog?.hoardings || [];
     const error = cachedCatalog?.error || null;
 
-    const user = userForPrefs;
-
     if (error) {
         console.error('Supabase Error:', error);
         return <div className="p-10 text-red-500">Error loading data.</div>;
@@ -164,12 +154,15 @@ export default async function ExplorePage({ searchParams }) {
             user={user}
             exploreMetafieldFilters={exploreMetafieldFilters}
             availableMediaTypes={availableMediaTypes}
+            // The plan that scopes this whole session. ExploreView locks the
+            // plan switcher to this one and pre-seeds filters from its intent.
+            initialPlan={planRow}
             landingPreferences={{
                 state: landingState,
                 mediaType: landingMediaType,
-                source: urlState ? 'url' : userPrefsForClient?.state ? 'profile' : 'default',
+                states: planStates,
+                source: 'plan',
             }}
-            needsOnboarding={needsOnboarding}
         />
     );
 }

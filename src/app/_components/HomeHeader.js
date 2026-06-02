@@ -112,11 +112,11 @@ export default function HomeHeader({ user }) {
                             <div className="absolute top-full right-0 mt-2 w-48 bg-[#111] border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
                                 <div className="p-1">
                                     <button
-                                        onClick={() => router.push('/explore')}
+                                        onClick={() => router.push('/plans')}
                                         className="w-full text-left px-4 py-2.5 text-xs text-gray-300 hover:bg-gray-800 rounded-lg flex items-center gap-2"
                                     >
                                         <MapPinned size={16} />
-                                        Explore Map
+                                        My Plans
                                     </button>
                                     <div className="h-px bg-gray-800 my-1"></div>
                                     <button

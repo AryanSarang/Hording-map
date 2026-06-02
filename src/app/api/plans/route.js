@@ -81,6 +81,28 @@ export async function GET() {
     }
 }
 
+/** Soft cap mirrors the DB CHECK constraint `plans_states_max_two`. */
+export const PLAN_STATES_MAX = 2;
+
+/** Coerce + validate the plan "intent" inputs (media type + states). */
+function normalizePlanIntent(body) {
+    const mediaTypeRaw = body?.mediaType ?? body?.media_type ?? null;
+    const statesRaw = body?.states ?? null;
+    const mediaType = mediaTypeRaw == null ? null : String(mediaTypeRaw).trim() || null;
+
+    let states = [];
+    if (Array.isArray(statesRaw)) {
+        const dedup = new Map();
+        for (const s of statesRaw) {
+            const v = String(s ?? '').trim();
+            if (!v) continue;
+            dedup.set(v.toLowerCase(), v);
+        }
+        states = Array.from(dedup.values()).slice(0, PLAN_STATES_MAX);
+    }
+    return { mediaType, states };
+}
+
 // Create a new plan for the current user
 export async function POST(req) {
     try {
@@ -92,9 +114,25 @@ export async function POST(req) {
         const body = await req.json();
         const name = (body.name || '').trim();
         const items = normalizePlanItems(body.items);
+        const { mediaType, states } = normalizePlanIntent(body);
 
         if (!name) {
             return NextResponse.json({ success: false, error: 'Plan name is required' }, { status: 400 });
+        }
+        if (!mediaType) {
+            return NextResponse.json({ success: false, error: 'Media type is required' }, { status: 400 });
+        }
+        if (states.length === 0) {
+            return NextResponse.json(
+                { success: false, error: 'Pick at least one state (max two)' },
+                { status: 400 }
+            );
+        }
+        if (states.length > PLAN_STATES_MAX) {
+            return NextResponse.json(
+                { success: false, error: `Pick at most ${PLAN_STATES_MAX} states` },
+                { status: 400 }
+            );
         }
 
         const { data, error } = await supabaseAdmin
@@ -103,6 +141,8 @@ export async function POST(req) {
                 user_id: user.id,
                 name,
                 items,
+                media_type: mediaType,
+                states,
             })
             .select('*')
             .single();

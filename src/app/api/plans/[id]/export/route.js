@@ -13,21 +13,11 @@ export const dynamic = 'force-dynamic';
 /**
  * Plan export endpoint.
  *
- * GET /api/plans/[id]/export?format=csv | pptx
+ * GET /api/plans/[id]/export?format=csv
  *
- * CSV:
- *   One row per media (industry-standard for media plan ledgers — RFP-friendly).
- *   Columns: Serial, Media Type, State, City, Title, Address, Pincode, then a single
- *   "Specifications" column with key=value pairs from metafields, then a "Sub products"
- *   column listing variant titles + rates joined with ` | `, "Pricing Conditions" with
- *   the picks, and Price (final, multiplier-adjusted). The flat shape keeps it diff-able
- *   in Excel / Google Sheets and easy to round-trip into other planning tools.
- *
- * PPTX:
- *   One slide per media. Each slide shows media-level info (type, title, location, full
- *   address, contact-style block) on the left and the full variant list on the right with
- *   rates. Pricing conditions appear in a "Conditions" mini-table at the bottom alongside
- *   the multiplier-adjusted total. Suitable for client pitches without further editing.
+ * CSV: one row per selected variant with full media details, metafields, pricing
+ * conditions, and rates. Column list matches what the plan detail API loads so we
+ * never select dropped columns (e.g. width/height removed in migrations).
  */
 export async function GET(req, { params }) {
     try {
@@ -35,13 +25,13 @@ export async function GET(req, { params }) {
         if (!user) {
             return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
         }
-        const { id } = params;
+        const { id } = await params;
         const { searchParams } = new URL(req.url);
         const format = (searchParams.get('format') || 'csv').toLowerCase();
 
-        if (format !== 'csv' && format !== 'pptx') {
+        if (format !== 'csv') {
             return NextResponse.json(
-                { success: false, error: 'format must be csv or pptx' },
+                { success: false, error: 'Only CSV export is supported' },
                 { status: 400 }
             );
         }
@@ -58,7 +48,12 @@ export async function GET(req, { params }) {
         }
 
         const items = normalizePlanItemsForExport(planRow.items);
-        const mediaIds = items.map((i) => i.mediaId).filter(Boolean);
+        const mediaIds = items
+            .map((i) => {
+                const n = Number(i.mediaId);
+                return Number.isFinite(n) ? n : String(i.mediaId).trim();
+            })
+            .filter(Boolean);
 
         // 2. Load every dependent table in parallel so the export endpoint stays fast.
         const [
@@ -72,7 +67,7 @@ export async function GET(req, { params }) {
                 ? supabaseAdmin
                     .from('media')
                     .select(
-                        'id, vendor_id, city, state, address, landmark, zone, pincode, title, media_type, monthly_rental, screen_size, display_format, width, height, latitude, longitude'
+                        'id, city, state, address, landmark, pincode, title, media_type, monthly_rental, screen_size, display_format, latitude, longitude'
                     )
                     .in('id', mediaIds)
                 : Promise.resolve({ data: [] }),
@@ -80,7 +75,7 @@ export async function GET(req, { params }) {
                 ? supabaseAdmin
                     .from('media_variants')
                     .select(
-                        'id, media_id, variant_title, option1_value, option2_value, option3_value, rate, display_order, size, cinema_format, audience_category, seating'
+                        'id, media_id, variant_title, option1_value, option2_value, option3_value, rate, display_order, seating'
                     )
                     .in('media_id', mediaIds)
                     .order('display_order', { ascending: true })
@@ -111,17 +106,31 @@ export async function GET(req, { params }) {
         const metafieldDefs = metafieldDefsRes?.data || [];
         const mediaMetafields = mediaMetafieldsRes?.data || [];
 
-        // 3. Index everything for O(1) lookups in the formatters.
-        const mediaById = new Map(media.map((m) => [m.id, m]));
+        if (mediaRes?.error) {
+            console.error('export: media fetch', mediaRes.error);
+            return NextResponse.json(
+                { success: false, error: mediaRes.error.message || 'Failed to load media for export' },
+                { status: 500 }
+            );
+        }
+        if (variantsRes?.error) {
+            console.error('export: variants fetch', variantsRes.error);
+        }
+
+        // Keys must be strings — plan.items store mediaId as string but Postgres
+        // returns media.id as number; Map uses strict equality so get("42") misses 42.
+        const mediaById = new Map(media.map((m) => [String(m.id), m]));
         const variantsByMedia = new Map();
         for (const v of variants) {
-            if (!variantsByMedia.has(v.media_id)) variantsByMedia.set(v.media_id, []);
-            variantsByMedia.get(v.media_id).push(v);
+            const key = String(v.media_id);
+            if (!variantsByMedia.has(key)) variantsByMedia.set(key, []);
+            variantsByMedia.get(key).push(v);
         }
         const pricingRulesByMedia = new Map();
         for (const r of pricingRulesFlat) {
-            if (!pricingRulesByMedia.has(r.media_id)) pricingRulesByMedia.set(r.media_id, []);
-            pricingRulesByMedia.get(r.media_id).push(r);
+            const key = String(r.media_id);
+            if (!pricingRulesByMedia.has(key)) pricingRulesByMedia.set(key, []);
+            pricingRulesByMedia.get(key).push(r);
         }
         for (const [mid, rows] of pricingRulesByMedia.entries()) {
             pricingRulesByMedia.set(mid, groupPricingRules(rows));
@@ -129,11 +138,12 @@ export async function GET(req, { params }) {
         const metafieldDefById = new Map(metafieldDefs.map((m) => [String(m.id), m]));
         const metafieldsByMedia = new Map();
         for (const r of mediaMetafields) {
-            if (!metafieldsByMedia.has(r.media_id)) metafieldsByMedia.set(r.media_id, {});
-            metafieldsByMedia.get(r.media_id)[String(r.vendor_metafield_id)] = r.value;
+            const key = String(r.media_id);
+            if (!metafieldsByMedia.has(key)) metafieldsByMedia.set(key, {});
+            metafieldsByMedia.get(key)[String(r.vendor_metafield_id)] = r.value;
         }
 
-        // 4. Build a denormalized per-item bundle used by both exporters.
+        // 4. Build denormalized rows for CSV export.
         const rows = items
             .map((it, idx) => buildPlanRow(it, idx, {
                 mediaById,
@@ -146,25 +156,12 @@ export async function GET(req, { params }) {
 
         const planNameSafe = sanitizeForFilename(planRow.name || `plan-${planRow.id}`);
 
-        if (format === 'csv') {
-            const csv = buildCsv(rows);
-            return new NextResponse(csv, {
-                status: 200,
-                headers: {
-                    'Content-Type': 'text/csv; charset=utf-8',
-                    'Content-Disposition': `attachment; filename="${planNameSafe}.csv"`,
-                    'Cache-Control': 'no-store',
-                },
-            });
-        }
-
-        // pptx
-        const pptxBuffer = await buildPptxBuffer(planRow, rows);
-        return new NextResponse(pptxBuffer, {
+        const csv = buildCsv(rows);
+        return new NextResponse(csv, {
             status: 200,
             headers: {
-                'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                'Content-Disposition': `attachment; filename="${planNameSafe}.pptx"`,
+                'Content-Type': 'text/csv; charset=utf-8',
+                'Content-Disposition': `attachment; filename="${planNameSafe}.csv"`,
                 'Cache-Control': 'no-store',
             },
         });
@@ -200,9 +197,10 @@ function normalizePlanItemsForExport(items) {
 }
 
 function buildPlanRow(item, idx, ctx) {
-    const m = ctx.mediaById.get(item.mediaId);
+    const mediaKey = String(item.mediaId);
+    const m = ctx.mediaById.get(mediaKey);
     if (!m) return null;
-    const availableVariants = ctx.variantsByMedia.get(item.mediaId) || [];
+    const availableVariants = ctx.variantsByMedia.get(mediaKey) || [];
     const variantIdSet = new Set((item.variantIds || []).map(String));
     const selectedVariants = variantIdSet.size > 0
         ? availableVariants.filter((v) => variantIdSet.has(String(v.id)))
@@ -214,12 +212,12 @@ function buildPlanRow(item, idx, ctx) {
         .reduce((a, b) => a + b, 0)
         || Number(m.monthly_rental) || 0;
 
-    const groups = ctx.pricingRulesByMedia.get(item.mediaId) || [];
+    const groups = ctx.pricingRulesByMedia.get(mediaKey) || [];
     const resolved = withDefaultsForGroups(groups, item.pricingSelections || {});
     const multiplier = multiplierForSelection(groups, resolved);
     const finalRate = baseRate * multiplier;
 
-    const mfObj = ctx.metafieldsByMedia.get(item.mediaId) || {};
+    const mfObj = ctx.metafieldsByMedia.get(mediaKey) || {};
     const specs = [];
     for (const [mfId, value] of Object.entries(mfObj)) {
         if (value == null || String(value).trim() === '') continue;
@@ -287,185 +285,59 @@ function buildCsv(rows) {
         'City',
         'Title',
         'Address',
+        'Landmark',
         'Pincode',
         'Specifications',
-        'Sub products',
+        'Sub product',
         'Pricing Conditions',
-        'Base Price (INR)',
+        'Variant Rate (INR)',
         'Multiplier',
-        'Final Price (INR)',
+        'Final Rate (INR)',
     ];
     const lines = [headers.map(csvEscape).join(',')];
+
     for (const r of rows) {
         const m = r.media;
-        const address = [m.address, m.landmark, m.zone].filter(Boolean).join(' • ');
+        const address = m.address || '';
+        const landmark = m.landmark || '';
         const specsCol = r.specs.map((s) => `${s.name}=${s.value}`).join(' | ');
-        const subCol = r.subProducts.join(' | ');
         const condCol = r.conditionsList.join(' | ');
-        lines.push(
-            [
-                r.serial,
-                m.media_type || '',
-                m.state || '',
-                m.city || '',
-                m.title || '',
-                address,
-                m.pincode || '',
-                specsCol,
-                subCol,
-                condCol,
-                Math.round(r.baseRate),
-                r.multiplier,
-                Math.round(r.finalRate),
-            ]
-                .map(csvEscape)
-                .join(',')
-        );
-    }
-    return lines.join('\n');
-}
 
-async function buildPptxBuffer(planRow, rows) {
-    // Dynamic import keeps the cold-start lean for the much-more-common CSV path.
-    const { default: pptxgen } = await import('pptxgenjs');
-    const pres = new pptxgen();
-    pres.author = 'medvar';
-    pres.company = 'medvar';
-    pres.title = planRow.name || `Plan ${planRow.id}`;
-    pres.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 in — standard 16:9 deck
+        const variantRows =
+            r.selectedVariants.length > 0
+                ? r.selectedVariants.map((v, i) => ({
+                    subProduct: r.subProducts[i] || cleanVariantTitle(v, i, m.media_type),
+                    rate: Number(v.rate) || 0,
+                }))
+                : [{ subProduct: 'Default', rate: r.baseRate }];
 
-    // Cover slide.
-    {
-        const slide = pres.addSlide();
-        slide.background = { color: '0a0a0a' };
-        slide.addText('MEDIA PLAN', {
-            x: 0.6, y: 1.0, w: 12, h: 0.6,
-            color: '22c55e', bold: true, fontSize: 18, fontFace: 'Calibri',
-            charSpacing: 6,
-        });
-        slide.addText(planRow.name || 'Untitled plan', {
-            x: 0.6, y: 1.7, w: 12, h: 1.2,
-            color: 'FFFFFF', fontSize: 44, fontFace: 'Calibri', bold: true,
-        });
-        const totalFinal = rows.reduce((acc, r) => acc + r.finalRate, 0);
-        const totalBase = rows.reduce((acc, r) => acc + r.baseRate, 0);
-        slide.addText(
-            `${rows.length} media · ${rows.reduce((a, r) => a + r.selectedVariants.length, 0)} variants`,
-            { x: 0.6, y: 3.1, w: 12, h: 0.4, color: 'A1A1AA', fontSize: 16 }
-        );
-        slide.addText(`Estimated total: ₹${Math.round(totalFinal).toLocaleString('en-IN')}`, {
-            x: 0.6, y: 3.7, w: 12, h: 0.6,
-            color: '22c55e', fontSize: 28, bold: true,
-        });
-        if (Math.round(totalBase) !== Math.round(totalFinal)) {
-            slide.addText(`Base ₹${Math.round(totalBase).toLocaleString('en-IN')} · with pricing conditions applied`, {
-                x: 0.6, y: 4.4, w: 12, h: 0.3, color: '71717A', fontSize: 12,
-            });
+        for (const vr of variantRows) {
+            const variantFinal = Math.round(vr.rate * r.multiplier);
+            lines.push(
+                [
+                    r.serial,
+                    m.media_type || '',
+                    m.state || '',
+                    m.city || '',
+                    m.title || '',
+                    address,
+                    landmark,
+                    m.pincode || '',
+                    specsCol,
+                    vr.subProduct,
+                    condCol,
+                    Math.round(vr.rate),
+                    r.multiplier,
+                    variantFinal,
+                ]
+                    .map(csvEscape)
+                    .join(',')
+            );
         }
-        slide.addText(`Plan ID: ${planRow.id}    Generated ${new Date().toLocaleString('en-IN')}`, {
-            x: 0.6, y: 6.9, w: 12, h: 0.3, color: '52525B', fontSize: 10,
-        });
     }
 
-    // Per-media slides.
-    for (const r of rows) {
-        const slide = pres.addSlide();
-        slide.background = { color: 'ffffff' };
-        const m = r.media;
-
-        // Header strip — serial + media type + title.
-        slide.addText(`#${r.serial}  ·  ${m.media_type || 'Media'}`, {
-            x: 0.4, y: 0.25, w: 12.5, h: 0.35,
-            color: '16a34a', fontSize: 12, bold: true, charSpacing: 4,
-        });
-        slide.addText(m.title || m.address || `Site ${m.id}`, {
-            x: 0.4, y: 0.6, w: 12.5, h: 0.6,
-            color: '0a0a0a', fontSize: 22, bold: true,
-        });
-        slide.addText([m.city, m.state].filter(Boolean).join(', '), {
-            x: 0.4, y: 1.25, w: 12.5, h: 0.3,
-            color: '52525B', fontSize: 12,
-        });
-
-        // Left column — address + specs + conditions.
-        let leftY = 1.85;
-        const address = [m.address, m.landmark, m.zone].filter(Boolean).join(' • ');
-        if (address) {
-            slide.addText('ADDRESS', { x: 0.4, y: leftY, w: 6, h: 0.25, color: '71717A', fontSize: 9, bold: true, charSpacing: 4 });
-            slide.addText(address + (m.pincode ? `  ·  ${m.pincode}` : ''), {
-                x: 0.4, y: leftY + 0.25, w: 6, h: 0.8, color: '0a0a0a', fontSize: 11,
-            });
-            leftY += 1.1;
-        }
-
-        if (r.specs.length > 0) {
-            slide.addText('SPECIFICATIONS', { x: 0.4, y: leftY, w: 6, h: 0.25, color: '71717A', fontSize: 9, bold: true, charSpacing: 4 });
-            leftY += 0.3;
-            const specBody = r.specs.map((s) => `${s.name}: ${s.value}`).join('\n');
-            slide.addText(specBody, { x: 0.4, y: leftY, w: 6, h: 2.0, color: '0a0a0a', fontSize: 11 });
-            leftY += Math.min(2.0, r.specs.length * 0.3 + 0.2);
-        }
-
-        if (r.conditionsList.length > 0) {
-            slide.addText('PRICING CONDITIONS', { x: 0.4, y: leftY, w: 6, h: 0.25, color: '71717A', fontSize: 9, bold: true, charSpacing: 4 });
-            leftY += 0.3;
-            slide.addText(r.conditionsList.join('\n'), {
-                x: 0.4, y: leftY, w: 6, h: 1.5, color: '0a0a0a', fontSize: 11,
-            });
-        }
-
-        // Right column — variants table.
-        const isCinema = String(m.media_type || '').toLowerCase().includes('cinema');
-        slide.addText(isCinema ? 'AUDITORIUMS' : 'VARIANTS', {
-            x: 7.0, y: 1.85, w: 5.9, h: 0.25,
-            color: '71717A', fontSize: 9, bold: true, charSpacing: 4,
-        });
-        const variantRows = [
-            [
-                { text: 'Sub product', options: { bold: true, color: 'FFFFFF', fill: { color: '0a0a0a' } } },
-                { text: 'Rate (INR)', options: { bold: true, color: 'FFFFFF', fill: { color: '0a0a0a' }, align: 'right' } },
-            ],
-            ...r.selectedVariants.map((v, i) => {
-                const title = cleanVariantTitle(v, i, m.media_type);
-                const rate = Number(v.rate);
-                const seating = v.seating || v.seating_capacity;
-                const sub = seating ? `${title}  ·  Seating ${seating}` : title;
-                return [
-                    { text: sub, options: { color: '0a0a0a' } },
-                    {
-                        text: Number.isFinite(rate) && rate > 0
-                            ? `₹${Math.round(rate).toLocaleString('en-IN')}`
-                            : '—',
-                        options: { color: '0a0a0a', align: 'right' },
-                    },
-                ];
-            }),
-        ];
-        slide.addTable(variantRows, {
-            x: 7.0, y: 2.15, w: 5.9,
-            fontFace: 'Calibri',
-            fontSize: 11,
-            border: { type: 'solid', color: 'E5E7EB', pt: 0.5 },
-        });
-
-        // Footer total.
-        slide.addText('FINAL PRICE', {
-            x: 7.0, y: 6.5, w: 3.0, h: 0.3, color: '71717A', fontSize: 9, bold: true, charSpacing: 4,
-        });
-        if (r.multiplier !== 1) {
-            slide.addText(`Base ₹${Math.round(r.baseRate).toLocaleString('en-IN')}  ·  ×${r.multiplier}`, {
-                x: 7.0, y: 6.78, w: 3.0, h: 0.25, color: '71717A', fontSize: 10,
-            });
-        }
-        slide.addText(`₹${Math.round(r.finalRate).toLocaleString('en-IN')}`, {
-            x: 10.0, y: 6.55, w: 2.9, h: 0.6,
-            color: '16a34a', fontSize: 22, bold: true, align: 'right',
-        });
-    }
-
-    // pptxgenjs supports a Node-friendly write() with `outputType: 'nodebuffer'`.
-    const buffer = await pres.write({ outputType: 'nodebuffer' });
-    return buffer;
+    // UTF-8 BOM helps Excel open special characters (₹ in sub-product strings) correctly.
+    return '\uFEFF' + lines.join('\n');
 }
 
 function sanitizeForFilename(s) {

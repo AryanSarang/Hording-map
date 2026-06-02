@@ -6,7 +6,6 @@ import dynamic from 'next/dynamic';
 import DetailsPanel from './DetailsPanel';
 import FilterPanel from './FilterPanel';
 import ExploreHeader from './ExploreHeader';
-import ExploreOnboardingModal from './ExploreOnboardingModal';
 import { toast } from 'sonner';
 import {
     computeExploreFilterCreditCost,
@@ -33,16 +32,11 @@ export default function ExploreView({
     exploreMetafieldFilters = [],
     availableMediaTypes = [],
     landingPreferences = null,
-    needsOnboarding = false,
+    initialPlan = null,
 }) {
-    /**
-     * Onboarding modal (UX spec #6): single-step state + media-type form, no skip.
-     * Page.js decides whether to show it (logged-in user with empty explore_preferences
-     * and no `?state=` URL param). We mirror that into local state so we can dismiss
-     * after a successful save without forcing a page reload (the modal itself does a
-     * `window.location.href` redirect to re-run SSR with the new slice).
-     */
-    const [showOnboarding, setShowOnboarding] = useState(Boolean(needsOnboarding));
+    // Onboarding modal is gone in the new flow — /plans is the gate, /explore is
+    // only ever entered with a planId. `landingPreferences.states/mediaType`
+    // already reflect the plan intent.
 
     /**
      * Radius filter (UX spec #1): a single circle on the map with an adjustable km
@@ -105,15 +99,27 @@ export default function ExploreView({
     const isAuthenticated = !!user;
 
     // --- PLAN MANAGEMENT STATE (persisted per user via API) ---
-    const [plans, setPlans] = useState([]);
-    const [currentPlan, setCurrentPlan] = useState(null);
+    //
+    // The new flow is plan-scoped: SSR resolves the plan from `?planId=` and
+    // hands it in via `initialPlan`. We seed `currentPlan` from that so the
+    // first paint already shows the right "Add to plan" target — no second
+    // round-trip and no auto-pick-first guesswork.
+    //
+    // We still keep a `plans` list for the header's "Switch plan" menu, but
+    // that list is loaded lazily and treated as read-only context.
+    const initialPlanWithItems = useMemo(() => {
+        if (!initialPlan) return null;
+        return { ...initialPlan, items: normalizePlanItems(initialPlan.items) };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialPlan?.id]);
+    const [plans, setPlans] = useState(initialPlanWithItems ? [initialPlanWithItems] : []);
+    const [currentPlan, setCurrentPlan] = useState(initialPlanWithItems);
     const [loadingPlans, setLoadingPlans] = useState(false);
     const [planError, setPlanError] = useState(null);
     const [planMutatingMediaIds, setPlanMutatingMediaIds] = useState(new Set());
 
     useEffect(() => {
         if (!isAuthenticated) {
-            // Guest: no server plans, keep empty state
             setPlans([]);
             setCurrentPlan(null);
             setPlanError(null);
@@ -139,7 +145,15 @@ export default function ExploreView({
                         items: normalizePlanItems(p.items),
                     }));
                     setPlans(list);
-                    setCurrentPlan(list[0] || null);
+                    // Prefer the SSR-resolved plan; fall back to the first one
+                    // only if the URL didn't pin a specific plan (legacy entry).
+                    setCurrentPlan((prev) => {
+                        if (prev?.id) {
+                            const fresh = list.find((p) => p.id === prev.id);
+                            return fresh || prev;
+                        }
+                        return list[0] || null;
+                    });
                 }
             } catch (err) {
                 if (!cancelled) setPlanError(err?.message || 'Failed to load plans');
@@ -370,14 +384,32 @@ export default function ExploreView({
         return rates.length > 0 ? Math.max(...rates) : 100000;
     }, [initialCatalog]);
 
-    const landingFilters = useMemo(
-        () =>
-            buildDefaultExploreLandingFilters(
-                initialCatalog,
-                initialMaxPriceFromSSR || 100000
-            ),
-        [initialCatalog, initialMaxPriceFromSSR]
-    );
+    /**
+     * Seed the landing filters from the plan's intent when we're in plan-scoped
+     * mode (the standard new flow). Falls back to the legacy "Mumbai + cinema"
+     * default only if no plan was passed in (defensive — shouldn't normally
+     * happen now that /explore is gated behind a planId).
+     */
+    const landingFilters = useMemo(() => {
+        const maxPrice = initialMaxPriceFromSSR || 100000;
+        const planStates = Array.isArray(initialPlan?.states) ? initialPlan.states.filter(Boolean) : [];
+        const planMediaType = initialPlan?.media_type || null;
+        if (initialPlan && (planStates.length > 0 || planMediaType)) {
+            return {
+                states: planStates,
+                cities: [], // city sub-filter is opt-in; FilterPanel auto-fills cities for selected states
+                minPrice: 0,
+                maxPrice,
+                // If the plan pinned a single media type, lock the filter to it.
+                // Otherwise show everything available in the catalog slice.
+                mediaTypes: planMediaType ? [planMediaType] : [
+                    ...new Set(initialCatalog.map((h) => h.mediaType).filter(Boolean)),
+                ],
+                metafieldSelections: {},
+            };
+        }
+        return buildDefaultExploreLandingFilters(initialCatalog, maxPrice);
+    }, [initialCatalog, initialMaxPriceFromSSR, initialPlan]);
 
     const dataMaxPrice = useMemo(() => {
         const rates = hoardings.map((h) => h.rate).filter((r) => r > 0);
@@ -563,12 +595,6 @@ export default function ExploreView({
 
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-black text-white">
-            <ExploreOnboardingModal
-                open={showOnboarding}
-                availableMediaTypes={availableMediaTypes}
-                onSaved={() => setShowOnboarding(false)}
-            />
-
             {/* --- LEFT COLUMN: MAP (60%) --- */}
             {/* Map takes full height, independent of the header */}
             <section className="w-[60%] h-full relative border-r border-gray-800">

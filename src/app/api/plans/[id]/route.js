@@ -136,6 +136,33 @@ export async function PUT(req, { params }) {
             updates.name = name;
         }
 
+        // Allow editing the plan "intent" (media type + states) after creation.
+        // Same validation rules as POST — non-empty media type and 1-2 states.
+        if ('mediaType' in body || 'media_type' in body) {
+            const raw = body.mediaType ?? body.media_type;
+            const mediaType = raw == null ? null : String(raw).trim() || null;
+            if (!mediaType) {
+                return NextResponse.json({ success: false, error: 'Media type cannot be empty' }, { status: 400 });
+            }
+            updates.media_type = mediaType;
+        }
+        if (Array.isArray(body.states)) {
+            const dedup = new Map();
+            for (const s of body.states) {
+                const v = String(s ?? '').trim();
+                if (!v) continue;
+                dedup.set(v.toLowerCase(), v);
+            }
+            const states = Array.from(dedup.values());
+            if (states.length === 0) {
+                return NextResponse.json({ success: false, error: 'Pick at least one state (max two)' }, { status: 400 });
+            }
+            if (states.length > 2) {
+                return NextResponse.json({ success: false, error: 'Pick at most 2 states' }, { status: 400 });
+            }
+            updates.states = states;
+        }
+
         if (Array.isArray(body.items)) {
             const incomingItems = normalizePlanItems(body.items);
 

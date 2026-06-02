@@ -6,8 +6,10 @@ import { NextResponse } from 'next/server';
 export async function GET(request) {
     const requestUrl = new URL(request.url);
     const code = requestUrl.searchParams.get('code');
-    // If there's a "next" param (e.g. /explore), go there. Otherwise default to /explore
-    const next = requestUrl.searchParams.get('next') || '/explore';
+    // If there's a "next" param (e.g. the page the user was trying to reach
+    // before being bounced to login), honor it. Otherwise default to /plans —
+    // the new flow gates /explore behind a plan being selected first.
+    const next = requestUrl.searchParams.get('next') || '/plans';
 
     if (code) {
         const cookieStore = await cookies();

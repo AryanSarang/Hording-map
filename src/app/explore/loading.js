@@ -1,63 +1,68 @@
 /**
  * Route-segment loading skeleton for `/explore`.
  *
- * Next.js renders this as a Suspense fallback while the page-level SSR (catalog
- * fetch + variants + metafields) is in flight. Without it the user sees a blank
- * white viewport for the duration of the slowest query. The mock mirrors the
- * real layout — header, filter rail on the left, big map area in the middle,
- * details panel on the right — so the layout doesn't shift when the real
- * content paints in.
+ * Mirrors the real `ExploreView` layout exactly so there's no jump when the SSR
+ * finishes:
+ *   - Left 60% column = Leaflet map area (light grey).
+ *   - Right 40% column = stacked ExploreHeader (h-14) then a 50/50 split of
+ *     DetailsPanel + FilterPanel. Both panels sit inside a dark surface.
+ *
+ * We use `lg:` only where the real layout does (it doesn't) — so this skeleton
+ * is also fine on tablets/phones, which currently show the same 60/40 split.
  */
 
 import { SkeletonBlock, SkeletonText } from "../_components/ui/Skeleton";
 
 export default function ExploreLoading() {
     return (
-        <div className="h-[100svh] bg-[#0a0a0a] text-white flex flex-col overflow-hidden">
-            {/* Header strip */}
-            <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <SkeletonBlock className="h-6 w-24" />
-                    <SkeletonBlock className="h-5 w-40" />
+        <div className="flex h-screen w-screen overflow-hidden bg-black text-white">
+            {/* LEFT 60% — map placeholder */}
+            <section className="w-[60%] h-full relative border-r border-gray-800 bg-[#dcdfe2]">
+                <SkeletonBlock className="absolute inset-0 rounded-none bg-[#cdd0d3]" />
+                {/* floating "search location" pill mirrors MapSection's top-centre input */}
+                <div className="absolute top-4 left-1/2 -translate-x-1/2">
+                    <SkeletonBlock className="h-9 w-[40%] min-w-[260px] max-w-md bg-white/70" />
                 </div>
-                <div className="flex items-center gap-2">
-                    <SkeletonBlock className="h-7 w-24" />
-                    <SkeletonBlock className="h-7 w-7 rounded-full" />
-                </div>
-            </div>
+            </section>
 
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr_360px] min-h-0">
-                {/* Filter rail */}
-                <aside className="hidden lg:flex flex-col border-r border-gray-800 p-4 gap-5">
-                    {[0, 1, 2, 3].map((i) => (
-                        <div key={i} className="space-y-2">
-                            <SkeletonText width="40%" />
-                            <SkeletonBlock className="h-9 w-full" />
-                        </div>
-                    ))}
-                    <SkeletonBlock className="h-10 w-full mt-auto" />
-                </aside>
+            {/* RIGHT 40% — header + panels stack */}
+            <section className="w-[40%] h-full flex flex-col bg-[#0a0a0a]">
+                {/* ExploreHeader is h-14 with plan switcher on the left + profile on the right */}
+                <header className="h-14 bg-black border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <SkeletonBlock className="h-7 w-44" />
+                        <SkeletonBlock className="h-7 w-[260px]" />
+                    </div>
+                    <SkeletonBlock className="h-8 w-8 rounded-full" />
+                </header>
 
-                {/* Map */}
-                <div className="relative bg-[#dde0e3] min-h-[400px] overflow-hidden">
-                    <SkeletonBlock className="absolute inset-0 rounded-none" />
-                    <div className="absolute top-4 left-1/2 -translate-x-1/2">
-                        <SkeletonBlock className="h-9 w-72" />
+                {/* Below header: 50/50 DetailsPanel | FilterPanel */}
+                <div className="flex flex-1 overflow-hidden border-t border-gray-800">
+                    {/* DetailsPanel placeholder — list of "site" cards */}
+                    <div className="w-1/2 h-full border-r border-gray-800 bg-[#0a0a0a] p-3 space-y-2 overflow-hidden">
+                        <SkeletonText width="50%" />
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <div key={i} className="flex gap-3 rounded-lg border border-gray-800 bg-[#111] p-2">
+                                <SkeletonBlock className="h-10 w-10 shrink-0 rounded" />
+                                <div className="flex-1 min-w-0 space-y-1.5">
+                                    <SkeletonText width="80%" className="h-3" />
+                                    <SkeletonText width="50%" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {/* FilterPanel placeholder — section headers + controls */}
+                    <div className="w-1/2 h-full bg-[#111] p-4 space-y-4 overflow-hidden">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="space-y-2">
+                                <SkeletonText width="35%" />
+                                <SkeletonBlock className="h-9 w-full" />
+                            </div>
+                        ))}
+                        <SkeletonBlock className="h-10 w-full mt-2" />
                     </div>
                 </div>
-
-                {/* Details rail */}
-                <aside className="hidden lg:flex flex-col border-l border-gray-800 p-4 gap-3">
-                    <SkeletonText width="50%" />
-                    {[0, 1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="space-y-2 rounded-lg border border-gray-800 bg-[#111] p-3">
-                            <SkeletonText width="80%" className="h-4" />
-                            <SkeletonText width="50%" />
-                            <SkeletonText width="30%" />
-                        </div>
-                    ))}
-                </aside>
-            </div>
+            </section>
         </div>
     );
 }

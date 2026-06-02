@@ -17,7 +17,7 @@ export default function PublicFooter() {
           <div className="flex flex-col gap-1">
             <Link href="/about-us" className="hover:text-white">About Us</Link>
             <Link href="/contact-us" className="hover:text-white">Contact Us</Link>
-            <LoadingLink href="/explore" className="hover:text-white">Explore Locations</LoadingLink>
+            <LoadingLink href="/plans" className="hover:text-white">Explore Locations</LoadingLink>
           </div>
         </div>
         <div>

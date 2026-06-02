@@ -286,17 +286,14 @@ export default function PlanDetailsPage() {
     }
 
     /**
-     * Export the *current* plan via the server endpoint (which computes spec /
-     * pricing-condition multipliers, joins metafields, and renders PPTX). We don't
-     * pass the filter UI's narrowing — the export always represents the full saved
-     * plan so the file an advertiser sends out matches what they agreed to.
+     * Export the full saved plan as CSV via the server endpoint.
      */
-    async function exportPlan(format) {
+    async function exportPlan() {
         if (!plan) return;
         try {
             setSaving(true);
             const res = await fetch(
-                `/api/plans/${encodeURIComponent(plan.id)}/export?format=${encodeURIComponent(format)}`,
+                `/api/plans/${encodeURIComponent(plan.id)}/export?format=csv`,
                 { credentials: 'include' }
             );
             if (!res.ok) {
@@ -306,7 +303,7 @@ export default function PlanDetailsPage() {
             const blob = await res.blob();
             const disposition = res.headers.get('content-disposition') || '';
             const filenameMatch = /filename="([^"]+)"/.exec(disposition);
-            const fallback = `${(plan.name || 'plan').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_')}.${format}`;
+            const fallback = `${(plan.name || 'plan').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_')}.csv`;
             const filename = filenameMatch ? filenameMatch[1] : fallback;
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -317,7 +314,7 @@ export default function PlanDetailsPage() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (err) {
-            setError(err?.message || `Failed to export ${format.toUpperCase()}`);
+            setError(err?.message || 'Failed to export CSV');
         } finally {
             setSaving(false);
         }
@@ -328,12 +325,29 @@ export default function PlanDetailsPage() {
             <div className="max-w-7xl mx-auto px-4 py-5 sm:px-6 sm:py-6">
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pb-4 border-b border-gray-800 mb-6">
                     <div>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Plan</p>
+                        <div className="flex items-center gap-2 mb-1">
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Plan</p>
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-green-400 bg-green-500/10 border border-green-500/30 rounded px-1.5 py-0.5">
+                                View
+                            </span>
+                        </div>
                         <h1 className="text-lg sm:text-xl font-medium text-white leading-snug">{plan?.name || 'Plan'}</h1>
                         {plan && (
-                            <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-wide">
-                                {(Array.isArray(plan.items) ? plan.items.length : 0)} media in plan
-                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                {plan.media_type && (
+                                    <span className="inline-flex items-center text-[10px] font-medium text-gray-300 bg-gray-800/70 border border-gray-700 rounded-full px-2 py-0.5">
+                                        {plan.media_type}
+                                    </span>
+                                )}
+                                {Array.isArray(plan.states) && plan.states.map((s) => (
+                                    <span key={s} className="inline-flex items-center text-[10px] font-medium text-gray-300 bg-gray-800/70 border border-gray-700 rounded-full px-2 py-0.5">
+                                        {s}
+                                    </span>
+                                ))}
+                                <span className="text-[10px] text-gray-500 uppercase tracking-wide ml-1">
+                                    · {(Array.isArray(plan.items) ? plan.items.length : 0)} media
+                                </span>
+                            </div>
                         )}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -343,11 +357,14 @@ export default function PlanDetailsPage() {
                         >
                             All Plans
                         </Link>
+                        {/* Edit jumps into /explore scoped to this plan so the user can
+                            add/remove media in context. The view page itself stays
+                            read-only-ish (remove + reorder only). */}
                         <Link
-                            href="/explore"
-                            className="px-3 py-2 rounded-lg border border-gray-700 text-[10px] font-bold uppercase tracking-widest text-gray-300 hover:border-green-500/60 hover:text-green-400 transition-colors"
+                            href={plan?.id ? `/explore?planId=${encodeURIComponent(plan.id)}` : '/plans'}
+                            className="px-3 py-2 rounded-lg border border-green-500/60 text-[10px] font-bold uppercase tracking-widest text-green-400 hover:bg-green-500/10 transition-colors"
                         >
-                            Explore
+                            Edit Plan
                         </Link>
                     </div>
                 </div>
@@ -448,28 +465,16 @@ export default function PlanDetailsPage() {
                                     placeholder="Search title / address / city"
                                     className="bg-[#0a0a0a] border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 outline-none focus:border-green-500/60"
                                 />
-                                <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
-                                    <button
-                                        type="button"
-                                        onClick={() => exportPlan('csv')}
-                                        disabled={saving || !plan}
-                                        className="inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold uppercase tracking-widest flex-1 bg-[#0a0a0a] text-gray-300 hover:text-white hover:bg-[#111] disabled:opacity-60"
-                                        title="Download as spreadsheet (CSV)"
-                                    >
-                                        <Download size={14} />
-                                        CSV
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => exportPlan('pptx')}
-                                        disabled={saving || !plan}
-                                        className="inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold uppercase tracking-widest flex-1 border-l border-gray-700 bg-[#0a0a0a] text-gray-300 hover:text-white hover:bg-[#111] disabled:opacity-60"
-                                        title="Download client-ready deck (PowerPoint)"
-                                    >
-                                        <Download size={14} />
-                                        PPT
-                                    </button>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={exportPlan}
+                                    disabled={saving || !plan}
+                                    className="inline-flex items-center justify-center gap-1 px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-[#0a0a0a] border border-gray-700 rounded-lg text-gray-300 hover:text-white hover:bg-[#111] disabled:opacity-60"
+                                    title="Download plan as CSV"
+                                >
+                                    <Download size={14} />
+                                    Export CSV
+                                </button>
                                 <div className="inline-flex rounded-lg border border-gray-700 overflow-hidden">
                                     <button
                                         type="button"

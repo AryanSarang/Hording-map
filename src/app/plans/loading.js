@@ -1,10 +1,8 @@
 /**
  * Route-segment loading skeleton for `/plans`.
  *
- * `plans/page.js` itself is a client component (it fetches `/api/plans` on
- * mount), so Next will show this skeleton only briefly during initial nav
- * before the client tree mounts. The grid mirrors the real page so there's no
- * layout shift when the data lands.
+ * Shown during client-side navigation while the PlansList client bundle
+ * hydrates. Matches the real page layout to avoid layout shift.
  */
 
 import { SkeletonBlock, SkeletonCard } from "../_components/ui/Skeleton";
@@ -18,7 +16,10 @@ export default function PlansLoading() {
                         <SkeletonBlock className="h-3 w-28" />
                         <SkeletonBlock className="h-6 w-44" />
                     </div>
-                    <SkeletonBlock className="h-8 w-32" />
+                    <div className="flex gap-2">
+                        <SkeletonBlock className="h-8 w-16" />
+                        <SkeletonBlock className="h-8 w-24" />
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {Array.from({ length: 6 }).map((_, i) => (
