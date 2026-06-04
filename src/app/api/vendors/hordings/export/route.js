@@ -59,17 +59,37 @@ function parentTailValues(h, vendorName, images, metas, allMetaKeys, pricingRule
     ];
 }
 
-async function runExport(mediaIds, userId) {
-    let query = supabaseAdmin.from("media").select("*").eq("user_id", userId);
-    if (mediaIds.length > 0) {
-        query = query.in("id", mediaIds);
-    } else {
-        query = query.range(0, 99999);
+/** PostgREST encodes `.in("id", ids)` in the request URL; 300+ UUIDs overflows Node's header limit. */
+async function fetchMediaForExport(mediaIds, userId) {
+    if (mediaIds.length === 0) {
+        const { data, error } = await supabaseAdmin
+            .from("media")
+            .select("*")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .range(0, 99999);
+        if (error) throw error;
+        return data || [];
     }
-    const { data: list, error: mediaError } = await query.order("created_at", { ascending: false });
 
-    if (mediaError) throw mediaError;
-    const rows = list || [];
+    const rows = [];
+    for (const idList of chunk(mediaIds, BATCH_SIZE)) {
+        const { data, error } = await supabaseAdmin
+            .from("media")
+            .select("*")
+            .eq("user_id", userId)
+            .in("id", idList)
+            .order("created_at", { ascending: false });
+        if (error) throw error;
+        rows.push(...(data || []));
+    }
+
+    rows.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return rows;
+}
+
+async function runExport(mediaIds, userId) {
+    const rows = await fetchMediaForExport(mediaIds, userId);
 
     const vendorIds = [...new Set(rows.map((h) => h.vendor_id).filter(Boolean))];
     let vendorMap = {};

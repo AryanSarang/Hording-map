@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getOrSetCached } from '../../../../lib/memoryCache';
+import { fetchDistinctActiveMediaTypes } from '../../../../lib/exploreCatalogFetch';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,18 +13,7 @@ export async function GET() {
         const mediaTypes = await getOrSetCached(
             'explore:distinct-media-types',
             MEDIA_TYPES_TTL_MS,
-            async () => {
-                const { data: typeRows, error: typeErr } = await supabaseAdmin
-                    .from('media')
-                    .select('media_type')
-                    .or('status.eq.active,status.is.null');
-                if (typeErr || !Array.isArray(typeRows)) return [];
-                return [
-                    ...new Set(
-                        typeRows.map((r) => (r?.media_type || '').trim()).filter(Boolean)
-                    ),
-                ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-            }
+            () => fetchDistinctActiveMediaTypes(supabaseAdmin)
         );
         return NextResponse.json(
             { success: true, mediaTypes },

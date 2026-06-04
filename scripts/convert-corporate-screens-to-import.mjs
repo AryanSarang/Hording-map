@@ -10,7 +10,7 @@
  *   Tenant Details, Number of Screens, Rate
  *
  * Mapping notes:
- *   - "Corporate Screens" → media_type `Corporate`
+ *   - "Corporate Screens" → media_type `Corporate Screen`
  *   - Area → zone, Locality → locality
  *   - Number of Screens → N variant rows (Screen 1..N), same as cafe Sheet7
  *   - Photographs → images (pipe-separated if multiple)
@@ -243,10 +243,10 @@ function isStateName(s) {
 
 function normalizeMediaType(raw) {
     const s = normStr(raw).toLowerCase();
-    if (/corporate\s*screens?/.test(s)) return 'Corporate';
+    if (/corporate\s*screens?/.test(s)) return 'Corporate Screen';
     if (/cafe\s*screens?/.test(s)) return 'Cafe Screen';
     if (/cinema\s*screens?/.test(s)) return 'Cinema Screen';
-    return 'Corporate';
+    return 'Corporate Screen';
 }
 
 function parseRate(raw) {

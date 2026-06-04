@@ -2,7 +2,7 @@
  * Shared explore catalog loading (SSR page + /api/explore/catalog after Apply).
  */
 
-import { fetchAllSupabasePagesParallel } from './fetchAllSupabasePages';
+import { fetchAllSupabasePages, fetchAllSupabasePagesParallel } from './fetchAllSupabasePages';
 import {
     coerceLocationStringList,
     hoardingMatchesCityFilter,
@@ -314,4 +314,26 @@ export async function fetchExploreCatalogFormatted(
         loadPricingRulesForMedia(admin, rows),
     ]);
     return fetchVariantsAndFormat(admin, rows, mfMap, prMap);
+}
+
+/**
+ * Distinct active media_type values for explore filters and plan creation.
+ * PostgREST caps each request at ~1000 rows; with 5000+ media we must page
+ * or newer types (e.g. Corporate Screen) never appear in the pill row.
+ */
+export async function fetchDistinctActiveMediaTypes(admin) {
+    const { data: typeRows, error } = await fetchAllSupabasePages((from, to) =>
+        admin
+            .from('media')
+            .select('media_type')
+            .or('status.eq.active,status.is.null')
+            .order('id', { ascending: true })
+            .range(from, to)
+    );
+    if (error) throw error;
+    return [
+        ...new Set(
+            (typeRows || []).map((r) => (r?.media_type || '').trim()).filter(Boolean)
+        ),
+    ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }

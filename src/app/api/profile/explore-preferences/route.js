@@ -7,12 +7,13 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { normalizeMediaType } from '../../../../lib/mediaTypes';
 
 function sanitize(input) {
     if (!input || typeof input !== 'object') return {};
     const out = {};
     if (input.state != null) out.state = String(input.state).trim().slice(0, 80);
-    if (input.mediaType != null) out.mediaType = String(input.mediaType).trim().slice(0, 80);
+    if (input.mediaType != null) out.mediaType = normalizeMediaType(String(input.mediaType).trim()).slice(0, 80);
     return out;
 }
 

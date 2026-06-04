@@ -38,7 +38,7 @@ REQUIRED (must have a value for every row; if client data is missing, use empty 
 | poc_name                  | text     | (empty)            | Point of contact name. Required. |
 | poc_number                | text     | (empty)            | Phone. Required. |
 | minimum_booking_duration  | text     | (empty)            | e.g. "1 month", "1 week". Required. |
-| media_type                | text     | (empty)            | Required. Must be exactly one of: Bus Shelter, Digital Screens, Residential, Corporate, Corporate Coffee Machines, Croma Stores, ATM, other. |
+| media_type                | text     | (empty)            | Required. Must be exactly one of: Bus Shelter, Digital Screens, Residential, Corporate Screen, Corporate Coffee Machines, Croma Stores, ATM, other. |
 
 OPTIONAL / NOT REQUIRED (our database has these columns; include them in the header but leave empty if client has no data; use default only when specified):
 
@@ -61,7 +61,7 @@ OPTIONAL / NOT REQUIRED (our database has these columns; include them in the hea
 | images                | text    | (empty)            | Multiple URLs separated by pipe: url1\|url2\|url3. |
 | screen_size           | text    | (empty)            | |
 | screen_number         | integer | (empty)            | Numeric only. |
-| screen_placement      | text    | (empty)            | e.g. Residential, Corporate, Cinema (for Digital Screens). |
+| screen_placement      | text    | (empty)            | e.g. Residential, Corporate Screen, Cinema (for Digital Screens). |
 | display_format        | text    | (empty)            | LED, Front Lit, Back lit, Ambient Lit. |
 | slot_time             | text    | (empty)            | e.g. "10 sec". |
 | loop_time             | text    | (empty)            | e.g. "2 min". |

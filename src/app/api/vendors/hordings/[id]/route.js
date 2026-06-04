@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { isValidMediaId } from '../../../../../lib/genId10';
+import { normalizeMediaType } from '../../../../../lib/mediaTypes';
 import { getCurrentUser } from '../../../../../lib/authServer';
 import {
     invalidateExploreCatalog,
@@ -226,7 +227,7 @@ export async function PUT(req, { params }) {
         if (body.ourRate !== undefined) dbPayload.vendor_rate = body.ourRate ? parseInt(body.ourRate) : null;
         if (body.minimumBookingDuration !== undefined) dbPayload.minimum_booking_duration = body.minimumBookingDuration;
 
-        if (body.mediaType !== undefined) dbPayload.media_type = body.mediaType;
+        if (body.mediaType !== undefined) dbPayload.media_type = normalizeMediaType(body.mediaType);
         if (body.imageUrls !== undefined) {
             dbPayload.media = typeof body.imageUrls === 'string'
                 ? body.imageUrls.split(/[\n,]/).map(s => s.trim()).filter(Boolean)

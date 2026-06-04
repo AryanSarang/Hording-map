@@ -8,7 +8,7 @@ import Link from 'next/link';
 import styles from '../metafields.module.css';
 
 /** Keep in sync with the create page + vendor media forms. */
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+import { MEDIA_TYPES, normalizeMediaType } from '../../../../lib/mediaTypes';
 
 export default function EditMetafieldPage() {
     const router = useRouter();
@@ -42,7 +42,7 @@ export default function EditMetafieldPage() {
                     optionsInput: Array.isArray(m.options) ? m.options.join(', ') : '',
                     exploreFilterEnabled: Boolean(m.explore_filter_enabled),
                     appliesToMediaTypes: Array.isArray(m.applies_to_media_types)
-                        ? m.applies_to_media_types
+                        ? m.applies_to_media_types.map(normalizeMediaType).filter(Boolean)
                         : [],
                 });
             } else {

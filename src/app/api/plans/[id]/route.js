@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { applyCreditDelta } from '../../../../lib/creditsServer';
+import { normalizeMediaType } from '../../../../lib/mediaTypes';
 
 /**
  * Normalize plan items received from the client. Preserves the pricing-condition
@@ -140,7 +141,8 @@ export async function PUT(req, { params }) {
         // Same validation rules as POST — non-empty media type and 1-2 states.
         if ('mediaType' in body || 'media_type' in body) {
             const raw = body.mediaType ?? body.media_type;
-            const mediaType = raw == null ? null : String(raw).trim() || null;
+            const mediaType =
+                raw == null ? null : normalizeMediaType(String(raw).trim()) || null;
             if (!mediaType) {
                 return NextResponse.json({ success: false, error: 'Media type cannot be empty' }, { status: 400 });
             }

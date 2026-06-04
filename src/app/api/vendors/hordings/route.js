@@ -1,5 +1,6 @@
 // app/api/vendors/hordings/route.js
 import { NextResponse } from 'next/server';
+import { normalizeMediaType } from '../../../../lib/mediaTypes';
 import { supabaseAdmin } from '../../../../lib/supabase';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { fetchAllSupabasePages } from '../../../../lib/fetchAllSupabasePages';
@@ -261,7 +262,7 @@ export async function POST(req) {
             vendor_rate: body.ourRate ? parseInt(body.ourRate) : null,
             minimum_booking_duration: body.minimumBookingDuration,
 
-            media_type: body.mediaType,
+            media_type: normalizeMediaType(body.mediaType),
             media: body.imageUrls || [],
 
             screen_size: body.screenSize,

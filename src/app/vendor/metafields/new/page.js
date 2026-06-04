@@ -12,7 +12,7 @@ import styles from '../metafields.module.css';
  * here (matching the project's existing pattern) rather than centralized to a shared
  * constants file — vendor-form sources of truth are intentionally duplicated for now.
  */
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+import { MEDIA_TYPES } from '../../../../lib/mediaTypes';
 
 export default function CreateMetafieldPage() {
     const router = useRouter();

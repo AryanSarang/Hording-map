@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../../lib/supabase';
 import { invalidateExploreMetafieldList } from '../../../../../lib/exploreCacheInvalidation';
+import { normalizeMediaType } from '../../../../../lib/mediaTypes';
 
 // GET - Fetch single metafield (only if owned by current user)
 export async function GET(req, { params }) {
@@ -72,7 +73,7 @@ export async function PUT(req, { params }) {
              * defensive normalization against whatever the admin form sends.
              */
             updates.applies_to_media_types = Array.isArray(body.appliesToMediaTypes)
-                ? [...new Set(body.appliesToMediaTypes.map((s) => String(s).trim()).filter(Boolean))]
+                ? [...new Set(body.appliesToMediaTypes.map((s) => normalizeMediaType(s)).filter(Boolean))]
                 : [];
         }
 

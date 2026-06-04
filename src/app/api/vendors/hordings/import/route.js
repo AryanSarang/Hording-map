@@ -11,8 +11,7 @@ import {
     invalidateExploreCatalog,
     invalidateExploreMediaTypes,
 } from '../../../../../lib/exploreCacheInvalidation';
-
-const MEDIA_TYPES = ['Bus Shelter', 'Digital Screens', 'Cinema Screen', 'Cafe Screen', 'Residential', 'Corporate', 'Corporate Coffee Machines', 'Croma Stores', 'ATM', 'other'];
+import { MEDIA_TYPES, normalizeMediaType, isValidMediaType } from '../../../../../lib/mediaTypes';
 
 /** Every import must include these header names (normalized). Aliases listed per key. */
 const REQUIRED_HEADER_RULES = [
@@ -339,7 +338,7 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
             }
 
             const errs = [];
-            const mediaType = get('media_type') || get('media_type_');
+            const mediaType = normalizeMediaType(get('media_type') || get('media_type_'));
             const city = get('city');
             const state = get('state');
             const address = get('address');
@@ -367,7 +366,7 @@ function parseShopifyStyleUnified(rows, headerRowIndex, headerIndex, keyToId) {
             if (!pocNumber?.trim()) errs.push('poc_number is required on the first row for each handle');
             if (!String(minBooking || '').trim()) errs.push('minimum_booking_duration is required on the first row for each handle (no default)');
             if (!mediaType?.trim()) errs.push('media_type is required');
-            else if (!MEDIA_TYPES.includes(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
+            else if (!isValidMediaType(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
             if (!titleVal) errs.push('title is required on the first row for each handle (non-empty title or media_title)');
 
             const vendorIdStr = get('vendor_id');
@@ -903,7 +902,7 @@ export async function POST(req) {
                 if (!cells || cells.length === 0 || cells.every((c) => !String(c || '').trim())) continue;
 
                 // CSV aliases (sheet-style)
-                const mediaType = get('media_type') || get('media_type_');
+                const mediaType = normalizeMediaType(get('media_type') || get('media_type_'));
                 const city = get('city');
                 const state = get('state');
                 const address = get('address');
@@ -942,7 +941,7 @@ export async function POST(req) {
                 if (!pocNumber?.trim()) errs.push('poc_number is required');
                 if (!String(minBooking || '').trim()) errs.push('minimum_booking_duration is required (no default)');
                 if (!mediaType?.trim()) errs.push('media_type is required');
-                else if (!MEDIA_TYPES.includes(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
+                else if (!isValidMediaType(mediaType)) errs.push(`media_type must be one of: ${MEDIA_TYPES.join(', ')}`);
                 if (!titleVal) errs.push('title is required (non-empty title or media_title)');
 
                 const vendorIdStr = get('vendor_id');

@@ -21,6 +21,7 @@ import { getCurrentUser } from '../../lib/authServer';
 import {
     buildInitialExplorePageQuery,
     fetchExploreCatalogFormatted,
+    fetchDistinctActiveMediaTypes,
 } from '../../lib/exploreCatalogFetch';
 import { getOrSetCached } from '../../lib/memoryCache';
 
@@ -106,16 +107,7 @@ export default async function ExplorePage({ searchParams }) {
         MEDIA_TYPES_TTL_MS,
         async () => {
             try {
-                const { data: typeRows, error: typeErr } = await supabaseAdmin
-                    .from('media')
-                    .select('media_type')
-                    .or('status.eq.active,status.is.null');
-                if (typeErr || !Array.isArray(typeRows)) return [];
-                return [
-                    ...new Set(
-                        typeRows.map((r) => (r?.media_type || '').trim()).filter(Boolean)
-                    ),
-                ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+                return await fetchDistinctActiveMediaTypes(supabaseAdmin);
             } catch (e) {
                 console.warn('explore: distinct media_type fetch', e);
                 return [];

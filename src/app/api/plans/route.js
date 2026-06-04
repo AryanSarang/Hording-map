@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { getCurrentUser } from '../../../lib/authServer';
 import { applyCreditDelta } from '../../../lib/creditsServer';
+import { normalizeMediaType } from '../../../lib/mediaTypes';
 
 /**
  * Normalize plan items received from the client. Preserves the pricing-condition
@@ -88,7 +89,8 @@ export const PLAN_STATES_MAX = 2;
 function normalizePlanIntent(body) {
     const mediaTypeRaw = body?.mediaType ?? body?.media_type ?? null;
     const statesRaw = body?.states ?? null;
-    const mediaType = mediaTypeRaw == null ? null : String(mediaTypeRaw).trim() || null;
+    const mediaType =
+        mediaTypeRaw == null ? null : normalizeMediaType(String(mediaTypeRaw).trim()) || null;
 
     let states = [];
     if (Array.isArray(statesRaw)) {

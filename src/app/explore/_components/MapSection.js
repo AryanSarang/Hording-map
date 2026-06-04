@@ -35,8 +35,8 @@ const PIN_GLYPHS = {
     'Digital Screens': '<rect x="11" y="9.5" width="10" height="8" rx="0.5" fill="#0a0a0a" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/><rect x="14" y="18.5" width="4" height="1" fill="#0a0a0a"/>',
     // Roof triangle — residential.
     'Residential': '<polygon points="16,8.5 22,15 22,19 10,19 10,15" fill="#0a0a0a" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/>',
-    // Tall rectangle — briefcase / corporate.
-    'Corporate': '<rect x="11" y="11" width="10" height="8" fill="#0a0a0a" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/><rect x="13.5" y="9.5" width="5" height="1.5" fill="#0a0a0a"/>',
+    // Tall rectangle — briefcase / corporate screen.
+    'Corporate Screen': '<rect x="11" y="11" width="10" height="8" fill="#0a0a0a" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/><rect x="13.5" y="9.5" width="5" height="1.5" fill="#0a0a0a"/>',
     // Concentric circle — coffee machine.
     'Corporate Coffee Machines': '<circle cx="16" cy="14.5" r="5" fill="#0a0a0a" stroke="rgba(255,255,255,0.3)" stroke-width="0.8"/><circle cx="16" cy="14.5" r="1.5" fill="#fff"/>',
     // Hexagon — Croma stores.

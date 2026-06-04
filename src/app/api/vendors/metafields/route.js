@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/authServer';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { normalizeMediaType } from '../../../../lib/mediaTypes';
 import { invalidateExploreMetafieldList } from '../../../../lib/exploreCacheInvalidation';
 
 // GET - Fetch current user's metafield definitions
@@ -91,7 +92,7 @@ export async function POST(req) {
              * whitespace or duplicates from multi-select widgets.
              */
             applies_to_media_types: Array.isArray(body.appliesToMediaTypes)
-                ? [...new Set(body.appliesToMediaTypes.map((s) => String(s).trim()).filter(Boolean))]
+                ? [...new Set(body.appliesToMediaTypes.map((s) => normalizeMediaType(s)).filter(Boolean))]
                 : [],
         };
 
